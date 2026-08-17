@@ -1,0 +1,141 @@
+/* pages/user-manage/user-manage.wxss */
+
+.page-header {
+  padding: 32rpx 32rpx 16rpx;
+  background: var(--color-bg-page);
+}
+
+.page-title {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #262626;
+}
+
+.page-subtitle {
+  font-size: 24rpx;
+  color: #8C8C8C;
+  margin-top: 8rpx;
+}
+
+.list {
+  padding: 16rpx 24rpx;
+}
+
+.list-item {
+  background: #ffffff;
+  border-radius: 16rpx;
+  padding: 32rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 4rpx 24rpx rgba(0, 0, 0, 0.04);
+}
+
+.item-name {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #262626;
+  margin-bottom: 16rpx;
+  display: flex;
+  align-items: center;
+}
+
+.item-meta, .item-sub {
+  font-size: 26rpx;
+  color: #595959;
+  margin-bottom: 8rpx;
+}
+
+.item-sub {
+  color: #8C8C8C;
+  margin-top: 12rpx;
+}
+
+.item-actions {
+  display: flex;
+  align-items: center;
+}
+
+.action-btn {
+  font-size: 28rpx;
+  color: #1890FF;
+  padding: 16rpx;
+}
+
+.action-delete {
+  color: #FF4D4F;
+  margin-left: 8rpx;
+}
+
+.fab {
+  position: fixed;
+  right: 40rpx;
+  bottom: calc(140rpx + env(safe-area-inset-bottom));
+  width: 100rpx;
+  height: 100rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #40A9FF, #1890FF);
+  color: #ffffff;
+  font-size: 52rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6rpx 24rpx rgba(24, 144, 255, 0.4);
+}
+.fab:active {
+  transform: scale(0.92);
+}
+
+/* Modal */
+.modal-mask {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  z-index: 1000;
+}
+
+.modal-body {
+  width: 100%;
+  background: #ffffff;
+  border-radius: 32rpx 32rpx 0 0;
+  padding: 40rpx 40rpx calc(40rpx + env(safe-area-inset-bottom));
+}
+
+.modal-title {
+  font-size: 36rpx;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 40rpx;
+}
+
+.form-group {
+  margin-bottom: 24rpx;
+}
+
+.form-label {
+  font-size: 28rpx;
+  color: #595959;
+  margin-bottom: 12rpx;
+}
+
+.form-input {
+  width: 100%;
+  height: 80rpx;
+  background: #F5F7FA;
+  border-radius: 12rpx;
+  padding: 0 24rpx;
+  box-sizing: border-box;
+  font-size: 28rpx;
+}
+
+.picker-display {
+  display: flex;
+  align-items: center;
+  color: #262626;
+}
+
+.btn-group {
+  display: flex;
+  gap: 20rpx;
+}

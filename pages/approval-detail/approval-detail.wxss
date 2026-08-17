@@ -1,0 +1,80 @@
+/* pages/approval-detail/approval-detail.wxss */
+
+.info-grid {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 16rpx;
+}
+
+.info-item {
+  width: 50%;
+  margin-bottom: 16rpx;
+}
+
+.info-label {
+  font-size: 24rpx;
+  color: #8C8C8C;
+  margin-bottom: 4rpx;
+}
+
+.info-value {
+  font-size: 28rpx;
+  color: #262626;
+}
+
+.remark-box {
+  padding-top: 16rpx;
+  border-top: 1rpx solid #F0F0F0;
+  font-size: 24rpx;
+}
+
+.goods-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid #F0F0F0;
+}
+
+.goods-row:last-child {
+  border-bottom: none;
+}
+
+.goods-name {
+  font-size: 28rpx;
+  font-weight: 500;
+}
+
+.goods-qty-section {
+  text-align: right;
+}
+
+.qty-request {
+  font-size: 24rpx;
+  color: #8C8C8C;
+  margin-bottom: 8rpx;
+}
+
+.qty-approve {
+  display: flex;
+  align-items: center;
+}
+
+.approve-input {
+  width: 100rpx;
+  height: 56rpx;
+  text-align: center;
+  background: #F0F2F5;
+  border-radius: 8rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1890FF;
+  margin-left: 8rpx;
+}
+
+.action-card {
+  background: #ffffff;
+  border-radius: 16rpx;
+  padding: 28rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
+}

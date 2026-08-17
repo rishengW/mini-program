@@ -1,0 +1,67 @@
+/* pages/index/index.wxss */
+
+.store-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(135deg, #1890FF, #096DD9);
+  padding: 32rpx;
+  border-radius: 16rpx;
+  color: #ffffff;
+  margin-bottom: 20rpx;
+}
+.store-name { font-size: 32rpx; font-weight: 600; }
+.user-info { margin-top: 6rpx; color: rgba(255,255,255,0.8); }
+.store-switch { font-size: 24rpx; opacity: 0.9; }
+
+/* 数据概览 */
+.stats-row {
+  display: flex;
+  gap: 16rpx;
+  margin-bottom: 20rpx;
+}
+.stat-card {
+  flex: 1;
+  background: #ffffff;
+  border-radius: 16rpx;
+  padding: 24rpx 16rpx;
+  text-align: center;
+  box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.04);
+}
+.stat-icon { font-size: 36rpx; }
+.stat-value { font-size: 36rpx; font-weight: 700; color: #262626; margin: 4rpx 0; }
+.stat-label { font-size: 22rpx; color: #8C8C8C; }
+
+/* 快捷操作 */
+.action-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16rpx;
+}
+.action-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20rpx 0;
+}
+.action-icon { font-size: 44rpx; }
+.action-label { font-size: 24rpx; color: #595959; margin-top: 8rpx; }
+
+/* 列表 */
+.item-meta { margin-top: 8rpx; font-size: 24rpx; color: #8C8C8C; }
+.dot { margin: 0 8rpx; }
+.empty-hint { text-align: center; padding: 32rpx 0; color: #BFBFBF; font-size: 26rpx; }
+.more-link { font-size: 24rpx; color: #1890FF; }
+
+/* 报表迷你条目 */
+.report-mini-item {
+  display: flex;
+  align-items: center;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid #F0F0F0;
+}
+.report-mini-item:last-child { border-bottom: none; }
+.report-mini-icon { font-size: 36rpx; margin-right: 16rpx; }
+.report-mini-info { flex: 1; }
+.report-mini-title { font-size: 28rpx; font-weight: 500; color: #262626; }
+.report-mini-arrow { color: #BFBFBF; font-size: 24rpx; }

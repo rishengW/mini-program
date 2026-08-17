@@ -1,0 +1,147 @@
+<!-- pages/purchase-create/purchase-create.wxml -->
+<!-- 重写：商品直接输入数量，日期/备注在底部 -->
+<view class="page-wrap">
+
+  <!-- 1. 页面标题 / 门店信息 -->
+  <view class="header-bar">
+    <view class="header-title">门店采购申请</view>
+  </view>
+
+  <!-- 2. 一级分类切换（后厨/前厅） -->
+  <view class="l1-tabs">
+    <view wx:for="{{categoryL1List}}" wx:key="id"
+          class="l1-tab {{activeL1 === item.id ? 'l1-tab-active' : ''}}"
+          bindtap="switchL1" data-id="{{item.id}}">
+      {{item.icon}} {{item.name}}
+    </view>
+  </view>
+
+  <!-- 搜索 -->
+  <view class="search-section">
+    <input class="search-input" placeholder="搜索商品" bindinput="onSearchInput" value="{{searchKey}}" />
+  </view>
+
+  <!-- 二级分类横向滚动 -->
+  <scroll-view class="cat2-scroll" scroll-x>
+    <view wx:for="{{filteredCategories}}" wx:key="id"
+          class="cat2-item {{activeCategoryId === item.id ? 'cat2-item-active' : ''}}"
+          bindtap="selectCategory" data-id="{{item.id}}">
+      {{item.icon}} {{item.name}}
+    </view>
+  </scroll-view>
+
+  <!-- 3. 库存商品列表（直接输入数量） -->
+  <view class="product-section">
+    <view wx:for="{{displayProducts}}" wx:key="productId" class="product-card {{item.qty > 0 ? 'product-card-active' : ''}}">
+      <view class="product-top">
+        <view class="product-name-row">
+          <text class="product-name">{{item.name}}</text>
+          <text class="product-unit">/ {{item.unit}}</text>
+        </view>
+        <view class="product-brand">{{item.manufacturerName}}</view>
+      </view>
+      <view class="product-bottom">
+        <view class="qty-control">
+          <view class="qty-btn" bindtap="decreaseProductQty" data-index="{{index}}">−</view>
+          <input class="qty-input" type="digit" value="{{item.qty || ''}}" placeholder="0"
+                 bindinput="onProductQtyInput" data-index="{{index}}" />
+          <view class="qty-btn" bindtap="increaseProductQty" data-index="{{index}}">+</view>
+        </view>
+      </view>
+    </view>
+    <view wx:if="{{displayProducts.length === 0}}" class="empty-hint">暂无商品</view>
+  </view>
+
+  <!-- 4. 手动添加商品区域 -->
+  <view class="section-card">
+    <view class="flex-between">
+      <view class="section-title">手动商品 ({{manualItems.length}}/5)</view>
+      <view class="add-btn {{manualItems.length >= 5 ? 'add-btn-disabled' : ''}}" bindtap="showManualForm">+ 手动添加</view>
+    </view>
+    <view wx:if="{{manualItems.length === 0}}" class="empty-hint-sm">商品库没有的商品可手动添加</view>
+    <view wx:for="{{manualItems}}" wx:key="tempId" class="manual-row">
+      <view class="manual-info">
+        <text class="manual-name">{{item.name}}</text>
+        <text class="manual-badge">手动</text>
+        <text class="manual-meta">{{item.unit}} {{item.remark ? '·' + item.remark : ''}}</text>
+      </view>
+      <view class="qty-control-sm">
+        <view class="qty-btn-sm" bindtap="decreaseManualQty" data-index="{{index}}">−</view>
+        <input class="qty-input-sm" type="digit" value="{{item.qty}}" bindinput="onManualQtyInput" data-index="{{index}}" />
+        <view class="qty-btn-sm" bindtap="increaseManualQty" data-index="{{index}}">+</view>
+      </view>
+      <view class="remove-btn" bindtap="removeManualItem" data-index="{{index}}">✕</view>
+    </view>
+  </view>
+
+  <!-- 5/6. 日期 -->
+  <view class="section-card">
+    <view class="form-row">
+      <text class="form-row-label">采购日期</text>
+      <picker mode="date" value="{{orderDate}}" bindchange="onOrderDateChange">
+        <text class="form-row-value">{{orderDate}} ▾</text>
+      </picker>
+    </view>
+    <view class="form-row">
+      <text class="form-row-label">期望到货</text>
+      <picker mode="date" value="{{deliveryDate}}" start="{{today}}" bindchange="onDeliveryDateChange">
+        <text class="form-row-value {{deliveryDate ? '' : 'text-tertiary'}}">{{deliveryDate || '请选择'}} ▾</text>
+      </picker>
+    </view>
+  </view>
+
+  <!-- 7. 备注栏（缩小） -->
+  <view class="section-card">
+    <view class="form-row-label" style="margin-bottom:8rpx;">备注</view>
+    <textarea class="remark-input" placeholder="选填" value="{{remark}}" bindinput="onRemarkInput"
+              maxlength="200" auto-height="true" style="min-height:60rpx;max-height:160rpx;" />
+  </view>
+
+  <!-- 底部占位 -->
+  <view style="height:140rpx;"></view>
+
+  <!-- 8. 底部提交 -->
+  <view class="submit-bar">
+    <view class="submit-info">共 {{totalCount}} 种商品</view>
+    <view class="submit-btns">
+      <button class="btn btn-outline btn-sm" bindtap="saveDraft">存草稿</button>
+      <button class="btn btn-primary btn-sm" bindtap="submitRequest">提交申请</button>
+    </view>
+  </view>
+
+  <!-- 手动商品弹窗 -->
+  <view wx:if="{{showManualPopup}}" class="picker-mask" bindtap="hideManualForm">
+    <view class="manual-popup" catchtap="preventBubble">
+      <view class="popup-header">
+        <text class="popup-title">手动添加商品</text>
+        <text class="popup-close" bindtap="hideManualForm">✕</text>
+      </view>
+      <view class="manual-form">
+        <view class="form-group">
+          <view class="form-label">商品名称 <text class="text-danger">*</text></view>
+          <input class="form-input" placeholder="输入商品名称" value="{{manualForm.name}}" bindinput="onManualInput" data-field="name" />
+        </view>
+        <view class="form-group">
+          <view class="form-label">分类 <text class="text-danger">*</text></view>
+          <view class="manual-category-tabs">
+            <view class="manual-cat-tab {{manualForm.categoryL1 === 'kitchen' ? 'manual-cat-active' : ''}}" bindtap="setManualCategory" data-cat="kitchen">🍳 后厨</view>
+            <view class="manual-cat-tab {{manualForm.categoryL1 === 'front' ? 'manual-cat-active' : ''}}" bindtap="setManualCategory" data-cat="front">🪑 前厅</view>
+          </view>
+        </view>
+        <view class="form-group">
+          <view class="form-label">单位 <text class="text-danger">*</text></view>
+          <input class="form-input" placeholder="斤、箱、瓶" value="{{manualForm.unit}}" bindinput="onManualInput" data-field="unit" />
+        </view>
+        <view class="form-group">
+          <view class="form-label">数量 <text class="text-danger">*</text></view>
+          <input class="form-input" type="digit" placeholder="输入数量" value="{{manualForm.qty}}" bindinput="onManualInput" data-field="qty" />
+        </view>
+        <view class="form-group">
+          <view class="form-label">备注</view>
+          <input class="form-input" placeholder="选填" value="{{manualForm.remark}}" bindinput="onManualInput" data-field="remark" />
+        </view>
+        <button class="btn btn-primary btn-block" bindtap="confirmManual">确认添加</button>
+      </view>
+    </view>
+  </view>
+</view>

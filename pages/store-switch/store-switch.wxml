@@ -1,0 +1,16 @@
+<!-- pages/store-switch/store-switch.wxml -->
+<view class="container">
+  <view class="page-header">
+    <view class="page-title">选择门店</view>
+  </view>
+
+  <view wx:for="{{stores}}" wx:key="storeId"
+        class="store-card {{currentStoreId === item.storeId ? 'store-card-active' : ''}}"
+        bindtap="selectStore" data-id="{{item.storeId}}">
+    <view class="store-card-name">
+      <text>{{item.storeName}}</text>
+      <text wx:if="{{currentStoreId === item.storeId}}" class="current-badge">当前</text>
+    </view>
+    <view class="store-card-code text-sm text-tertiary">编号: {{item.storeCode}}</view>
+  </view>
+</view>

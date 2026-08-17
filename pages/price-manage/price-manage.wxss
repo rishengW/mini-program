@@ -1,0 +1,49 @@
+/* pages/price-manage/price-manage.wxss */
+.page-header { margin-bottom: 24rpx; }
+.page-title { font-size: 36rpx; font-weight: 700; }
+.page-subtitle { font-size: 24rpx; color: var(--color-text-tertiary); margin-top: 4rpx; }
+
+.filter-row { margin-bottom: 16rpx; }
+.filter-picker {
+  height: 76rpx; line-height: 76rpx; padding: 0 24rpx;
+  background: var(--color-bg-card); border-radius: var(--radius-lg);
+  font-size: 28rpx; box-shadow: var(--shadow-card);
+}
+
+.search-bar { margin-bottom: 20rpx; }
+.search-input {
+  width: 100%; height: 76rpx; padding: 0 24rpx;
+  background: var(--color-bg-card); border-radius: var(--radius-lg);
+  font-size: 28rpx; box-shadow: var(--shadow-card); box-sizing: border-box;
+}
+
+.item-name { font-size: 30rpx; font-weight: 600; }
+.item-meta { font-size: 24rpx; color: var(--color-text-tertiary); margin-top: 8rpx; }
+.item-sub { font-size: 22rpx; color: var(--color-text-tertiary); margin-top: 4rpx; }
+
+.price-display { text-align: right; min-width: 120rpx; }
+.price-value { font-size: 36rpx; font-weight: 700; color: var(--color-danger); }
+.price-unit { font-size: 22rpx; color: var(--color-text-tertiary); }
+
+.modal-mask {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5); z-index: 1000;
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.modal-body {
+  width: 100%; max-height: 85vh; padding: 40rpx;
+  background: #fff; border-radius: 24rpx 24rpx 0 0;
+  overflow-y: auto; box-sizing: border-box;
+}
+.modal-title { font-size: 34rpx; font-weight: 700; margin-bottom: 32rpx; text-align: center; }
+
+.edit-info {
+  background: var(--color-bg-grey); border-radius: var(--radius-md);
+  padding: 24rpx; margin-bottom: 24rpx;
+}
+.edit-product { font-size: 32rpx; font-weight: 600; margin-bottom: 8rpx; }
+.edit-supplier { font-size: 24rpx; color: var(--color-text-secondary); }
+.edit-old { font-size: 28rpx; color: var(--color-danger); margin-top: 8rpx; font-weight: 500; }
+
+.price-input { font-size: 36rpx; font-weight: 600; text-align: center; }
+.price-tip { margin-top: 16rpx; text-align: center; }

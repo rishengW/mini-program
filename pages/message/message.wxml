@@ -1,0 +1,30 @@
+<!-- pages/message/message.wxml -->
+<view class="container">
+  <view class="page-header">
+    <view class="page-title">消息中心</view>
+    <view wx:if="{{unreadCount > 0}}" class="mark-all-read" bindtap="markAllRead">全部已读</view>
+  </view>
+
+  <view wx:for="{{messages}}" wx:key="id" class="msg-item {{!item.read ? 'msg-unread' : ''}}" bindtap="readMessage" data-id="{{item.id}}">
+    <view class="msg-icon-wrap">
+      <view class="msg-icon">
+        <text wx:if="{{item.type === 'approval'}}">✅</text>
+        <text wx:elif="{{item.type === 'order'}}">📦</text>
+        <text wx:elif="{{item.type === 'receive'}}">🚚</text>
+        <text wx:elif="{{item.type === 'abnormal'}}">⚠️</text>
+        <text wx:else>💬</text>
+      </view>
+      <view wx:if="{{!item.read}}" class="msg-dot"></view>
+    </view>
+    <view class="msg-content">
+      <view class="msg-title">{{item.title}}</view>
+      <view class="msg-body text-sm text-tertiary">{{item.content}}</view>
+      <view class="msg-time text-sm text-tertiary">{{item.timeAgo}}</view>
+    </view>
+  </view>
+
+  <view wx:if="{{messages.length === 0}}" class="empty-state">
+    <view class="empty-state-icon">💬</view>
+    <view class="empty-state-text">暂无消息</view>
+  </view>
+</view>

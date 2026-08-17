@@ -1,0 +1,121 @@
+/* pages/purchase-detail/purchase-detail.wxss */
+
+.status-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40rpx;
+  border-radius: 16rpx;
+  margin-bottom: 20rpx;
+  color: #ffffff;
+}
+
+.status-bg-grey { background: linear-gradient(135deg, #8C8C8C, #595959); }
+.status-bg-primary { background: linear-gradient(135deg, #40A9FF, #1890FF); }
+.status-bg-warning { background: linear-gradient(135deg, #FFC53D, #FAAD14); }
+.status-bg-success { background: linear-gradient(135deg, #73D13D, #52C41A); }
+.status-bg-danger { background: linear-gradient(135deg, #FF7875, #FF4D4F); }
+
+.status-icon {
+  font-size: 56rpx;
+  margin-bottom: 12rpx;
+}
+
+.status-text {
+  font-size: 32rpx;
+  font-weight: 600;
+}
+
+.status-reason {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  opacity: 0.9;
+  text-align: center;
+}
+
+/* 信息网格 */
+.info-grid {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.info-item {
+  width: 50%;
+  margin-bottom: 20rpx;
+}
+
+.info-label {
+  font-size: 24rpx;
+  color: #8C8C8C;
+  margin-bottom: 6rpx;
+}
+
+.info-value {
+  font-size: 28rpx;
+  color: #262626;
+}
+
+.info-remark {
+  padding-top: 16rpx;
+  border-top: 1rpx solid #F0F0F0;
+}
+
+/* 商品行 */
+.goods-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid #F0F0F0;
+}
+
+.goods-row:last-child {
+  border-bottom: none;
+}
+
+.goods-info {
+  flex: 1;
+}
+
+.goods-name {
+  font-size: 28rpx;
+  font-weight: 500;
+}
+
+.goods-qty {
+  text-align: right;
+}
+
+.qty-main {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #262626;
+}
+
+.qty-approved {
+  font-size: 22rpx;
+  margin-top: 4rpx;
+}
+
+.manual-badge {
+  display: inline-block;
+  font-size: 18rpx;
+  padding: 2rpx 8rpx;
+  border-radius: 4rpx;
+  background: #FFF7E6;
+  color: #FAAD14;
+  margin-left: 6rpx;
+  vertical-align: middle;
+}
+
+.manual-goods-row {
+  border-left: 4rpx solid #FAAD14;
+  padding-left: 16rpx;
+}
+
+/* 底部操作 */
+.bottom-actions {
+  display: flex;
+  gap: 20rpx;
+  padding: 32rpx 0;
+}

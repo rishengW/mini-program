@@ -1,0 +1,89 @@
+<!-- pages/receive-verify/receive-verify.wxml -->
+<view class="container">
+  <!-- 订单信息 -->
+  <view class="card">
+    <view class="flex-between">
+      <view class="card-title">{{order.storeName}}</view>
+      <view class="tag tag-warning">待验收</view>
+    </view>
+    <view class="order-info text-sm text-tertiary">
+      <text>单号: {{order.orderNo}}</text>
+      <text style="margin-left:20rpx;">到货日期: {{order.deliveryDate}}</text>
+    </view>
+  </view>
+
+  <!-- 逐项验收 -->
+  <view class="card">
+    <view class="card-title">商品验收</view>
+    <view wx:for="{{items}}" wx:key="itemId" class="verify-item">
+      <view class="verify-header">
+        <view class="verify-product-name">{{item.productName}}</view>
+        <view class="text-sm text-tertiary">订单: ×{{item.orderQty}} {{item.unit}}</view>
+      </view>
+      
+      <view class="verify-form">
+        <view class="verify-row">
+          <text class="verify-label">实收数量</text>
+          <view class="verify-input-wrap">
+            <input class="verify-input" type="digit" value="{{item.receivedQty}}" 
+                   bindinput="onReceivedQtyInput" data-index="{{index}}" />
+            <text class="verify-unit">{{item.unit}}</text>
+          </view>
+        </view>
+        
+        <view class="verify-row">
+          <text class="verify-label">验收状态</text>
+          <view class="check-group">
+            <view class="check-item {{item.isShortage ? 'check-active' : ''}}" 
+                  bindtap="toggleCheck" data-index="{{index}}" data-field="isShortage">
+              少货/缺货
+            </view>
+            <view class="check-item {{item.isQualityIssue ? 'check-active' : ''}}"
+                  bindtap="toggleCheck" data-index="{{index}}" data-field="isQualityIssue">
+              质量问题
+            </view>
+            <view class="check-item {{item.isWrongItem ? 'check-active' : ''}}"
+                  bindtap="toggleCheck" data-index="{{index}}" data-field="isWrongItem">
+              错货
+            </view>
+          </view>
+        </view>
+
+        <view wx:if="{{item.isShortage || item.isQualityIssue || item.isWrongItem}}" class="verify-row">
+          <text class="verify-label">异常说明</text>
+          <textarea class="form-textarea" style="min-height:80rpx;" placeholder="描述异常情况" 
+                    value="{{item.remark}}" bindinput="onItemRemarkInput" data-index="{{index}}"></textarea>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 拍照上传 -->
+  <view class="card">
+    <view class="card-title">现场照片（选填）</view>
+    <view class="photo-hint">未上传照片也可以提交验收</view>
+    <view class="photo-grid">
+      <view wx:for="{{photos}}" wx:key="index" class="photo-item">
+        <image src="{{item}}" mode="aspectFill" class="photo-img"></image>
+        <view class="photo-del" catchtap="deletePhoto" data-index="{{index}}">✕</view>
+      </view>
+      <view wx:if="{{photos.length < 9}}" class="photo-add" bindtap="choosePhoto">
+        <text class="photo-add-icon">📷</text>
+        <text class="photo-add-text">拍照/上传</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 总备注 -->
+  <view class="card">
+    <view class="form-group" style="margin-bottom:0;">
+      <view class="form-label">总体备注</view>
+      <textarea class="form-textarea" placeholder="选填" value="{{overallRemark}}" bindinput="onOverallRemarkInput"></textarea>
+    </view>
+  </view>
+
+  <!-- 提交 -->
+  <view class="submit-bar">
+    <button class="btn btn-primary btn-block" loading="{{isSubmitting}}" disabled="{{isSubmitting}}" bindtap="submitReceipt">提交验收</button>
+  </view>
+</view>

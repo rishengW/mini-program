@@ -1,0 +1,78 @@
+/* pages/message/message.wxss */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.page-title { font-size: 34rpx; font-weight: 600; }
+
+.mark-all-read {
+  font-size: 24rpx;
+  color: #1890FF;
+}
+
+.msg-item {
+  display: flex;
+  background: #ffffff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 12rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.04);
+}
+
+.msg-unread {
+  background: #F0F8FF;
+}
+
+.msg-icon-wrap {
+  position: relative;
+  margin-right: 20rpx;
+  flex-shrink: 0;
+}
+
+.msg-icon {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 50%;
+  background: #F0F2F5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36rpx;
+}
+
+.msg-dot {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 16rpx;
+  height: 16rpx;
+  background: #FF4D4F;
+  border-radius: 50%;
+  border: 2rpx solid #ffffff;
+}
+
+.msg-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.msg-title {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #262626;
+  margin-bottom: 6rpx;
+}
+
+.msg-body {
+  margin-bottom: 8rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.msg-time {
+  font-size: 22rpx;
+}

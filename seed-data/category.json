@@ -1,0 +1,12 @@
+{"category_id":1,"category_level_1":"kitchen","category_level_1_name":"后厨","category_level_1_icon":"🍳","category_name":"蔬菜","sort_no":1,"icon":"🥬","status":1}
+{"category_id":2,"category_level_1":"kitchen","category_level_1_name":"后厨","category_level_1_icon":"🍳","category_name":"肉类","sort_no":2,"icon":"🥩","status":1}
+{"category_id":3,"category_level_1":"kitchen","category_level_1_name":"后厨","category_level_1_icon":"🍳","category_name":"海鲜水产","sort_no":3,"icon":"🦐","status":1}
+{"category_id":4,"category_level_1":"kitchen","category_level_1_name":"后厨","category_level_1_icon":"🍳","category_name":"调料干货","sort_no":4,"icon":"🧂","status":1}
+{"category_id":5,"category_level_1":"kitchen","category_level_1_name":"后厨","category_level_1_icon":"🍳","category_name":"粮油","sort_no":5,"icon":"🍚","status":1}
+{"category_id":6,"category_level_1":"kitchen","category_level_1_name":"后厨","category_level_1_icon":"🍳","category_name":"酒水饮料","sort_no":6,"icon":"🍺","status":1}
+{"category_id":7,"category_level_1":"kitchen","category_level_1_name":"后厨","category_level_1_icon":"🍳","category_name":"冻品","sort_no":7,"icon":"🧊","status":1}
+{"category_id":8,"category_level_1":"kitchen","category_level_1_name":"后厨","category_level_1_icon":"🍳","category_name":"豆制品","sort_no":8,"icon":"","status":1}
+{"category_id":9,"category_level_1":"front","category_level_1_name":"前厅","category_level_1_icon":"","category_name":"纸品","sort_no":1,"icon":"","status":1}
+{"category_id":10,"category_level_1":"front","category_level_1_name":"前厅","category_level_1_icon":"","category_name":"餐具","sort_no":2,"icon":"🍽️","status":1}
+{"category_id":11,"category_level_1":"front","category_level_1_name":"前厅","category_level_1_icon":"","category_name":"清洁用品","sort_no":3,"icon":"🧹","status":1}
+{"category_id":12,"category_level_1":"front","category_level_1_name":"前厅","category_level_1_icon":"","category_name":"包装材料","sort_no":4,"icon":"📦","status":1}

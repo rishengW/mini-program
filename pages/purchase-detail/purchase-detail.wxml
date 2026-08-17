@@ -1,0 +1,63 @@
+<!-- pages/purchase-detail/purchase-detail.wxml -->
+<view class="container">
+  <view class="status-card status-bg-{{detail.statusType}}">
+    <view class="status-icon">
+      <text wx:if="{{detail.orderStatus === 'draft'}}">📝</text>
+      <text wx:elif="{{detail.orderStatus === 'submitted'}}">📤</text>
+      <text wx:elif="{{detail.orderStatus === 'received'}}">✅</text>
+      <text wx:else>📋</text>
+    </view>
+    <view class="status-text">{{detail.statusText}}</view>
+  </view>
+
+  <view class="card">
+    <view class="card-title">基本信息</view>
+    <view class="info-grid">
+      <view class="info-item">
+        <view class="info-label">门店</view>
+        <view class="info-value">{{detail.storeName}}</view>
+      </view>
+      <view class="info-item">
+        <view class="info-label">下单日期</view>
+        <view class="info-value">{{detail.orderDate}}</view>
+      </view>
+      <view class="info-item">
+        <view class="info-label">提交人</view>
+        <view class="info-value">{{detail.createdBy}}</view>
+      </view>
+      <view class="info-item">
+        <view class="info-label">创建时间</view>
+        <view class="info-value">{{detail.createdAt}}</view>
+      </view>
+    </view>
+    <view wx:if="{{detail.remark}}" class="info-remark">
+      <view class="info-label">备注</view>
+      <view class="info-value">{{detail.remark}}</view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="card-title">商品清单 ({{detail.items.length}})</view>
+    <view wx:for="{{detail.items}}" wx:key="itemId" class="goods-row {{item.isManual ? 'manual-goods-row' : ''}}">
+      <view class="goods-info">
+        <view class="goods-name">
+          {{item.productNameSnapshot}}
+          <text wx:if="{{item.isManual}}" class="manual-badge">手动</text>
+        </view>
+        <view class="goods-spec text-sm text-tertiary">{{item.categorySnapshot}} · {{item.unitSnapshot}}</view>
+      </view>
+      <view class="goods-qty">
+        <view class="qty-main">×{{item.orderQty}} {{item.unitSnapshot}}</view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{detail.orderStatus === 'draft'}}" class="bottom-actions">
+    <button class="btn btn-outline flex-1" bindtap="editRequest">编辑</button>
+    <button class="btn btn-primary flex-1" bindtap="submitRequest">提交审核</button>
+  </view>
+
+  <view wx:if="{{canReceive}}" class="bottom-actions">
+    <button class="btn btn-success btn-block" bindtap="goReceive">📦 去收货</button>
+  </view>
+</view>

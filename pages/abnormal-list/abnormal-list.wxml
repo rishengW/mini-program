@@ -1,0 +1,56 @@
+<!-- pages/abnormal-list/abnormal-list.wxml -->
+<view class="container">
+  <view class="page-header">
+    <view class="page-title">异常记录</view>
+  </view>
+
+  <!-- 筛选 -->
+  <view class="filter-bar">
+    <view class="filter-tab {{activeFilter === 'all' ? 'filter-tab-active' : ''}}" bindtap="switchFilter" data-value="all">全部</view>
+    <view class="filter-tab {{activeFilter === 'pending' ? 'filter-tab-active' : ''}}" bindtap="switchFilter" data-value="pending">待处理</view>
+    <view class="filter-tab {{activeFilter === 'processing' ? 'filter-tab-active' : ''}}" bindtap="switchFilter" data-value="processing">处理中</view>
+    <view class="filter-tab {{activeFilter === 'resolved' ? 'filter-tab-active' : ''}}" bindtap="switchFilter" data-value="resolved">已解决</view>
+  </view>
+
+  <view wx:for="{{filteredList}}" wx:key="id" class="list-item">
+    <!-- 头部 -->
+    <view class="flex-between">
+      <view class="abnormal-type">
+        <text class="type-icon">
+          <text wx:if="{{item.type === 'quality'}}">🔴</text>
+          <text wx:elif="{{item.type === 'shortage'}}">🟡</text>
+          <text wx:elif="{{item.type === 'delay'}}">🟠</text>
+          <text wx:elif="{{item.type === 'wrong_item'}}">🔵</text>
+          <text wx:else>⚪</text>
+        </text>
+        <text class="type-name">{{item.typeName}}</text>
+      </view>
+      <view class="tag tag-{{item.statusColor}}">{{item.statusName}}</view>
+    </view>
+
+    <!-- 内容 -->
+    <view class="abnormal-desc">{{item.description}}</view>
+    <view class="abnormal-meta">
+      <text>{{item.supplierName}}</text>
+      <text class="dot">·</text>
+      <text>{{item.storeName}}</text>
+      <text class="dot">·</text>
+      <text>{{item.createdAt}}</text>
+    </view>
+
+    <!-- 处理结果 -->
+    <view wx:if="{{item.resolution}}" class="resolution-box">
+      <text class="text-sm text-success">处理结果: {{item.resolution}}</text>
+    </view>
+
+    <!-- 操作 -->
+    <view wx:if="{{item.status === 'pending'}}" class="item-actions">
+      <button class="btn btn-primary btn-sm" catchtap="handleAbnormal" data-id="{{item.id}}">处理</button>
+    </view>
+  </view>
+
+  <view wx:if="{{filteredList.length === 0}}" class="empty-state">
+    <view class="empty-state-icon">✅</view>
+    <view class="empty-state-text">暂无异常记录</view>
+  </view>
+</view>

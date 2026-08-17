@@ -1,0 +1,53 @@
+<!-- pages/report-list/report-list.wxml -->
+<view class="container">
+  <!-- 报表类型筛选 -->
+  <view class="filter-section">
+    <scroll-view class="type-tabs" scroll-x>
+      <view wx:for="{{typeTabs}}" wx:key="value"
+            class="type-tab {{activeType === item.value ? 'type-tab-active' : ''}}"
+            bindtap="switchType" data-value="{{item.value}}">
+        <text class="type-tab-icon">{{item.icon}}</text>
+        <text>{{item.label}}</text>
+      </view>
+    </scroll-view>
+  </view>
+
+  <!-- 日期筛选 -->
+  <view class="date-filter">
+    <picker mode="date" value="{{filterDate}}" bindchange="onDateFilter">
+      <view class="date-picker-btn">
+        <text>📅 {{filterDate || '全部日期'}}</text>
+        <text class="picker-arrow">▾</text>
+      </view>
+    </picker>
+    <view wx:if="{{filterDate}}" class="clear-date" bindtap="clearDateFilter">清除</view>
+  </view>
+
+  <!-- 报表列表 -->
+  <view wx:for="{{reports}}" wx:key="reportId" class="report-card" bindtap="goDetail" data-id="{{item.reportId}}">
+    <view class="report-header">
+      <view class="report-type-badge" style="background:{{item.typeColor}}22; color:{{item.typeColor}};">
+        <text>{{item.typeIcon}} {{item.typeLabel}}</text>
+      </view>
+      <view class="report-version">v{{item.fileVersion || 1}}</view>
+    </view>
+    <view class="report-meta">
+      <view class="report-scope">
+        <text class="scope-label">{{item.reportScope === 'store' ? '门店' : '供应商'}}:</text>
+        <text class="scope-name">{{item.scopeName}}</text>
+      </view>
+      <view class="report-date">{{item.relatedDate}}</view>
+    </view>
+    <view class="report-footer">
+      <text class="text-sm text-tertiary">生成于 {{item.generatedAt}}</text>
+      <view class="report-actions">
+        <text class="action-link">查看</text>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{reports.length === 0}}" class="empty-state">
+    <view class="empty-state-icon">📊</view>
+    <view class="empty-state-text">暂无报表</view>
+  </view>
+</view>

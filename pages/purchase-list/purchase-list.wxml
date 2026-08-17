@@ -1,0 +1,42 @@
+<!-- pages/purchase-list/purchase-list.wxml -->
+<view class="container">
+  <view class="filter-bar">
+    <view wx:for="{{filterTabs}}" wx:key="value"
+          class="filter-tab {{activeFilter === item.value ? 'filter-tab-active' : ''}}"
+          bindtap="switchFilter" data-value="{{item.value}}">
+      {{item.label}}
+      <view wx:if="{{item.count > 0}}" class="filter-badge">{{item.count}}</view>
+    </view>
+  </view>
+
+  <view wx:for="{{filteredList}}" wx:key="purchaseOrderId" class="list-item">
+    <view class="flex-between" bindtap="goDetail" data-id="{{item.purchaseOrderId}}">
+      <view class="item-title">{{item.orderDate}} 门店采购</view>
+      <view class="tag tag-{{item.statusType}}">{{item.statusText}}</view>
+    </view>
+    <view class="item-products" bindtap="goDetail" data-id="{{item.purchaseOrderId}}">
+      <text wx:for="{{item.items}}" wx:for-item="prod" wx:key="itemId" class="product-tag {{prod.isManual ? 'product-tag-manual' : ''}}">
+        {{prod.productNameSnapshot}} ×{{prod.orderQty}}{{prod.isManual ? ' (手动)' : ''}}
+      </text>
+    </view>
+    <view class="item-meta">
+      <text>{{item.storeName}}</text>
+      <text class="dot">·</text>
+      <text>{{item.createdBy}}</text>
+      <text class="dot">·</text>
+      <text>{{item.timeAgo}}</text>
+      <text wx:if="{{item.manualCount > 0}}" class="manual-count-tag">含{{item.manualCount}}个手动商品</text>
+    </view>
+    <!-- 直接收货按钮 -->
+    <view wx:if="{{item.canReceive}}" class="receive-btn-row">
+      <button class="btn btn-success btn-sm receive-btn" catchtap="goReceive" data-id="{{item.purchaseOrderId}}">📦 去收货</button>
+    </view>
+  </view>
+
+  <view wx:if="{{filteredList.length === 0}}" class="empty-state">
+    <view class="empty-state-icon">📋</view>
+    <view class="empty-state-text">暂无采购申请</view>
+  </view>
+
+  <view class="fab" bindtap="goCreate"><text>+</text></view>
+</view>

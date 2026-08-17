@@ -1,0 +1,67 @@
+<!-- pages/login/login.wxml -->
+<view class="login-page">
+  <view class="login-header">
+    <view class="login-logo">🍽️</view>
+    <view class="login-title">门店采购系统</view>
+    <view class="login-subtitle">账号密码登录</view>
+  </view>
+
+  <view class="login-card">
+    <block wx:if="{{!isSuperAdminLogin}}">
+      <view class="login-card-title">欢迎使用</view>
+
+      <!-- 角色三选一 -->
+      <view class="role-section">
+        <view class="form-label" style="text-align: center; margin-bottom: 24rpx;">选择登录角色</view>
+        <view class="role-list">
+          <view wx:for="{{roles}}" wx:key="key"
+            class="role-item {{selectedRole === item.key ? 'role-item-active' : ''}}"
+            bindtap="selectRole" data-role="{{item.key}}">
+            <view class="role-icon">{{item.icon}}</view>
+            <view class="role-name">{{item.label}}</view>
+          </view>
+        </view>
+      </view>
+
+      <view class="form-group">
+        <view class="form-label">账号</view>
+        <input class="form-input" placeholder="请输入账号" value="{{username}}" bindinput="onInput" data-field="username" />
+      </view>
+
+      <view class="form-group">
+        <view class="form-label">密码</view>
+        <input class="form-input" password placeholder="请输入密码" value="{{password}}" bindinput="onInput" data-field="password" />
+      </view>
+
+      <button class="btn btn-primary btn-block login-btn" bindtap="login">进入系统</button>
+      
+      <view style="text-align:center; margin-top:32rpx;" bindtap="toggleSuperAdmin">
+        <text style="color:#1890FF; font-size:26rpx;">超级管理员登录</text>
+      </view>
+    </block>
+
+    <block wx:else>
+      <view class="login-card-title">超级管理员登录</view>
+
+      <view class="form-group">
+        <view class="form-label">超级账号</view>
+        <input class="form-input" placeholder="请输入超级管理员账号" value="{{username}}" bindinput="onInput" data-field="username" />
+      </view>
+
+      <view class="form-group">
+        <view class="form-label">密码</view>
+        <input class="form-input" password placeholder="请输入密码" value="{{password}}" bindinput="onInput" data-field="password" />
+      </view>
+
+      <button class="btn btn-primary btn-block login-btn" bindtap="login">安全登录</button>
+      
+      <view style="text-align:center; margin-top:32rpx;" bindtap="toggleSuperAdmin">
+        <text style="color:#8C8C8C; font-size:26rpx;">返回普通角色登录</text>
+      </view>
+    </block>
+  </view>
+
+  <view class="login-footer">
+    <text class="text-tertiary text-sm">门店采购系统 测试版</text>
+  </view>
+</view>

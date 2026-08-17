@@ -1,0 +1,104 @@
+<!-- pages/report-detail/report-detail.wxml -->
+<view class="container">
+  <!-- 报表头 -->
+  <view class="report-header-card">
+    <view class="report-type-icon" style="background:{{typeColor}}22;">
+      <text style="font-size:48rpx;">{{typeIcon}}</text>
+    </view>
+    <view class="report-header-info">
+      <view class="report-type-name">{{typeLabel}}</view>
+      <view class="report-scope-info">{{scopeLabel}}: {{report.scopeName}}</view>
+      <view class="report-date-info">日期: {{report.relatedDate}} · v{{report.fileVersion || 1}}</view>
+    </view>
+  </view>
+
+  <!-- 报表内容表格 -->
+  <view class="card">
+    <view class="card-title">报表内容</view>
+    
+    <!-- 下单报表 -->
+    <block wx:if="{{report.reportType === 'store_order_report'}}">
+      <view class="table-header">
+        <text class="col-name">商品</text>
+        <text class="col-cat">分类</text>
+        <text class="col-unit">单位</text>
+        <text class="col-qty">数量</text>
+      </view>
+      <view wx:for="{{rows}}" wx:key="index" class="table-row">
+        <text class="col-name">{{item.productName}}</text>
+        <text class="col-cat text-sm">{{item.category}}</text>
+        <text class="col-unit">{{item.unit}}</text>
+        <text class="col-qty text-bold">{{item.orderQty}}</text>
+      </view>
+    </block>
+
+    <!-- 收货报表 -->
+    <block wx:elif="{{report.reportType === 'store_receipt_report'}}">
+      <view class="table-header">
+        <text class="col-name">商品</text>
+        <text class="col-num">下单</text>
+        <text class="col-num">实收</text>
+        <text class="col-unit">单位</text>
+      </view>
+      <view wx:for="{{rows}}" wx:key="index" class="table-row {{item.receivedQty < item.orderQty ? 'row-warning' : ''}}">
+        <text class="col-name">{{item.productName}}</text>
+        <text class="col-num">{{item.orderQty}}</text>
+        <text class="col-num text-bold {{item.receivedQty < item.orderQty ? 'text-danger' : 'text-success'}}">{{item.receivedQty}}</text>
+        <text class="col-unit">{{item.unit}}</text>
+      </view>
+    </block>
+
+    <!-- 带价格收货/供应商带价格 -->
+    <block wx:elif="{{report.reportType === 'store_receipt_price_report' || report.reportType === 'supplier_receipt_price_report'}}">
+      <view class="table-header">
+        <text class="col-name">商品</text>
+        <text class="col-num">数量</text>
+        <text class="col-num">单价</text>
+        <text class="col-amount">小计</text>
+      </view>
+      <view wx:for="{{rows}}" wx:key="index" class="table-row">
+        <text class="col-name">{{item.productName}}</text>
+        <text class="col-num">{{item.receivedQty || item.qty}}</text>
+        <text class="col-num">¥{{item.unitPrice}}</text>
+        <text class="col-amount text-bold">¥{{item.subtotal}}</text>
+      </view>
+      <view class="table-total">
+        <text class="col-name text-bold">合计</text>
+        <text class="col-num"></text>
+        <text class="col-num"></text>
+        <text class="col-amount text-bold text-primary">¥{{totalAmount}}</text>
+      </view>
+    </block>
+
+    <!-- 供应商订货汇总 -->
+    <block wx:elif="{{report.reportType === 'supplier_order_report'}}">
+      <view class="table-header">
+        <text class="col-name">商品</text>
+        <text class="col-store">门店</text>
+        <text class="col-num">数量</text>
+        <text class="col-unit">单位</text>
+      </view>
+      <view wx:for="{{rows}}" wx:key="index" class="table-row">
+        <text class="col-name">{{item.productName}}</text>
+        <text class="col-store text-sm">{{item.storeName}}</text>
+        <text class="col-num text-bold">{{item.qty}}</text>
+        <text class="col-unit">{{item.unit}}</text>
+      </view>
+    </block>
+
+    <!-- 通用空态 -->
+    <block wx:else>
+      <view class="empty-hint">报表数据加载中...</view>
+    </block>
+  </view>
+
+  <!-- 导出按钮 -->
+  <view class="export-section">
+    <button class="btn btn-primary btn-block" bindtap="exportReport">
+      📤 导出报表文件
+    </button>
+    <view class="export-hint text-sm text-tertiary">
+      生成时间: {{report.generatedAt}}
+    </view>
+  </view>
+</view>

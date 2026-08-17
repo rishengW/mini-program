@@ -1,0 +1,123 @@
+/* pages/report-list/report-list.wxss */
+
+.filter-section { margin-bottom: 16rpx; }
+
+.type-tabs {
+  display: flex;
+  white-space: nowrap;
+  padding-bottom: 8rpx;
+}
+
+.type-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6rpx;
+  padding: 14rpx 24rpx;
+  margin-right: 12rpx;
+  background: #ffffff;
+  border-radius: 32rpx;
+  font-size: 24rpx;
+  color: #595959;
+  box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.04);
+  flex-shrink: 0;
+}
+
+.type-tab-active {
+  background: #1890FF;
+  color: #ffffff;
+}
+
+.type-tab-icon { font-size: 28rpx; }
+
+.date-filter {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-bottom: 20rpx;
+}
+
+.date-picker-btn {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 12rpx 24rpx;
+  background: #ffffff;
+  border-radius: 12rpx;
+  font-size: 26rpx;
+  color: #595959;
+  box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.04);
+}
+
+.clear-date {
+  font-size: 24rpx;
+  color: #1890FF;
+}
+
+/* 报表卡片 */
+.report-card {
+  background: #ffffff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 16rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.06);
+}
+
+.report-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16rpx;
+}
+
+.report-type-badge {
+  padding: 6rpx 16rpx;
+  border-radius: 8rpx;
+  font-size: 24rpx;
+  font-weight: 500;
+}
+
+.report-version {
+  font-size: 22rpx;
+  color: #8C8C8C;
+  background: #F0F2F5;
+  padding: 4rpx 12rpx;
+  border-radius: 6rpx;
+}
+
+.report-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12rpx;
+}
+
+.scope-label {
+  font-size: 24rpx;
+  color: #8C8C8C;
+}
+
+.scope-name {
+  font-size: 28rpx;
+  color: #262626;
+  font-weight: 500;
+  margin-left: 6rpx;
+}
+
+.report-date {
+  font-size: 26rpx;
+  color: #595959;
+}
+
+.report-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 12rpx;
+  border-top: 1rpx solid #F0F0F0;
+}
+
+.action-link {
+  color: #1890FF;
+  font-size: 26rpx;
+  font-weight: 500;
+}

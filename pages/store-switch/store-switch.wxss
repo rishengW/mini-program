@@ -1,0 +1,71 @@
+/* pages/store-switch/store-switch.wxss */
+
+.page-desc {
+  font-size: 26rpx;
+  color: #8C8C8C;
+  margin-bottom: 24rpx;
+}
+
+.store-card {
+  background: #ffffff;
+  border-radius: 16rpx;
+  padding: 28rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.05);
+  border: 2rpx solid transparent;
+}
+
+.store-card-active {
+  border-color: #1890FF;
+  background: rgba(24, 144, 255, 0.03);
+}
+
+.store-card-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.store-icon {
+  font-size: 48rpx;
+  margin-right: 16rpx;
+}
+
+.store-content {
+  flex: 1;
+}
+
+.store-card-name {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #262626;
+}
+
+.store-card-code {
+  font-size: 22rpx;
+  color: #8C8C8C;
+  margin-top: 4rpx;
+}
+
+.current-badge {
+  background: #1890FF;
+  color: #ffffff;
+  font-size: 22rpx;
+  padding: 4rpx 16rpx;
+  border-radius: 20rpx;
+}
+
+.store-card-info {
+  padding-top: 16rpx;
+  border-top: 1rpx solid #F0F0F0;
+}
+
+.info-row {
+  font-size: 24rpx;
+  color: #595959;
+  margin-bottom: 8rpx;
+}
+
+.info-label {
+  margin-right: 8rpx;
+}

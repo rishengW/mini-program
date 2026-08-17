@@ -1,0 +1,108 @@
+<!-- pages/product-manage/product-manage.wxml -->
+<view class="container">
+  <view class="page-header">
+    <view class="page-title">商品管理</view>
+    <view class="page-subtitle">共 {{filteredProducts.length}} 个商品</view>
+  </view>
+
+  <!-- 搜索 -->
+  <view class="search-bar">
+    <input class="search-input" placeholder="搜索商品名称" bindinput="onSearch" value="{{keyword}}" />
+  </view>
+
+  <!-- L1分类Tab -->
+  <view class="filter-bar">
+    <view class="filter-tab {{activeL1 === 'all' ? 'filter-tab-active' : ''}}" bindtap="switchL1" data-value="all">全部</view>
+    <view wx:for="{{categoryL1List}}" wx:key="id"
+          class="filter-tab {{activeL1 === item.id ? 'filter-tab-active' : ''}}"
+          bindtap="switchL1" data-value="{{item.id}}">
+      {{item.icon}} {{item.name}}
+    </view>
+  </view>
+
+  <!-- 商品列表 -->
+  <view wx:for="{{filteredProducts}}" wx:key="productId" class="list-item">
+    <view class="flex-between">
+      <view class="flex-1">
+        <view class="item-name">
+          {{item.name}}
+          <text class="tag {{item.status === 1 ? 'tag-success' : 'tag-grey'}}" style="margin-left:12rpx;">{{item.status === 1 ? '启用' : '停用'}}</text>
+        </view>
+        <view class="item-meta">{{item.l1Name}} · {{item.categoryName}} · {{item.unit}}</view>
+        <view class="item-sub">厂家：{{item.manufacturerName || '默认'}} · 供应商：{{item.supplierName}}</view>
+      </view>
+      <view class="item-actions">
+        <view class="action-btn" bindtap="showEditForm" data-id="{{item.productId}}">✏️</view>
+        <view class="action-btn" bindtap="toggleStatus" data-id="{{item.productId}}">
+          {{item.status === 1 ? '⏸️' : '▶️'}}
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 空状态 -->
+  <view wx:if="{{filteredProducts.length === 0}}" class="empty-state">
+    <view class="empty-state-icon">📦</view>
+    <view class="empty-state-text">暂无商品</view>
+  </view>
+
+  <!-- 添加按钮 -->
+  <view class="fab" bindtap="showAddForm">＋</view>
+
+  <!-- 添加/编辑弹窗 -->
+  <view wx:if="{{showAdd}}" class="modal-mask" bindtap="closeForm">
+    <view class="modal-body" catchtap="">
+      <view class="modal-title">{{editItem ? '编辑商品' : '新增商品'}}</view>
+
+      <view class="form-group">
+        <view class="form-label">商品名称 *</view>
+        <input class="form-input" placeholder="输入商品名称" value="{{form.name}}" bindinput="onFormInput" data-field="name" />
+      </view>
+
+      <view class="form-group">
+        <view class="form-label">一级分类 *</view>
+        <picker range="{{['后厨','前厅']}}" bindchange="onL1Change">
+          <view class="form-input picker-display">{{form.categoryL1 === 'kitchen' ? '后厨' : '前厅'}} ▾</view>
+        </picker>
+      </view>
+
+      <view class="form-group">
+        <view class="form-label">二级分类 *</view>
+        <picker range="{{filteredCategories}}" range-key="name" bindchange="onCategoryChange">
+          <view class="form-input picker-display">
+            {{form.categoryName || '请选择'}} ▾
+          </view>
+        </picker>
+      </view>
+
+      <view class="form-group">
+        <view class="form-label">单位 *</view>
+        <input class="form-input" placeholder="如：斤、箱、瓶" value="{{form.unit}}" bindinput="onFormInput" data-field="unit" />
+      </view>
+
+      <view class="form-group">
+        <view class="form-label">规格</view>
+        <input class="form-input" placeholder="如：500g/袋" value="{{form.spec}}" bindinput="onFormInput" data-field="spec" />
+      </view>
+
+      <view class="form-group">
+        <view class="form-label">厂家/品牌 *</view>
+        <input class="form-input" placeholder="如无则填默认" value="{{form.manufacturerName}}" bindinput="onFormInput" data-field="manufacturerName" />
+      </view>
+
+      <view class="form-group">
+        <view class="form-label">默认供应商</view>
+        <picker range="{{suppliers}}" range-key="supplierName" bindchange="onSupplierChange">
+          <view class="form-input picker-display">
+            {{form.defaultSupplierId ? '已选择' : '请选择'}} ▾
+          </view>
+        </picker>
+      </view>
+
+      <view class="btn-group" style="margin-top:32rpx;">
+        <button class="btn btn-outline flex-1" bindtap="closeForm">取消</button>
+        <button class="btn btn-primary flex-1" bindtap="saveProduct">保存</button>
+      </view>
+    </view>
+  </view>
+</view>

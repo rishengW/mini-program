@@ -1,0 +1,58 @@
+<!-- pages/approval-detail/approval-detail.wxml -->
+<view class="container">
+  <!-- 申请信息 -->
+  <view class="card">
+    <view class="flex-between">
+      <view class="card-title">采购申请</view>
+      <view class="tag tag-warning">待审核</view>
+    </view>
+    <view class="info-grid">
+      <view class="info-item">
+        <view class="info-label">提交人</view>
+        <view class="info-value">{{detail.requesterName}}</view>
+      </view>
+      <view class="info-item">
+        <view class="info-label">期望到货</view>
+        <view class="info-value">{{detail.expectedDeliveryDate}}</view>
+      </view>
+      <view class="info-item">
+        <view class="info-label">提交时间</view>
+        <view class="info-value">{{detail.submittedAt}}</view>
+      </view>
+    </view>
+    <view wx:if="{{detail.remark}}" class="remark-box">
+      <text class="text-tertiary">备注: {{detail.remark}}</text>
+    </view>
+  </view>
+
+  <!-- 商品清单（可修改数量） -->
+  <view class="card">
+    <view class="card-title">商品清单</view>
+    <view wx:for="{{detail.items}}" wx:key="id" class="goods-row">
+      <view class="goods-info">
+        <view class="goods-name">{{item.productName}}</view>
+        <view class="goods-spec text-sm text-tertiary">{{item.spec}} · {{item.unit}}</view>
+      </view>
+      <view class="goods-qty-section">
+        <view class="qty-request">申请: ×{{item.requestedQty}}</view>
+        <view class="qty-approve">
+          <text class="text-sm text-tertiary">审核数量: </text>
+          <input class="approve-input" type="digit" value="{{item.approveQty}}" 
+                 bindinput="onApproveQtyInput" data-index="{{index}}" />
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 审核操作 -->
+  <view class="action-card">
+    <view class="form-group">
+      <view class="form-label">审核备注（驳回时必填）</view>
+      <textarea class="form-textarea" placeholder="请输入审核意见" value="{{auditRemark}}" bindinput="onAuditRemarkInput"></textarea>
+    </view>
+    <view class="btn-group">
+      <button class="btn btn-danger flex-1" bindtap="rejectRequest">驳回</button>
+      <button class="btn btn-success flex-1" bindtap="approveRequest">通过</button>
+    </view>
+  </view>
+</view>

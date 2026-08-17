@@ -1,0 +1,31 @@
+<!-- pages/receive-list/receive-list.wxml -->
+<view class="container">
+  <view class="page-header">
+    <view class="page-title">待收货订单</view>
+  </view>
+
+  <view wx:for="{{orders}}" wx:key="purchaseOrderId" class="list-item" bindtap="goVerify" data-id="{{item.purchaseOrderId}}">
+    <view class="order-header">
+      <view class="supplier-name">{{item.storeName}} · {{item.orderDate}}</view>
+      <view class="tag tag-{{item.statusType}}">{{item.statusText}}</view>
+    </view>
+    <view class="order-no text-sm text-tertiary">单号: {{item.orderNo}}</view>
+    <view class="divider"></view>
+    <view wx:for="{{item.items}}" wx:for-item="product" wx:key="itemId" class="order-product">
+      <view class="flex-between">
+        <text>{{product.productNameSnapshot}} {{product.isManual ? '(手动)' : ''}}</text>
+        <text>×{{product.orderQty}} {{product.unitSnapshot}}</text>
+      </view>
+    </view>
+    <view class="divider"></view>
+    <view class="order-footer">
+      <text class="text-sm">提交人: {{item.createdBy}}</text>
+      <text class="text-sm">{{item.itemCount}}种商品</text>
+    </view>
+  </view>
+
+  <view wx:if="{{orders.length === 0}}" class="empty-state">
+    <view class="empty-state-icon">📦</view>
+    <view class="empty-state-text">暂无待收货订单</view>
+  </view>
+</view>

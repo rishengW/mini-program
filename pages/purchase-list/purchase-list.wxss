@@ -1,0 +1,122 @@
+/* pages/purchase-list/purchase-list.wxss */
+
+.filter-bar {
+  display: flex;
+  gap: 12rpx;
+  margin-bottom: 20rpx;
+  overflow-x: auto;
+  white-space: nowrap;
+  padding-bottom: 4rpx;
+}
+
+.filter-tab {
+  position: relative;
+  padding: 12rpx 24rpx;
+  background: #ffffff;
+  border-radius: 32rpx;
+  font-size: 26rpx;
+  color: #595959;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  flex-shrink: 0;
+}
+
+.filter-tab-active {
+  background: #1890FF;
+  color: #ffffff;
+}
+
+.filter-badge {
+  position: absolute;
+  top: -8rpx;
+  right: -8rpx;
+  min-width: 32rpx;
+  height: 32rpx;
+  line-height: 32rpx;
+  text-align: center;
+  background: #FF4D4F;
+  color: #ffffff;
+  font-size: 20rpx;
+  border-radius: 16rpx;
+  padding: 0 8rpx;
+}
+
+.item-products {
+  margin-top: 12rpx;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+}
+
+.product-tag {
+  display: inline-block;
+  padding: 4rpx 14rpx;
+  background: #F0F2F5;
+  border-radius: 6rpx;
+  font-size: 22rpx;
+  color: #595959;
+}
+
+.item-meta {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  color: #8C8C8C;
+}
+
+.dot {
+  margin: 0 8rpx;
+}
+
+.reject-reason {
+  margin-top: 10rpx;
+  padding: 12rpx 16rpx;
+  background: #FFF2F0;
+  border-radius: 8rpx;
+  font-size: 24rpx;
+  color: #FF4D4F;
+}
+
+/* 浮动按钮 */
+.fab {
+  position: fixed;
+  right: 40rpx;
+  bottom: calc(140rpx + env(safe-area-inset-bottom));
+  width: 100rpx;
+  height: 100rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #40A9FF, #1890FF);
+  color: #ffffff;
+  font-size: 52rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6rpx 24rpx rgba(24, 144, 255, 0.4);
+}
+
+.fab:active {
+  transform: scale(0.92);
+}
+
+.product-tag-manual {
+  background: #FFF7E6;
+  color: #FAAD14;
+  border: 1rpx solid #FFE58F;
+}
+
+.manual-count-tag {
+  display: inline-block;
+  margin-left: 8rpx;
+  font-size: 20rpx;
+  color: #FAAD14;
+  padding: 0 8rpx;
+  background: #FFF7E6;
+  border-radius: 4rpx;
+}
+
+.receive-btn-row {
+  margin-top: 12rpx;
+  display: flex;
+  justify-content: flex-end;
+}
+.receive-btn {
+  min-width: 160rpx;
+}

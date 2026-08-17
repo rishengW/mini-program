@@ -1,0 +1,67 @@
+<!-- pages/supplier-manage/supplier-manage.wxml -->
+<view class="container">
+  <view class="page-header">
+    <view class="page-title">供应商管理</view>
+    <view class="page-subtitle">共 {{suppliers.length}} 个供应商</view>
+  </view>
+
+  <view class="search-bar">
+    <input class="search-input" placeholder="搜索供应商/联系人" bindinput="onSearch" value="{{keyword}}" />
+  </view>
+
+  <view wx:for="{{suppliers}}" wx:key="supplierId" class="list-item">
+    <view class="flex-between">
+      <view class="flex-1">
+        <view class="item-name">
+          {{item.supplierName}}
+          <text class="tag {{item.status === 1 ? 'tag-success' : 'tag-grey'}}" style="margin-left:12rpx;">{{item.status === 1 ? '启用' : '停用'}}</text>
+        </view>
+        <view class="item-meta">联系人：{{item.contactName || '—'}} · {{item.contactPhone || '—'}}</view>
+        <view class="item-sub">供应 {{item.productCount}} 个商品</view>
+      </view>
+      <view class="item-actions">
+        <view class="action-btn" bindtap="goProducts" data-id="{{item.supplierId}}">💰</view>
+        <view class="action-btn" bindtap="showEditForm" data-id="{{item.supplierId}}">✏️</view>
+        <view class="action-btn" bindtap="toggleStatus" data-id="{{item.supplierId}}">
+          {{item.status === 1 ? '⏸️' : '▶️'}}
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{suppliers.length === 0}}" class="empty-state">
+    <view class="empty-state-icon">🏭</view>
+    <view class="empty-state-text">暂无供应商</view>
+  </view>
+
+  <view class="fab" bindtap="showAddForm">＋</view>
+
+  <!-- 弹窗 -->
+  <view wx:if="{{showAdd}}" class="modal-mask" bindtap="closeForm">
+    <view class="modal-body" catchtap="">
+      <view class="modal-title">{{editItem ? '编辑供应商' : '新增供应商'}}</view>
+
+      <view class="form-group">
+        <view class="form-label">供应商名称 *</view>
+        <input class="form-input" placeholder="输入供应商名称" value="{{form.supplierName}}" bindinput="onFormInput" data-field="supplierName" />
+      </view>
+      <view class="form-group">
+        <view class="form-label">联系人</view>
+        <input class="form-input" placeholder="输入联系人姓名" value="{{form.contactName}}" bindinput="onFormInput" data-field="contactName" />
+      </view>
+      <view class="form-group">
+        <view class="form-label">电话</view>
+        <input class="form-input" placeholder="输入联系电话" type="number" value="{{form.contactPhone}}" bindinput="onFormInput" data-field="contactPhone" />
+      </view>
+      <view class="form-group">
+        <view class="form-label">备注</view>
+        <textarea class="form-textarea" placeholder="可选" value="{{form.remark}}" bindinput="onFormInput" data-field="remark" />
+      </view>
+
+      <view class="btn-group" style="margin-top:32rpx;">
+        <button class="btn btn-outline flex-1" bindtap="closeForm">取消</button>
+        <button class="btn btn-primary flex-1" bindtap="saveSupplier">保存</button>
+      </view>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,66 @@
+<!-- pages/price-manage/price-manage.wxml -->
+<view class="container">
+  <view class="page-header">
+    <view class="page-title">价格管理</view>
+    <view class="page-subtitle">当前有效价格 · {{priceList.length}} 条</view>
+  </view>
+
+  <!-- 供应商筛选 -->
+  <view class="filter-row">
+    <picker range="{{supplierOptions}}" range-key="supplierName" bindchange="onSupplierFilter" style="flex:1;">
+      <view class="filter-picker">🏭 {{selectedSupplierName}} ▾</view>
+    </picker>
+  </view>
+
+  <!-- 搜索 -->
+  <view class="search-bar">
+    <input class="search-input" placeholder="搜索商品名称" bindinput="onSearch" value="{{keyword}}" />
+  </view>
+
+  <!-- 价格列表 -->
+  <view wx:for="{{priceList}}" wx:key="priceId" class="list-item" bindtap="showEditPrice" data-id="{{item.priceId}}">
+    <view class="flex-between">
+      <view class="flex-1">
+        <view class="item-name">{{item.productName}}</view>
+        <view class="item-meta">{{item.supplierName}} · {{item.productCategory}} · {{item.productUnit}}</view>
+        <view class="item-sub">生效：{{item.effectiveDate}}</view>
+      </view>
+      <view class="price-display">
+        <view class="price-value">¥{{item.price}}</view>
+        <view class="price-unit">/{{item.productUnit}}</view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{priceList.length === 0}}" class="empty-state">
+    <view class="empty-state-icon">💰</view>
+    <view class="empty-state-text">暂无价格数据</view>
+  </view>
+
+  <!-- 编辑弹窗 -->
+  <view wx:if="{{showEdit}}" class="modal-mask" bindtap="closeEdit">
+    <view class="modal-body" catchtap="">
+      <view class="modal-title">修改价格</view>
+
+      <view class="edit-info">
+        <view class="edit-product">{{editItem.productName}}</view>
+        <view class="edit-supplier">供应商：{{editItem.supplierName}}</view>
+        <view class="edit-old">当前价格：¥{{editItem.price}} / {{editItem.productUnit}}</view>
+      </view>
+
+      <view class="form-group">
+        <view class="form-label">新价格 (元)</view>
+        <input class="form-input price-input" type="digit" placeholder="输入新价格" value="{{newPrice}}" bindinput="onPriceInput" focus="true" />
+      </view>
+
+      <view class="price-tip">
+        <text class="text-tertiary text-sm">💡 修改后旧价格自动标记为历史记录，不会被删除</text>
+      </view>
+
+      <view class="btn-group" style="margin-top:32rpx;">
+        <button class="btn btn-outline flex-1" bindtap="closeEdit">取消</button>
+        <button class="btn btn-primary flex-1" bindtap="savePrice">确认修改</button>
+      </view>
+    </view>
+  </view>
+</view>

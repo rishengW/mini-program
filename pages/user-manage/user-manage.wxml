@@ -1,0 +1,83 @@
+<!-- pages/user-manage/user-manage.wxml -->
+<view class="container">
+  <view class="page-header flex-between">
+    <view>
+      <view class="page-title">账号管理</view>
+      <view class="page-subtitle">共 {{users.length}} 个账号</view>
+    </view>
+  </view>
+
+  <!-- 用户列表 -->
+  <view class="list">
+    <view wx:for="{{users}}" wx:key="id" class="list-item">
+      <view class="flex-between">
+        <view class="flex-1">
+          <view class="item-name">
+            {{item.name}}
+            <text class="tag tag-primary" style="margin-left:12rpx;">{{item.roleLabel}}</text>
+          </view>
+          <view class="item-meta">账　号：{{item.username}}</view>
+          <view class="item-meta">状　态：{{item.status === 1 ? '正常' : '停用'}}</view>
+          <view class="item-sub">关联门店：{{item.displayStoreName}}</view>
+        </view>
+        <view class="item-actions">
+          <view class="action-btn" bindtap="showEditForm" data-item="{{item}}">✏️ 编辑</view>
+          <view class="action-btn action-delete" bindtap="deleteUser" data-item="{{item}}">🗑️ 删除</view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 空状态 -->
+  <view wx:if="{{users.length === 0}}" class="empty-state">
+    <view class="empty-state-icon">👥</view>
+    <view class="empty-state-text">暂无账号</view>
+  </view>
+
+  <view class="fab" bindtap="showAddForm">＋</view>
+
+  <!-- 弹窗 -->
+  <view wx:if="{{showAdd}}" class="modal-mask" bindtap="closeForm">
+    <view class="modal-body" catchtap="stopBubble">
+      <view class="modal-title">{{editItem ? '编辑账号' : '新增账号'}}</view>
+
+      <view class="form-group">
+        <view class="form-label">账号名/登录ID *</view>
+        <input class="form-input" placeholder="输入登录账号" value="{{form.username}}" bindinput="onFormInput" data-field="username" />
+      </view>
+
+      <view class="form-group">
+        <view class="form-label">真实姓名 *</view>
+        <input class="form-input" placeholder="如：系统管理员、赵店长" value="{{form.name}}" bindinput="onFormInput" data-field="name" />
+      </view>
+
+      <view class="form-group">
+        <view class="form-label">{{editItem ? '新密码（留空则不修改）' : '登录密码 *'}}</view>
+        <input class="form-input" password placeholder="至少6位" value="{{form.password}}" bindinput="onFormInput" data-field="password" />
+      </view>
+
+      <view class="form-group">
+        <view class="form-label">所属角色 *</view>
+        <picker mode="selector" value="{{form.roleIndex || 0}}" range="{{roles}}" range-key="label" bindchange="onRoleChange">
+          <view class="form-input picker-display">
+            {{form.roleLabel || '请选择角色'}} ▾
+          </view>
+        </picker>
+      </view>
+
+      <view class="form-group" wx:if="{{form.role === 'chef' || form.role === 'store_manager'}}">
+        <view class="form-label">关联门店</view>
+        <picker mode="selector" value="{{form.storeIndex || 0}}" range="{{stores}}" range-key="storeName" bindchange="onStoreChange">
+          <view class="form-input picker-display">
+            {{form.storeName || '请选择所属门店'}} ▾
+          </view>
+        </picker>
+      </view>
+
+      <view class="btn-group" style="margin-top:40rpx;">
+        <button class="btn btn-outline flex-1" bindtap="closeForm">取消</button>
+        <button class="btn btn-primary flex-1" bindtap="saveUser">保存</button>
+      </view>
+    </view>
+  </view>
+</view>

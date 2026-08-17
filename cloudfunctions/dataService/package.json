@@ -1,0 +1,9 @@
+{
+  "name": "dataService",
+  "version": "1.0.0",
+  "description": "CloudBase 分类、主数据、审批、消息与异常服务",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

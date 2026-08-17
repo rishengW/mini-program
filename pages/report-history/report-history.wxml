@@ -1,0 +1,43 @@
+<!-- pages/report-history/report-history.wxml -->
+<view class="container">
+  <view class="page-header">
+    <view class="page-title">历史报表</view>
+    <view class="page-subtitle">共 {{reports.length}} 份报表</view>
+  </view>
+
+  <!-- 筛选区 -->
+  <view class="filter-section">
+    <view class="filter-row">
+      <picker range="{{scopeOptions}}" range-key="label" bindchange="onScopeChange" style="flex:1;">
+        <view class="filter-picker">📂 {{scopeOptions[filterScope === 'all' ? 0 : (filterScope === 'store' ? 1 : 2)].label}} ▾</view>
+      </picker>
+      <picker range="{{reportTypeOptions}}" range-key="label" bindchange="onTypeChange" style="flex:1;">
+        <view class="filter-picker">📋 {{filterType ? reportTypeOptions[0].label : '全部类型'}} ▾</view>
+      </picker>
+    </view>
+    <view class="filter-row">
+      <picker mode="date" bindchange="onDateChange" value="{{filterDate}}" style="flex:1;">
+        <view class="filter-picker">📅 {{filterDate || '选择日期'}} ▾</view>
+      </picker>
+      <view wx:if="{{filterDate}}" class="clear-btn" bindtap="clearDate">清除日期</view>
+    </view>
+  </view>
+
+  <!-- 报表列表 -->
+  <view wx:for="{{reports}}" wx:key="reportId" class="list-item" bindtap="goDetail" data-id="{{item.reportId}}">
+    <view class="report-row">
+      <view class="report-icon" style="background:{{item.typeColor}}20; color:{{item.typeColor}};">{{item.typeIcon}}</view>
+      <view class="report-info">
+        <view class="report-name">{{item.typeLabel}}</view>
+        <view class="report-meta">{{item.scopeName}} · {{item.relatedDate}}</view>
+        <view class="report-version">v{{item.fileVersion}} · {{item.generatedAt}}</view>
+      </view>
+      <view class="report-arrow">›</view>
+    </view>
+  </view>
+
+  <view wx:if="{{reports.length === 0}}" class="empty-state">
+    <view class="empty-state-icon">📊</view>
+    <view class="empty-state-text">暂无报表</view>
+  </view>
+</view>

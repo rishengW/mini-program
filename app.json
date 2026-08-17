@@ -1,0 +1,65 @@
+{
+  "pages": [
+    "pages/login/login",
+    "pages/index/index",
+    "pages/store-switch/store-switch",
+    "pages/purchase-create/purchase-create",
+    "pages/purchase-detail/purchase-detail",
+    "pages/purchase-list/purchase-list",
+    "pages/approval-list/approval-list",
+    "pages/approval-detail/approval-detail",
+    "pages/receive-list/receive-list",
+    "pages/receive-verify/receive-verify",
+    "pages/abnormal-list/abnormal-list",
+    "pages/message/message",
+    "pages/report-list/report-list",
+    "pages/report-detail/report-detail",
+    "pages/product-manage/product-manage",
+    "pages/supplier-manage/supplier-manage",
+    "pages/price-manage/price-manage",
+    "pages/report-history/report-history",
+    "pages/user-manage/user-manage"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#1890FF",
+    "navigationBarTitleText": "门店采购",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#F5F7FA",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "color": "#999999",
+    "selectedColor": "#1890FF",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页",
+        "iconPath": "assets/icons/home.png",
+        "selectedIconPath": "assets/icons/home-active.png"
+      },
+      {
+        "pagePath": "pages/purchase-list/purchase-list",
+        "text": "采购",
+        "iconPath": "assets/icons/cart.png",
+        "selectedIconPath": "assets/icons/cart-active.png"
+      },
+      {
+        "pagePath": "pages/report-list/report-list",
+        "text": "报表",
+        "iconPath": "assets/icons/report.png",
+        "selectedIconPath": "assets/icons/report-active.png"
+      },
+      {
+        "pagePath": "pages/message/message",
+        "text": "消息",
+        "iconPath": "assets/icons/bell.png",
+        "selectedIconPath": "assets/icons/bell-active.png"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "cloud": true
+}

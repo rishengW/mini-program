@@ -1,0 +1,31 @@
+<!-- pages/approval-list/approval-list.wxml -->
+<view class="container">
+  <view class="page-header">
+    <view class="page-title">待审核申请</view>
+    <view class="page-count">共 {{list.length}} 条</view>
+  </view>
+
+  <view wx:for="{{list}}" wx:key="id" class="list-item" bindtap="goDetail" data-id="{{item.id}}">
+    <view class="flex-between">
+      <view class="item-title">
+        <text class="requester-badge">{{item.requesterName}}</text>
+        <text>{{item.expectedDeliveryDate}} 采购申请</text>
+      </view>
+    </view>
+    <view class="item-products">
+      <text wx:for="{{item.items}}" wx:for-item="prod" wx:key="id" class="product-tag">{{prod.productName}} ×{{prod.requestedQty}}</text>
+    </view>
+    <view class="item-meta">
+      <text>提交时间: {{item.submittedAt}}</text>
+    </view>
+    <view class="item-actions">
+      <button class="btn btn-danger btn-sm" catchtap="rejectRequest" data-id="{{item.id}}">驳回</button>
+      <button class="btn btn-success btn-sm" catchtap="approveRequest" data-id="{{item.id}}">通过</button>
+    </view>
+  </view>
+
+  <view wx:if="{{list.length === 0}}" class="empty-state">
+    <view class="empty-state-icon">✅</view>
+    <view class="empty-state-text">暂无待审核申请</view>
+  </view>
+</view>
