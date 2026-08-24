@@ -98,6 +98,9 @@ Page({
 
   closeForm() { this.setData({ showAdd: false }) },
 
+  // Prevent clicks inside the modal (including picker controls) from closing it.
+  stopBubble() {},
+
   onFormInput(e) {
     const field = e.currentTarget.dataset.field
     this.setData({ [`form.${field}`]: e.detail.value })

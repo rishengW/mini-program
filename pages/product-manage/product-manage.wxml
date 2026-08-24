@@ -51,7 +51,7 @@
 
   <!-- 添加/编辑弹窗 -->
   <view wx:if="{{showAdd}}" class="modal-mask" bindtap="closeForm">
-    <view class="modal-body" catchtap="">
+    <view class="modal-body" catchtap="stopBubble">
       <view class="modal-title">{{editItem ? '编辑商品' : '新增商品'}}</view>
 
       <view class="form-group">
