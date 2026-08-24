@@ -15,6 +15,9 @@
   <!-- 报表内容表格 -->
   <view class="card">
     <view class="card-title">报表内容</view>
+    <view wx:if="{{report.hasAbnormal}}" class="report-abnormal-banner">
+      收货异常：{{report.abnormalSummary || '请查看明细中的异常标记'}}
+    </view>
     
     <!-- 下单报表 -->
     <block wx:if="{{report.reportType === 'store_order_report'}}">
@@ -45,6 +48,7 @@
         <text class="col-num">{{item.orderQty}}</text>
         <text class="col-num text-bold {{item.receivedQty < item.orderQty ? 'text-danger' : 'text-success'}}">{{item.receivedQty}}</text>
         <text class="col-unit">{{item.unit}}</text>
+        <text wx:if="{{item.abnormal}}" class="abnormal-label">{{item.abnormalStatus}}：{{item.abnormalText}}</text>
       </view>
     </block>
 
@@ -61,6 +65,7 @@
         <text class="col-name">{{item.productName}}</text>
         <text class="col-num text-bold">{{item.receivedQty}}</text>
         <text class="col-unit">{{item.unit}}</text>
+        <text wx:if="{{item.abnormal}}" class="abnormal-label">{{item.abnormalStatus}}：{{item.abnormalText}}</text>
       </view>
     </block>
 

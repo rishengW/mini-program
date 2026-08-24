@@ -33,6 +33,7 @@
       <view class="report-type-badge" style="background:{{item.typeColor}}22; color:{{item.typeColor}};">
         <text>{{item.typeIcon}} {{item.typeLabel}}</text>
       </view>
+      <view wx:if="{{item.hasAbnormal}}" class="tag tag-danger">{{item.abnormalLabel}}</view>
       <view class="report-version">v{{item.fileVersion || 1}}</view>
     </view>
     <view class="report-meta">

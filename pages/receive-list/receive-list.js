@@ -55,6 +55,9 @@ Page({
         receiptDate: receipt.receiptDate || receipt.receipt_date || '',
         storeName: receipt.storeName || receipt.store_name || '',
         receivedBy: receipt.receivedBy || receipt.received_by || '',
+        receiptStatus: receipt.receiptStatus || receipt.receipt_status || '',
+        statusText: (receipt.receiptStatus || receipt.receipt_status) === 'abnormal' ? '收货异常' : '已收货',
+        statusType: (receipt.receiptStatus || receipt.receipt_status) === 'abnormal' ? 'danger' : 'success',
         items: receipt.items || []
       }))
       : []

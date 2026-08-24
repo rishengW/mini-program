@@ -6,6 +6,7 @@ const statusMap = {
   rejected: { text: '已驳回', type: 'danger' },
   report_generated: { text: '已生成报表', type: 'success' },
   received: { text: '已收货', type: 'success' },
+  receipt_abnormal: { text: '收货异常', type: 'danger' },
   partial_received: { text: '部分收货', type: 'warning' },
   completed: { text: '已完成', type: 'success' },
   to_receive: { text: '待收货', type: 'warning' },

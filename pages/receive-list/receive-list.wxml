@@ -34,7 +34,10 @@
     <view wx:for="{{receipts}}" wx:key="receiptId" class="receipt-history-item">
       <view class="flex-between">
         <text class="text-bold">{{item.storeName}} · {{item.receiptDate}}</text>
-        <text class="text-sm text-tertiary">{{item.items.length}}种商品</text>
+        <view class="flex-between" style="gap:12rpx;">
+          <text class="tag tag-{{item.statusType}}">{{item.statusText}}</text>
+          <text class="text-sm text-tertiary">{{item.items.length}}种商品</text>
+        </view>
       </view>
       <view class="text-sm text-tertiary">收货人: {{item.receivedBy}}</view>
     </view>

@@ -20,12 +20,16 @@ async function recoverCommittedReceipt(orderId, authToken, failedResult) {
   if (detail.orderStatus !== 'received' && receipts.length === 0) return null
 
   const receipt = receipts[0] || {}
+  const hasAbnormal = detail.orderStatus === 'receipt_abnormal' ||
+    receipt.receiptStatus === 'abnormal' || receipt.receipt_status === 'abnormal'
   return {
     code: 0,
     data: {
       receiptId: receipt.receiptId || receipt.receipt_id || '',
       reportsGenerated: 0,
       reportWarning: '连接中断导致报表状态未返回，请稍后在报表中心查看。',
+      hasAbnormal,
+      abnormalTypeNames: [],
       recovered: true
     }
   }
@@ -208,17 +212,21 @@ Page({
     if (result && result.code === 0) {
       const reportsGenerated = result.data.reportsGenerated || 0
       const hasReportWarning = !!result.data.reportWarning
+      const hasAbnormal = !!result.data.hasAbnormal
+      const abnormalTypes = (result.data.abnormalTypeNames || []).join('、')
       const content = hasReportWarning
-        ? `收货已保存。${result.data.reportWarning}`
-        : `收货已提交，${reportsGenerated}份报表已自动生成。可在报表中心查看。`
+        ? `${hasAbnormal ? '收货异常已保存。' : '收货已保存。'}${result.data.reportWarning}`
+        : hasAbnormal
+          ? `收货异常，已记录${abnormalTypes ? `：${abnormalTypes}` : ''}。已生成${reportsGenerated}份不含价格的收货报表，带价格报表未生成，请到异常记录处理。`
+          : `收货已提交，${reportsGenerated}份报表已自动生成。可在报表中心查看。`
       wx.showModal({
-        title: '验收完成',
+        title: hasAbnormal ? '收货异常' : '验收完成',
         content,
-        confirmText: hasReportWarning ? '返回' : '查看报表',
+        confirmText: hasReportWarning || hasAbnormal ? '返回' : '查看报表',
         cancelText: '返回',
-        showCancel: !hasReportWarning,
+        showCancel: !hasReportWarning && !hasAbnormal,
         success(res) {
-          if (res.confirm && !hasReportWarning) {
+          if (res.confirm && !hasReportWarning && !hasAbnormal) {
             wx.switchTab({ url: '/pages/report-list/report-list' })
           } else {
             wx.navigateBack()

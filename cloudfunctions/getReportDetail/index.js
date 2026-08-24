@@ -8,6 +8,20 @@ function hashToken(token) {
   return crypto.createHash('sha256').update(String(token || '')).digest('hex')
 }
 
+const ABNORMAL_TYPE_NAMES = {
+  shortage: '少货/缺货',
+  quality: '质量问题',
+  wrong_item: '错货'
+}
+
+function getAbnormalTypeNames(item = {}) {
+  const types = []
+  if (item.is_shortage) types.push('shortage')
+  if (item.is_quality_issue) types.push('quality')
+  if (item.is_wrong_item) types.push('wrong_item')
+  return types.map(type => ABNORMAL_TYPE_NAMES[type] || type)
+}
+
 async function getSessionUser(authToken) {
   if (!authToken) return null
   const result = await db.collection('app_user')
@@ -73,16 +87,23 @@ exports.main = async (event = {}) => {
         const itemsRes = await db.collection('receipt_item')
           .where({ receipt_id: receiptId })
           .get()
-        rows = itemsRes.data.map(item => ({
-          productName: item.product_name,
-          orderQty: item.order_qty_snapshot,
-          receivedQty: item.received_qty,
-          unit: item.unit_snapshot,
-          unitPrice: item.price_snapshot,
-          subtotal: (item.received_qty * item.price_snapshot).toFixed(2) * 1,
-          payable: item.payable_flag,
-          remark: item.remark || ''
-        }))
+        rows = itemsRes.data.map(item => {
+          const abnormalTypeNames = getAbnormalTypeNames(item)
+          return {
+            productName: item.product_name,
+            orderQty: item.order_qty_snapshot,
+            receivedQty: item.received_qty,
+            unit: item.unit_snapshot,
+            unitPrice: item.price_snapshot,
+            subtotal: (item.received_qty * item.price_snapshot).toFixed(2) * 1,
+            payable: item.payable_flag,
+            abnormal: abnormalTypeNames.length > 0,
+            abnormalTypeNames,
+            abnormalText: abnormalTypeNames.join('、'),
+            abnormalStatus: abnormalTypeNames.length > 0 ? '收货异常' : '正常',
+            remark: item.remark || ''
+          }
+        })
       }
     } else if (type === 'supplier_order_report') {
       // 供应商订货汇总：按供应商scope_id筛选采购单明细
@@ -125,6 +146,7 @@ exports.main = async (event = {}) => {
             .limit(1)
             .get()
           if (orderItemRes.data.length > 0) {
+            const abnormalTypeNames = getAbnormalTypeNames(item)
             rows.push({
               storeName: receipt.store_name,
               productName: item.product_name,
@@ -134,6 +156,10 @@ exports.main = async (event = {}) => {
               unitPrice: item.price_snapshot,
               subtotal: (item.received_qty * item.price_snapshot).toFixed(2) * 1,
               payable: item.payable_flag,
+              abnormal: abnormalTypeNames.length > 0,
+              abnormalTypeNames,
+              abnormalText: abnormalTypeNames.join('、'),
+              abnormalStatus: abnormalTypeNames.length > 0 ? '收货异常' : '正常',
               remark: item.remark || ''
             })
           }

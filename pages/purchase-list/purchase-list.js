@@ -45,13 +45,15 @@ Page({
       all: orders.length,
       draft: orders.filter(o => o.orderStatus === 'draft').length,
       submitted: orders.filter(o => o.orderStatus === 'submitted').length,
-      received: orders.filter(o => o.orderStatus === 'received').length
+      received: orders.filter(o => o.orderStatus === 'received').length,
+      receiptAbnormal: orders.filter(o => o.orderStatus === 'receipt_abnormal').length
     }
     const filterTabs = [
       { label: '全部', value: 'all', count: 0 },
       { label: '草稿', value: 'draft', count: counts.draft },
       { label: '已提交', value: 'submitted', count: counts.submitted },
-      { label: '已收货', value: 'received', count: 0 }
+      { label: '已收货', value: 'received', count: 0 },
+      { label: '收货异常', value: 'receipt_abnormal', count: counts.receiptAbnormal }
     ]
     this.setData({ filterTabs, orders, isLoading: false })
     this.applyFilter()

@@ -71,6 +71,9 @@ Page({
           relatedDate: r.relatedDate || r.related_date,
           generatedAt: r.generatedAt || r.generated_at || '',
           fileVersion: r.fileVersion || r.file_version || 1,
+          hasAbnormal: r.hasAbnormal !== undefined ? !!r.hasAbnormal : !!r.has_abnormal,
+          abnormalSummary: r.abnormalSummary || r.abnormal_summary || '',
+          abnormalLabel: `收货异常${r.abnormalSummary || r.abnormal_summary ? ` · ${r.abnormalSummary || r.abnormal_summary}` : ''}`,
           typeLabel: typeInfo.label,
           typeIcon: typeInfo.icon,
           typeColor: typeInfo.color

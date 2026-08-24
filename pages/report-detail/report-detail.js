@@ -35,11 +35,18 @@ Page({
         relatedDate: report.relatedDate || report.related_date,
         generatedAt: report.generatedAt || report.generated_at || '',
         fileVersion: report.fileVersion || report.file_version || 1,
-        reportScope: report.reportScope || report.report_scope
+        reportScope: report.reportScope || report.report_scope,
+        hasAbnormal: report.hasAbnormal !== undefined ? !!report.hasAbnormal : !!report.has_abnormal,
+        abnormalSummary: report.abnormalSummary || report.abnormal_summary || ''
       }
 
       let totalAmount = '0.00'
       const rows = report.rows || []
+      const inferredAbnormal = rows.some(row => row.abnormal)
+      rpt.hasAbnormal = rpt.hasAbnormal || inferredAbnormal
+      if (!rpt.abnormalSummary && inferredAbnormal) {
+        rpt.abnormalSummary = [...new Set(rows.reduce((all, row) => all.concat(row.abnormalTypeNames || []), []))].join('、')
+      }
       if (rpt.reportType.includes('price')) {
         const sum = rows.reduce((s, r) => s + (r.subtotal || 0), 0)
         totalAmount = sum.toFixed(2)
