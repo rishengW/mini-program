@@ -10,6 +10,7 @@
     <view class="filter-tab {{activeFilter === 'pending' ? 'filter-tab-active' : ''}}" bindtap="switchFilter" data-value="pending">待处理</view>
     <view class="filter-tab {{activeFilter === 'processing' ? 'filter-tab-active' : ''}}" bindtap="switchFilter" data-value="processing">处理中</view>
     <view class="filter-tab {{activeFilter === 'resolved' ? 'filter-tab-active' : ''}}" bindtap="switchFilter" data-value="resolved">已解决</view>
+    <view class="filter-tab {{activeFilter === 'closed' ? 'filter-tab-active' : ''}}" bindtap="switchFilter" data-value="closed">已关闭</view>
   </view>
 
   <view wx:for="{{filteredList}}" wx:key="id" class="list-item">
@@ -45,7 +46,13 @@
 
     <!-- 操作 -->
     <view wx:if="{{item.status === 'pending'}}" class="item-actions">
-      <button class="btn btn-primary btn-sm" catchtap="handleAbnormal" data-id="{{item.id}}">处理</button>
+      <button class="btn btn-primary btn-sm" catchtap="handleAbnormal" data-id="{{item.id}}">开始处理</button>
+    </view>
+    <view wx:elif="{{item.status === 'processing'}}" class="item-actions">
+      <button class="btn btn-primary btn-sm" catchtap="resolveAbnormal" data-id="{{item.id}}">填写处理结果</button>
+    </view>
+    <view wx:elif="{{item.status === 'resolved'}}" class="item-actions">
+      <button class="btn btn-outline btn-sm" catchtap="closeAbnormal" data-id="{{item.id}}">关闭异常</button>
     </view>
   </view>
 

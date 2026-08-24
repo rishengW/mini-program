@@ -28,6 +28,7 @@ Page({
     this.setData({ isLoading: true })
 
     const result = await cloud.callFunction('getPurchaseOrders', {
+      authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
       role: user.role || 'purchaser',
       storeId: store.storeId || store.id || '',
       createdBy: user.role === 'chef' ? (user.userId || user.id || user.name || '') : '',
@@ -63,6 +64,8 @@ Page({
 
   applyFilter() {
     const { activeFilter } = this.data
+    const currentUser = getApp().globalData.userInfo || {}
+    const canReceiveRole = currentUser.role !== 'chef'
     let list = this.data.orders
     if (activeFilter !== 'all') {
       list = list.filter(o => o.orderStatus === activeFilter)
@@ -71,7 +74,7 @@ Page({
       const statusInfo = meta.getStatusInfo(o.orderStatus)
       const manualCount = o.items.filter(i => i.isManual).length
       // 判断是否可直接收货
-      const canReceive = ['submitted', 'approved', 'report_generated', 'partial_received', 'to_receive'].includes(o.orderStatus)
+      const canReceive = canReceiveRole && ['submitted', 'approved', 'report_generated', 'partial_received', 'to_receive'].includes(o.orderStatus)
       return {
         ...o,
         statusText: statusInfo.text,

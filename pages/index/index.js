@@ -23,17 +23,19 @@ Page({
     }
 
     const user = app.globalData.userInfo
-    const store = app.globalData.currentStore
+    const store = app.globalData.currentStore || {}
 
     const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
     const [ordersResult, reportsResult, messagesResult] = await Promise.all([
       cloud.callFunction('getPurchaseOrders', {
+        authToken,
         role: user.role,
-        storeId: store.storeId,
+        storeId: store.storeId || store.id || '',
         createdBy: user.role === 'chef' ? (user.userId || user.id || user.name) : '',
         pageSize: 100
       }),
       cloud.callFunction('getReports', {
+        authToken,
         role: user.role,
         storeId: store.storeId,
         reportType: '',
@@ -53,7 +55,7 @@ Page({
     // 统计（全部可点击）
     const pendingOrders = myOrders.filter(o => o.orderStatus === 'submitted').length
     const pendingReceive = myOrders.filter(o =>
-      ['submitted', 'approved', 'report_generated', 'to_receive'].includes(o.orderStatus)
+      ['submitted', 'approved', 'report_generated', 'partial_received', 'to_receive'].includes(o.orderStatus)
     ).length
     const completedOrders = myOrders.filter(o => o.orderStatus === 'received').length
     const unreadMsg = messages.filter(m => !m.read).length
@@ -84,10 +86,11 @@ Page({
     })
 
     this.setData({
-      storeName: store.storeName || store.name,
+      storeName: store.storeName || store.name || '未选择门店',
       userName: user.name,
       roleLabel: user.roleLabel || user.role,
       isSuperAdmin: user.role === 'super_admin',
+      isManager: ['super_admin', 'purchaser'].includes(user.role),
       stats, recentOrders, recentReports
     })
   },

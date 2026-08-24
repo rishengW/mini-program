@@ -76,6 +76,14 @@ async function saveProduct(event) {
   const unit = String(event.unit || '').trim()
   const category = await findCategory(event.categoryId)
   if (!name || !unit || !category) return { code: -1, msg: '商品名称、分类和单位不能为空' }
+  const defaultSupplierId = String(event.defaultSupplierId || '').trim()
+  if (defaultSupplierId) {
+    const supplierRes = await db.collection('supplier')
+      .where({ supplier_id: defaultSupplierId, status: 1 })
+      .limit(1)
+      .get()
+    if (!supplierRes.data.length) return { code: -1, msg: '默认供应商不存在或已停用' }
+  }
 
   const data = {
     product_name: name,
@@ -84,7 +92,7 @@ async function saveProduct(event) {
     category_name: category.category_name,
     unit,
     spec: String(event.spec || '').trim(),
-    default_supplier_id: event.defaultSupplierId || '',
+    default_supplier_id: defaultSupplierId,
     manufacturer_name: String(event.manufacturerName || '默认').trim() || '默认',
     updated_at: db.serverDate()
   }
@@ -124,6 +132,13 @@ async function saveSupplier(event) {
     contact_phone: String(event.contactPhone || '').trim(),
     remark: String(event.remark || '').trim(),
     updated_at: db.serverDate()
+  }
+  const duplicateSupplierRes = await db.collection('supplier')
+    .where({ supplier_name: supplierName })
+    .limit(100)
+    .get()
+  if (duplicateSupplierRes.data.some(item => item.supplier_id !== event.supplierId)) {
+    return { code: -1, msg: '该供应商名称已存在' }
   }
   if (event.supplierId) {
     const existing = await db.collection('supplier').where({ supplier_id: event.supplierId }).limit(1).get()
@@ -187,9 +202,27 @@ async function auditOrder(event) {
 
   const itemResult = await db.collection('purchase_order_item')
     .where({ purchase_order_id: event.orderId })
+    .limit(1000)
     .get()
   const qtyMap = {}
-  ;(event.items || []).forEach(item => { qtyMap[item.itemId] = Number(item.approveQty) })
+  if (event.status === 'approved' && event.items !== undefined && !Array.isArray(event.items)) {
+    return { code: -1, msg: '审核明细格式无效' }
+  }
+  ;(event.items || []).forEach(item => {
+    if (item && item.itemId) qtyMap[item.itemId] = Number(item.approveQty)
+  })
+  if (event.status === 'approved' && Array.isArray(event.items)) {
+    const validIds = new Set(itemResult.data.map(item => item.item_id))
+    for (const item of event.items) {
+      const qty = Number(item && item.approveQty)
+      const sourceItem = item && item.itemId
+        ? itemResult.data.find(source => source.item_id === item.itemId)
+        : null
+      if (!item || !validIds.has(item.itemId) || !Number.isFinite(qty) || qty < 0 || qty > Number(sourceItem && sourceItem.order_qty)) {
+        return { code: -1, msg: '审核数量无效，请检查后重试' }
+      }
+    }
+  }
 
   await db.runTransaction(async transaction => {
     for (const item of itemResult.data) {
@@ -250,6 +283,13 @@ async function markMessageRead(event) {
   const auth = await requireUser(event)
   if (auth.error) return auth.error
   if (!event.id) return { code: -1, msg: '消息信息缺失' }
+  const messageResult = await db.collection('message').doc(event.id).get()
+  const message = messageResult.data
+  if (!message) return { code: -1, msg: '消息不存在' }
+  const isGlobal = GLOBAL_ROLES.includes(auth.user.role)
+  const belongsToUser = !message.recipient_user_id || message.recipient_user_id === (auth.user.user_id || auth.user._id)
+  const belongsToStore = isGlobal || !message.store_id || message.store_id === auth.user.default_store_id
+  if (!belongsToUser || !belongsToStore) return { code: -403, msg: '无权操作该消息' }
   await db.collection('message').doc(event.id).update({ data: { read: true, read_at: db.serverDate() } })
   return { code: 0 }
 }
@@ -293,8 +333,9 @@ async function getAbnormalRecords(event) {
 
   const supplierIds = [...new Set(result.data.map(item => item.supplier_id).filter(Boolean))]
   const supplierMap = {}
-  if (supplierIds.length) {
-    const suppliers = await db.collection('supplier').where({ supplier_id: _.in(supplierIds) }).limit(100).get()
+  for (let i = 0; i < supplierIds.length; i += 20) {
+    const idChunk = supplierIds.slice(i, i + 20)
+    const suppliers = await db.collection('supplier').where({ supplier_id: _.in(idChunk) }).limit(100).get()
     suppliers.data.forEach(item => { supplierMap[item.supplier_id] = item.supplier_name })
   }
   const list = result.data.map(item => ({
@@ -316,11 +357,73 @@ async function getAbnormalRecords(event) {
 async function startAbnormal(event) {
   const auth = await requireUser(event, ['store_manager', 'purchaser', 'super_admin'])
   if (auth.error) return auth.error
+  if (!event.id) return { code: -1, msg: '异常记录信息缺失' }
   const result = await db.collection('abnormal_record').doc(event.id).get()
   if (!result.data) return { code: -1, msg: '异常记录不存在' }
+  if (!GLOBAL_ROLES.includes(auth.user.role) && result.data.store_id !== auth.user.default_store_id) {
+    return { code: -403, msg: '当前账号无权处理该门店异常' }
+  }
   if (result.data.status !== 'pending') return { code: -1, msg: '该异常已进入处理流程' }
   await db.collection('abnormal_record').doc(event.id).update({
     data: { status: 'processing', handled_by: auth.user.name, updated_at: db.serverDate() }
+  })
+  return { code: 0 }
+}
+
+async function resolveAbnormal(event) {
+  const auth = await requireUser(event, ['store_manager', 'purchaser', 'super_admin'])
+  if (auth.error) return auth.error
+  if (!event.id) return { code: -1, msg: '异常记录信息缺失' }
+  const resolution = String(event.resolution || '').trim()
+  if (!resolution) return { code: -1, msg: '请填写处理结果' }
+
+  const result = await db.collection('abnormal_record').doc(event.id).get()
+  const record = result.data
+  if (!record) return { code: -1, msg: '异常记录不存在' }
+  if (!GLOBAL_ROLES.includes(auth.user.role) && record.store_id !== auth.user.default_store_id) {
+    return { code: -403, msg: '当前账号无权处理该门店异常' }
+  }
+  if (record.status !== 'processing') return { code: -1, msg: '只有处理中异常才能标记为已解决' }
+
+  await db.collection('abnormal_record').doc(event.id).update({
+    data: {
+      status: 'resolved',
+      resolution,
+      resolved_by: auth.user.name,
+      resolved_at: db.serverDate(),
+      updated_at: db.serverDate()
+    }
+  })
+  await createMessage({
+    type: 'abnormal',
+    title: '异常已解决',
+    content: `${record.abnormal_id || event.id} 已记录处理结果`,
+    bizId: record.abnormal_id || event.id,
+    storeId: record.store_id
+  })
+  return { code: 0 }
+}
+
+async function closeAbnormal(event) {
+  const auth = await requireUser(event, ['store_manager', 'purchaser', 'super_admin'])
+  if (auth.error) return auth.error
+  if (!event.id) return { code: -1, msg: '异常记录信息缺失' }
+
+  const result = await db.collection('abnormal_record').doc(event.id).get()
+  const record = result.data
+  if (!record) return { code: -1, msg: '异常记录不存在' }
+  if (!GLOBAL_ROLES.includes(auth.user.role) && record.store_id !== auth.user.default_store_id) {
+    return { code: -403, msg: '当前账号无权处理该门店异常' }
+  }
+  if (record.status !== 'resolved') return { code: -1, msg: '只有已解决异常才能关闭' }
+
+  await db.collection('abnormal_record').doc(event.id).update({
+    data: {
+      status: 'closed',
+      closed_by: auth.user.name,
+      closed_at: db.serverDate(),
+      updated_at: db.serverDate()
+    }
   })
   return { code: 0 }
 }
@@ -339,6 +442,8 @@ exports.main = async (event = {}) => {
       case 'markAllMessagesRead': return await markAllMessagesRead(event)
       case 'getAbnormalRecords': return await getAbnormalRecords(event)
       case 'startAbnormal': return await startAbnormal(event)
+      case 'resolveAbnormal': return await resolveAbnormal(event)
+      case 'closeAbnormal': return await closeAbnormal(event)
       default: return { code: -1, msg: '不支持的数据操作' }
     }
   } catch (err) {

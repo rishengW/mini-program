@@ -16,12 +16,37 @@ function getCloudFailureResult(name, err) {
   return { code: -1, errorType: 'CLOUD_UNAVAILABLE', msg: 'CloudBase 服务连接失败，请稍后重试' }
 }
 
+function ensureCloudReady() {
+  if (!wx.cloud) return false
+  try {
+    const app = getApp()
+    if (app && app.globalData && !app.globalData.cloudReady && typeof app.initCloud === 'function') {
+      app.initCloud()
+    }
+  } catch (err) {
+    console.warn('[cloud] CloudBase 初始化检查失败:', err)
+  }
+  return true
+}
+
 async function callFunction(name, data = {}) {
-  if (!wx.cloud) {
+  if (!ensureCloudReady()) {
     return { code: -1, errorType: 'CLOUD_UNAVAILABLE', msg: '当前环境不支持 CloudBase' }
   }
+  // Keep authentication on every business request. Pages that already pass
+  // an explicit token remain unchanged; login is the only unauthenticated
+  // call and therefore naturally sends no token before a session exists.
+  const requestData = { ...data }
+  if (!requestData.authToken) {
+    try {
+      const app = getApp()
+      requestData.authToken = app.globalData.authToken || wx.getStorageSync('authToken') || ''
+    } catch (err) {
+      requestData.authToken = wx.getStorageSync('authToken') || ''
+    }
+  }
   try {
-    const res = await wx.cloud.callFunction({ name, data })
+    const res = await wx.cloud.callFunction({ name, data: requestData })
     return res.result || { code: -1, msg: '云函数未返回有效结果' }
   } catch (err) {
     console.error(`[cloud] 云函数 ${name} 调用失败:`, err)
@@ -29,10 +54,47 @@ async function callFunction(name, data = {}) {
   }
 }
 
+function parseDateValue(value) {
+  if (value === undefined || value === null || value === '') return null
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value
+  }
+  if (typeof value === 'number') {
+    const milliseconds = Math.abs(value) < 1e12 ? value * 1000 : value
+    const date = new Date(milliseconds)
+    return Number.isNaN(date.getTime()) ? null : date
+  }
+  if (typeof value === 'string') {
+    const text = value.trim()
+    if (!text) return null
+    if (/^-?\d+(?:\.\d+)?$/.test(text)) return parseDateValue(Number(text))
+    const date = new Date(text.includes('T') ? text : text.replace(/-/g, '/'))
+    return Number.isNaN(date.getTime()) ? null : date
+  }
+  if (typeof value === 'object') {
+    if (typeof value.toDate === 'function') return parseDateValue(value.toDate())
+    if (typeof value.getTime === 'function') return parseDateValue(value.getTime())
+    const dateValue = value.$date !== undefined ? value.$date
+      : (value.$timestamp !== undefined ? value.$timestamp
+        : (value.timestamp !== undefined ? value.timestamp
+          : (value.value !== undefined ? value.value : value.$numberLong)))
+    if (dateValue !== undefined && dateValue !== value) return parseDateValue(dateValue)
+    const seconds = value.seconds !== undefined ? value.seconds : value._seconds
+    if (seconds !== undefined) {
+      const nanos = value.nanoseconds !== undefined ? value.nanoseconds : (value._nanoseconds || 0)
+      return parseDateValue(Number(seconds) * 1000 + Number(nanos) / 1e6)
+    }
+  }
+  return null
+}
+
 function formatDateTime(value) {
-  if (!value || typeof value === 'string') return value || ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return String(value)
+  if (typeof value === 'string') {
+    const text = value.trim()
+    return text && parseDateValue(text) ? value : ''
+  }
+  const date = parseDateValue(value)
+  if (!date) return ''
   const pad = n => String(n).padStart(2, '0')
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
@@ -54,6 +116,9 @@ function normalizePurchaseItem(item = {}) {
 
 function normalizePurchaseOrder(order = {}) {
   const orderDate = order.orderDate || order.order_date || ''
+  // delivery_date was introduced after the first schema; old records fall
+  // back to their order date so pages can render a stable value.
+  const deliveryDate = order.deliveryDate || order.delivery_date || orderDate
   return {
     ...order,
     purchaseOrderId: order.purchaseOrderId || order.purchase_order_id || '',
@@ -61,11 +126,12 @@ function normalizePurchaseOrder(order = {}) {
     storeId: order.storeId || order.store_id || '',
     storeName: order.storeName || order.store_name || '',
     orderDate,
-    deliveryDate: order.deliveryDate || orderDate,
+    deliveryDate,
     createdById: order.createdById || order.created_by_id || order.created_by || '',
     createdBy: order.createdByName || order.created_by_name || order.createdBy || order.created_by || '',
     orderStatus: order.orderStatus || order.order_status || '',
     createdAt: formatDateTime(order.createdAt || order.created_at),
+    submittedAt: formatDateTime(order.submittedAt || order.submitted_at || order.createdAt || order.created_at),
     remark: order.remark || '',
     auditRemark: order.auditRemark || order.audit_remark || '',
     items: (order.items || []).map(normalizePurchaseItem)
@@ -130,7 +196,7 @@ function normalizeReport(report = {}) {
 
 async function uploadReceiptPhotos(localPaths = [], purchaseOrderId = 'receipt') {
   if (!Array.isArray(localPaths) || localPaths.length === 0) return []
-  if (!wx.cloud) throw new Error('CloudBase unavailable')
+  if (!ensureCloudReady()) throw new Error('CloudBase unavailable')
 
   const safeOrderId = String(purchaseOrderId).replace(/[^a-zA-Z0-9_-]/g, '') || 'receipt'
   const timestamp = Date.now()

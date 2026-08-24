@@ -1,15 +1,9 @@
 // app.js
+const CLOUD_ENV = 'cloud1-d3gezx51aca79d9bb'
+
 App({
   onLaunch() {
-    // 初始化云开发
-    if (!wx.cloud) {
-      console.error('请使用 2.2.3 或以上的基础库以使用云能力')
-    } else {
-      wx.cloud.init({
-        env: 'cloud1-d3gezx51aca79d9bb', // TODO: 替换为真实云环境ID
-        traceUser: true
-      })
-    }
+    this.initCloud()
 
     // 检查登录状态
     const userInfo = wx.getStorageSync('userInfo')
@@ -29,6 +23,25 @@ App({
     const currentStore = wx.getStorageSync('currentStore')
     if (currentStore) {
       this.globalData.currentStore = currentStore
+    }
+  },
+
+  // Keep a small readiness flag so a page opened immediately after launch
+  // can repair initialization before its first cloud request.
+  initCloud() {
+    if (!wx.cloud) {
+      this.globalData.cloudReady = false
+      console.error('请使用 2.2.3 或以上的基础库以使用云能力')
+      return false
+    }
+    try {
+      wx.cloud.init({ env: CLOUD_ENV, traceUser: true })
+      this.globalData.cloudReady = true
+      return true
+    } catch (err) {
+      this.globalData.cloudReady = false
+      console.error('[app] CloudBase 初始化失败:', err)
+      return false
     }
   },
 

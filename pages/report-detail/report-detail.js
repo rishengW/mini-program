@@ -16,9 +16,13 @@ Page({
 
   async onLoad(options) {
     const reportId = options.id
+    const app = getApp()
     util.showLoading('加载报表...')
 
-    const result = await cloud.callFunction('getReportDetail', { reportId })
+    const result = await cloud.callFunction('getReportDetail', {
+      reportId,
+      authToken: app.globalData.authToken || wx.getStorageSync('authToken')
+    })
     util.hideLoading()
 
     if (result.code === 0 && result.data) {
@@ -58,8 +62,14 @@ Page({
   async exportReport() {
     const { report } = this.data
     if (report.fileUrl || report.file_url) {
-      // 有云存储文件，获取临时链接下载
-      const fileUrl = await cloud.getFileUrl(report.fileUrl || report.file_url)
+      // 有云存储文件，通过云函数获取临时链接后下载
+      const fileResult = await cloud.callFunction('getReportFileUrl', {
+        fileId: report.fileUrl || report.file_url,
+        authToken: getApp().globalData.authToken || wx.getStorageSync('authToken')
+      })
+      const fileUrl = fileResult && fileResult.code === 0 && fileResult.data
+        ? fileResult.data.url
+        : null
       if (fileUrl) {
         wx.downloadFile({
           url: fileUrl,

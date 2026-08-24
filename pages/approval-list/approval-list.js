@@ -11,6 +11,7 @@ Page({
     const user = app.globalData.userInfo || {}
     const store = app.globalData.currentStore || {}
     const result = await cloud.callFunction('getPurchaseOrders', {
+      authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
       role: user.role || 'purchaser',
       storeId: store.storeId || '',
       createdBy: '',
@@ -28,8 +29,8 @@ Page({
           ...o,
           id: o.purchaseOrderId,
           requesterName: o.createdBy,
-          expectedDeliveryDate: o.orderDate,
-          submittedAt: o.createdAt,
+          expectedDeliveryDate: o.deliveryDate || o.orderDate,
+          submittedAt: o.submittedAt,
           statusText: statusInfo.text
         }
       })

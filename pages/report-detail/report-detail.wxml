@@ -48,6 +48,22 @@
       </view>
     </block>
 
+    <!-- 供应商到货汇总 -->
+    <block wx:elif="{{report.reportType === 'supplier_receipt_report'}}">
+      <view class="table-header">
+        <text class="col-store">门店</text>
+        <text class="col-name">商品</text>
+        <text class="col-num">实收</text>
+        <text class="col-unit">单位</text>
+      </view>
+      <view wx:for="{{rows}}" wx:key="index" class="table-row">
+        <text class="col-store text-sm">{{item.storeName}}</text>
+        <text class="col-name">{{item.productName}}</text>
+        <text class="col-num text-bold">{{item.receivedQty}}</text>
+        <text class="col-unit">{{item.unit}}</text>
+      </view>
+    </block>
+
     <!-- 带价格收货/供应商带价格 -->
     <block wx:elif="{{report.reportType === 'store_receipt_price_report' || report.reportType === 'supplier_receipt_price_report'}}">
       <view class="table-header">
@@ -81,7 +97,7 @@
       <view wx:for="{{rows}}" wx:key="index" class="table-row">
         <text class="col-name">{{item.productName}}</text>
         <text class="col-store text-sm">{{item.storeName}}</text>
-        <text class="col-num text-bold">{{item.qty}}</text>
+        <text class="col-num text-bold">{{item.orderQty || item.qty}}</text>
         <text class="col-unit">{{item.unit}}</text>
       </view>
     </block>

@@ -55,5 +55,54 @@ Page({
     if (result.code !== 0) return util.showToast(result.msg || '异常处理状态更新失败')
     util.showSuccess('已标记为处理中')
     await this.onShow()
+  },
+
+  promptResolution() {
+    return new Promise(resolve => {
+      wx.showModal({
+        title: '填写处理结果',
+        editable: true,
+        placeholderText: '请输入处理结果或解决方案',
+        success: res => resolve(res.confirm ? String(res.content || '').trim() : '')
+      })
+    })
+  },
+
+  async resolveAbnormal(e) {
+    const resolution = await this.promptResolution()
+    if (!resolution) {
+      util.showToast('请填写处理结果')
+      return
+    }
+    const app = getApp()
+    const result = await cloud.callFunction('dataService', {
+      action: 'resolveAbnormal',
+      authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
+      id: e.currentTarget.dataset.id,
+      resolution
+    })
+    if (!result || result.code !== 0) {
+      util.showToast((result && result.msg) || '异常解决状态更新失败')
+      return
+    }
+    util.showSuccess('已标记为已解决')
+    await this.onShow()
+  },
+
+  async closeAbnormal(e) {
+    const confirmed = await util.showConfirm('确认关闭该异常记录？关闭后不可继续处理。')
+    if (!confirmed) return
+    const app = getApp()
+    const result = await cloud.callFunction('dataService', {
+      action: 'closeAbnormal',
+      authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
+      id: e.currentTarget.dataset.id
+    })
+    if (!result || result.code !== 0) {
+      util.showToast((result && result.msg) || '异常关闭失败')
+      return
+    }
+    util.showSuccess('异常已关闭')
+    await this.onShow()
   }
 })

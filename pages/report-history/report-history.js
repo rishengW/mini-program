@@ -9,6 +9,7 @@ Page({
     filteredReports: [],
     filterScope: 'all',
     filterType: '',
+    filterTypeLabel: '全部类型',
     filterDate: '',
     reportTypeOptions: [],
     scopeOptions: [
@@ -23,20 +24,23 @@ Page({
     const role = app.globalData.userInfo ? app.globalData.userInfo.role : 'purchaser'
     const storeId = app.globalData.currentStore ? app.globalData.currentStore.storeId : ''
 
-    this.setData({
-      reportTypeOptions: [
+    const reportTypeOptions = [
         { value: '', label: '全部类型' },
         ...Object.keys(meta.reportTypeMap).map(k => ({
           value: k, label: meta.reportTypeMap[k].label
         }))
       ]
-    })
+    const selectedType = reportTypeOptions.find(item => item.value === this.data.filterType)
+    this.setData({ reportTypeOptions, filterTypeLabel: selectedType ? selectedType.label : '全部类型' })
 
     this.loadReports(role, storeId)
   },
 
   async loadReports(role, storeId) {
+    const app = getApp()
+    const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
     const result = await cloud.callFunction('getReports', {
+      authToken,
       role: role || 'purchaser',
       storeId: storeId || '',
       reportScope: this.data.filterScope !== 'all' ? this.data.filterScope : '',
@@ -74,7 +78,8 @@ Page({
   },
 
   onTypeChange(e) {
-    this.setData({ filterType: this.data.reportTypeOptions[e.detail.value].value })
+    const selected = this.data.reportTypeOptions[e.detail.value]
+    this.setData({ filterType: selected.value, filterTypeLabel: selected.label })
     this.onShow()
   },
 

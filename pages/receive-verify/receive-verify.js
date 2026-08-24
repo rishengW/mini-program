@@ -2,6 +2,35 @@
 const util = require('../../utils/util')
 const cloud = require('../../utils/cloud')
 
+async function recoverCommittedReceipt(orderId, authToken, failedResult) {
+  const message = String(failedResult && failedResult.msg || '')
+  const shouldCheck = failedResult && (
+    failedResult.errorType === 'CLOUD_UNAVAILABLE' ||
+    /已完成收货|不可收货|连接失败|Not connected/i.test(message)
+  )
+  if (!shouldCheck) return null
+
+  // A cloud request can lose its response after the transaction commits. The
+  // detail endpoint is idempotent and lets us distinguish that case from a
+  // genuine submission failure before showing an error to the user.
+  const detailResult = await cloud.callFunction('getPurchaseOrderDetail', { orderId, authToken })
+  if (!detailResult || detailResult.code !== 0) return null
+  const detail = cloud.normalizePurchaseOrder(detailResult.data)
+  const receipts = Array.isArray(detail.receipts) ? detail.receipts : []
+  if (detail.orderStatus !== 'received' && receipts.length === 0) return null
+
+  const receipt = receipts[0] || {}
+  return {
+    code: 0,
+    data: {
+      receiptId: receipt.receiptId || receipt.receipt_id || '',
+      reportsGenerated: 0,
+      reportWarning: '连接中断导致报表状态未返回，请稍后在报表中心查看。',
+      recovered: true
+    }
+  }
+}
+
 Page({
   data: {
     order: {},
@@ -19,7 +48,11 @@ Page({
     }
 
     util.showLoading('加载中...')
-    const result = await cloud.callFunction('getPurchaseOrderDetail', { orderId: id })
+    const app = getApp()
+    const result = await cloud.callFunction('getPurchaseOrderDetail', {
+      orderId: id,
+      authToken: app.globalData.authToken || wx.getStorageSync('authToken')
+    })
     util.hideLoading()
     if (!result || result.code !== 0) {
       util.showToast((result && result.msg) || '采购订单加载失败，请稍后重试')
@@ -95,6 +128,14 @@ Page({
       util.showToast('订单中没有可验收的商品，请返回后重试')
       return
     }
+    const invalidQty = items.some(item => (
+      typeof item.receivedQty !== 'number' || !Number.isFinite(item.receivedQty) ||
+      item.receivedQty < 0 || item.receivedQty > item.orderQty
+    ))
+    if (invalidQty) {
+      util.showToast('实收数量不能超过订单数量，请检查后重试')
+      return
+    }
 
     const app = getApp()
     const currentStore = app.globalData.currentStore || {}
@@ -118,6 +159,7 @@ Page({
     try {
       const photoFileIds = await cloud.uploadReceiptPhotos(photos, order.purchaseOrderId)
       result = await cloud.callFunction('createReceipt', {
+        authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
         purchaseOrderId: order.purchaseOrderId,
         storeId,
         storeName,
@@ -146,6 +188,21 @@ Page({
     } finally {
       util.hideLoading()
       this.setData({ isSubmitting: false })
+    }
+
+    if (!result || result.code !== 0) {
+      util.showLoading('确认收货状态...')
+      let recovered
+      try {
+        recovered = await recoverCommittedReceipt(
+          order.purchaseOrderId,
+          app.globalData.authToken || wx.getStorageSync('authToken'),
+          result
+        )
+      } finally {
+        util.hideLoading()
+      }
+      if (recovered) result = recovered
     }
 
     if (result && result.code === 0) {

@@ -36,6 +36,7 @@ Page({
         { value: 'store_receipt_report', label: '收货报表', icon: '📦' },
         { value: 'store_receipt_price_report', label: '带价格收货', icon: '💰' },
         { value: 'supplier_order_report', label: '供应商订货', icon: '🏭' },
+        { value: 'supplier_receipt_report', label: '供应商到货', icon: '🚛' },
         { value: 'supplier_receipt_price_report', label: '供应商账单', icon: '📊' }
       )
     }
@@ -46,8 +47,10 @@ Page({
     const app = getApp()
     const role = app.globalData.userInfo?.role || 'purchaser'
     const storeId = app.globalData.currentStore?.storeId
+    const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
 
     const result = await cloud.callFunction('getReports', {
+      authToken,
       role,
       storeId,
       reportType: this.data.activeType === 'all' ? '' : this.data.activeType,
@@ -92,6 +95,10 @@ Page({
   clearDateFilter() {
     this.setData({ filterDate: '' })
     this.loadReports()
+  },
+
+  goHistory() {
+    wx.navigateTo({ url: '/pages/report-history/report-history' })
   },
 
   goDetail(e) {

@@ -27,7 +27,8 @@ Page({
     totalCount: 0
   },
 
-  async onLoad() {
+  async onLoad(options = {}) {
+    this.editingOrderId = options.orderId || options.id || ''
     const now = new Date()
     const today = util.formatDate(now)
     const tmr = new Date(now.getTime() + 86400000)
@@ -35,6 +36,57 @@ Page({
 
     this.setData({ today, tomorrow, orderDate: today, deliveryDate: tomorrow })
     await this.loadReferenceData()
+    if (this.editingOrderId) await this.loadExistingOrder()
+  },
+
+  async loadExistingOrder() {
+    util.showLoading('加载草稿...')
+    const app = getApp()
+    const result = await cloud.callFunction('getPurchaseOrderDetail', {
+      orderId: this.editingOrderId,
+      authToken: app.globalData.authToken || wx.getStorageSync('authToken')
+    })
+    util.hideLoading()
+    if (!result || result.code !== 0) {
+      util.showToast((result && result.msg) || '草稿加载失败')
+      return
+    }
+    const order = cloud.normalizePurchaseOrder(result.data)
+    if (order.orderStatus !== 'draft') {
+      util.showToast('只有草稿订单可以编辑')
+      setTimeout(() => wx.navigateBack(), 600)
+      return
+    }
+
+    const qtyMap = {}
+    const manualItems = []
+    const sourceItems = order.items || []
+    sourceItems.forEach((item, index) => {
+      if (item.isManual) {
+        const categoryText = item.categorySnapshot || ''
+        const categoryL1 = /前厅|front/i.test(categoryText) ? 'front' : 'kitchen'
+        manualItems.push({
+          tempId: item.productId || item.itemId || ('MANUAL_' + index),
+          name: item.productNameSnapshot || '',
+          categoryL1,
+          unit: item.unitSnapshot || '',
+          qty: Number(item.orderQty) || 1,
+          remark: item.remark || '',
+          isManual: true
+        })
+      } else if (item.productId) {
+        qtyMap[item.productId] = Number(item.orderQty) || 0
+      }
+    })
+    this._qtyMap = qtyMap
+    this.setData({
+      orderDate: order.orderDate || this.data.orderDate,
+      deliveryDate: order.deliveryDate || order.orderDate || this.data.deliveryDate,
+      remark: order.remark || '',
+      manualItems
+    })
+    this.filterProducts()
+    this._updateTotal()
   },
 
   async loadReferenceData() {
@@ -57,7 +109,11 @@ Page({
   },
 
   async loadProducts() {
-    const result = await cloud.callFunction('getProducts', { includeInactive: false })
+    const app = getApp()
+    const result = await cloud.callFunction('getProducts', {
+      includeInactive: false,
+      authToken: app.globalData.authToken || wx.getStorageSync('authToken')
+    })
     if (!result || result.code !== 0) {
       util.showToast((result && result.msg) || '商品数据加载失败')
       this.setData({ displayProducts: [] })
@@ -266,9 +322,12 @@ Page({
     })
 
     const result = await cloud.callFunction('createPurchaseOrder', {
+      authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
       storeId: store.storeId || store.id,
       storeName: store.storeName || store.name,
-      orderDate: this.data.deliveryDate,
+      orderId: this.editingOrderId || undefined,
+      orderDate: this.data.orderDate,
+      deliveryDate: this.data.deliveryDate,
       createdBy: user.userId || user.id || user.name || user.username,
       createdByName: user.name || user.username,
       items,
@@ -278,9 +337,12 @@ Page({
 
     util.hideLoading()
     if (result.code === 0) {
+      const warning = result.data && result.data.reportWarning
       wx.showModal({
         title: orderStatus === 'draft' ? '草稿已保存' : '提交成功',
-        content: orderStatus === 'draft' ? '采购草稿已保存到数据库' : '采购申请已提交，下单报表已自动生成',
+        content: warning
+          ? warning
+          : (orderStatus === 'draft' ? '采购草稿已保存到数据库' : '采购申请已提交，下单报表已自动生成'),
         showCancel: false,
         success() { wx.navigateBack() }
       })

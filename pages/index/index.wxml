@@ -14,13 +14,29 @@
     </view>
   </view>
 
-  <!-- 系统管理 (仅超级管理员可见) -->
-  <view wx:if="{{isSuperAdmin}}" class="card" style="margin-top:-10rpx; margin-bottom:24rpx;">
+  <!-- 管理工作台 -->
+  <view wx:if="{{isManager}}" class="card" style="margin-top:-10rpx; margin-bottom:24rpx;">
     <view class="flex-between">
-      <view class="card-title">系统管理</view>
+      <view class="card-title">管理工作台</view>
     </view>
     <view class="action-grid" style="grid-template-columns: repeat(4, 1fr);">
-      <view class="action-item" bindtap="goAction" data-url="/pages/user-manage/user-manage">
+      <view class="action-item" bindtap="goAction" data-url="/pages/approval-list/approval-list">
+        <view class="action-icon">📝</view>
+        <view class="action-label">采购审核</view>
+      </view>
+      <view class="action-item" bindtap="goAction" data-url="/pages/product-manage/product-manage">
+        <view class="action-icon">🥬</view>
+        <view class="action-label">商品管理</view>
+      </view>
+      <view class="action-item" bindtap="goAction" data-url="/pages/supplier-manage/supplier-manage">
+        <view class="action-icon">🏭</view>
+        <view class="action-label">供应商</view>
+      </view>
+      <view class="action-item" bindtap="goAction" data-url="/pages/price-manage/price-manage">
+        <view class="action-icon">💰</view>
+        <view class="action-label">价格管理</view>
+      </view>
+      <view wx:if="{{isSuperAdmin}}" class="action-item" bindtap="goAction" data-url="/pages/user-manage/user-manage">
         <view class="action-icon">👥</view>
         <view class="action-label">账号管理</view>
       </view>

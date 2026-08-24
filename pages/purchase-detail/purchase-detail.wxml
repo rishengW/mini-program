@@ -22,6 +22,10 @@
         <view class="info-value">{{detail.orderDate}}</view>
       </view>
       <view class="info-item">
+        <view class="info-label">期望到货</view>
+        <view class="info-value">{{detail.deliveryDate || detail.orderDate}}</view>
+      </view>
+      <view class="info-item">
         <view class="info-label">提交人</view>
         <view class="info-value">{{detail.createdBy}}</view>
       </view>
@@ -52,7 +56,7 @@
     </view>
   </view>
 
-  <view wx:if="{{detail.orderStatus === 'draft'}}" class="bottom-actions">
+  <view wx:if="{{canEdit}}" class="bottom-actions">
     <button class="btn btn-outline flex-1" bindtap="editRequest">编辑</button>
     <button class="btn btn-primary flex-1" bindtap="submitRequest">提交审核</button>
   </view>

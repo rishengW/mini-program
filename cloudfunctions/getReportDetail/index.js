@@ -1,10 +1,28 @@
 // 云函数 getReportDetail - 获取报表详情（含行数据）
 const cloud = require('wx-server-sdk')
+const crypto = require('crypto')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
+function hashToken(token) {
+  return crypto.createHash('sha256').update(String(token || '')).digest('hex')
+}
+
+async function getSessionUser(authToken) {
+  if (!authToken) return null
+  const result = await db.collection('app_user')
+    .where({ session_token_hash: hashToken(authToken), status: 1 })
+    .limit(1).get()
+  const user = result.data[0]
+  if (!user || !user.session_expires_at) return null
+  const expiresAt = new Date(user.session_expires_at).getTime()
+  return Number.isFinite(expiresAt) && expiresAt > Date.now() ? user : null
+}
+
 exports.main = async (event = {}) => {
   try {
+    const user = await getSessionUser(event.authToken)
+    if (!user) return { code: -401, msg: '登录已过期，请重新登录' }
     const { reportId } = event || {}
     if (!reportId) return { code: -1, msg: '缺少reportId' }
 
@@ -19,6 +37,12 @@ exports.main = async (event = {}) => {
     }
 
     const report = reportRes.data[0]
+    const isGlobal = ['super_admin', 'purchaser'].includes(user.role)
+    if (!isGlobal) {
+      if (!['chef', 'store_manager'].includes(user.role)) return { code: -403, msg: '当前账号无权查看报表' }
+      if (report.report_scope !== 'store' || report.scope_id !== user.default_store_id) return { code: -403, msg: '无权查看其他门店报表' }
+      if (user.role === 'chef' && report.report_type !== 'store_order_report') return { code: -403, msg: '当前账号无权查看该报表类型' }
+    }
     let rows = []
 
     // 根据报表类型，从原始数据重新构建行数据

@@ -1,5 +1,8 @@
 /* pages/report-list/report-list.wxss */
 
+.report-page-header { margin-bottom: 20rpx; }
+.report-page-header .more-link { color: #1890FF; font-size: 24rpx; }
+
 .filter-section { margin-bottom: 16rpx; }
 
 .type-tabs {
