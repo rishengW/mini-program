@@ -1,6 +1,7 @@
 {
   "pages": [
     "pages/login/login",
+    "pages/account/account",
     "pages/index/index",
     "pages/store-switch/store-switch",
     "pages/purchase-create/purchase-create",

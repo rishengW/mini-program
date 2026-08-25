@@ -1,0 +1,58 @@
+/* pages/account/account.wxss */
+.account-page {
+  padding-top: 32rpx;
+}
+
+.account-summary {
+  display: flex;
+  align-items: center;
+  padding: 32rpx;
+}
+
+.account-avatar {
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 44rpx;
+  background: #E6F4FF;
+  color: #1890FF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 38rpx;
+  font-weight: 600;
+  margin-right: 24rpx;
+}
+
+.account-info {
+  min-width: 0;
+}
+
+.account-name {
+  font-size: 34rpx;
+  font-weight: 600;
+}
+
+.account-meta {
+  margin-top: 8rpx;
+  color: #8C8C8C;
+  font-size: 24rpx;
+}
+
+.password-card {
+  padding: 32rpx;
+}
+
+.password-card .card-title {
+  margin-bottom: 28rpx;
+}
+
+.password-card .form-group {
+  margin-bottom: 24rpx;
+}
+
+.password-tip {
+  margin-top: 20rpx;
+  color: #8C8C8C;
+  font-size: 22rpx;
+  line-height: 1.6;
+}

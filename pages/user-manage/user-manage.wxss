@@ -51,17 +51,25 @@
 
 .item-actions {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 170rpx;
 }
 
 .action-btn {
-  font-size: 28rpx;
+  font-size: 24rpx;
   color: #1890FF;
-  padding: 16rpx;
+  padding: 8rpx 0;
+  white-space: nowrap;
 }
 
 .action-delete {
   color: #FF4D4F;
+  margin-left: 8rpx;
+}
+
+.action-reset {
+  color: #FA8C16;
   margin-left: 8rpx;
 }
 
@@ -107,6 +115,17 @@
   font-weight: 600;
   text-align: center;
   margin-bottom: 40rpx;
+}
+
+.reset-modal {
+  padding-bottom: calc(48rpx + env(safe-area-inset-bottom));
+}
+
+.reset-target {
+  text-align: center;
+  color: #595959;
+  font-size: 26rpx;
+  margin: -16rpx 0 32rpx;
 }
 
 .form-group {

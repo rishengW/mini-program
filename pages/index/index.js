@@ -97,6 +97,8 @@ Page({
 
   goStore() { wx.navigateTo({ url: '/pages/store-switch/store-switch' }) },
 
+  goAccount() { wx.navigateTo({ url: '/pages/account/account' }) },
+
   async switchAccount() {
     const app = getApp()
     await cloud.callFunction('authService', {
