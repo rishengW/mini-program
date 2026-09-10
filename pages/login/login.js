@@ -37,9 +37,9 @@ Page({
 
   toggleSuperAdmin() {
     const isSuper = !this.data.isSuperAdminLogin
-    this.setData({ 
-      isSuperAdminLogin: isSuper, 
-      username: isSuper ? 'admin' : '', 
+    this.setData({
+      isSuperAdminLogin: isSuper,
+      username: isSuper ? 'admin' : '',
       password: ''
     })
     if (!isSuper) {
