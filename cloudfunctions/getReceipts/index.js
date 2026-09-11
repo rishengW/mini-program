@@ -3,6 +3,7 @@ const cloud = require('wx-server-sdk')
 const crypto = require('crypto')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
+const _ = db.command
 
 function hashToken(token) {
   return crypto.createHash('sha256').update(String(token || '')).digest('hex')
@@ -25,7 +26,7 @@ exports.main = async (event = {}) => {
     const user = await getSessionUser(event.authToken)
     if (!user) return { code: -401, msg: '登录已过期，请重新登录' }
     const { role, storeId, receiptDate } = event || {}
-    const page = Math.max(1, Math.floor(Number(event.page) || 1))
+    const page = Math.max(1, Math.min(1000, Math.floor(Number(event.page) || 1)))
     const pageSize = Math.min(100, Math.max(1, Math.floor(Number(event.pageSize) || 20)))
     let query = {}
 
@@ -51,15 +52,21 @@ exports.main = async (event = {}) => {
       .limit(pageSize)
       .get()
 
-    // 查每个收货单的明细
-    const receipts = []
-    for (const receipt of res.data) {
+    // 明细批量查询，避免每张收货单一次数据库请求
+    const receiptIds = res.data.map(r => r.receipt_id)
+    const itemGroups = {}
+    for (let i = 0; i < receiptIds.length; i += 20) {
+      const idChunk = receiptIds.slice(i, i + 20)
       const itemsRes = await db.collection('receipt_item')
-        .where({ receipt_id: receipt.receipt_id })
+        .where({ receipt_id: _.in(idChunk) })
         .limit(1000)
         .get()
-      receipts.push({ ...receipt, items: itemsRes.data })
+      itemsRes.data.forEach(item => {
+        if (!itemGroups[item.receipt_id]) itemGroups[item.receipt_id] = []
+        itemGroups[item.receipt_id].push(item)
+      })
     }
+    const receipts = res.data.map(receipt => ({ ...receipt, items: itemGroups[receipt.receipt_id] || [] }))
 
     return { code: 0, data: receipts, total: countRes.total, page, pageSize }
   } catch (err) {

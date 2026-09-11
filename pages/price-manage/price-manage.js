@@ -24,11 +24,10 @@ Page({
 
   async loadData() {
     const app = getApp()
-    const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
     const [supplierResult, productResult, priceResult] = await Promise.all([
-      cloud.callFunction('getSuppliers', { includeInactive: true, authToken }),
-      cloud.callFunction('getProducts', { includeInactive: true, authToken }),
-      cloud.callFunction('getProductPrices', { onlyCurrent: true, authToken })
+      cloud.callFunction('getSuppliers', { includeInactive: true }),
+      cloud.callFunction('getProducts', { includeInactive: true }),
+      cloud.callFunction('getProductPrices', { onlyCurrent: true })
     ])
     if (supplierResult.code !== 0 || productResult.code !== 0 || priceResult.code !== 0) {
       const failed = supplierResult.code !== 0 ? supplierResult : productResult.code !== 0 ? productResult : priceResult
@@ -109,6 +108,9 @@ Page({
 
   closeEdit() { this.setData({ showEdit: false }) },
 
+  // Prevent clicks inside the modal (including picker controls) from closing it.
+  stopBubble() {},
+
   onPriceInput(e) {
     this.setData({ newPrice: e.detail.value })
   },
@@ -120,7 +122,6 @@ Page({
 
     const app = getApp()
     const result = await cloud.callFunction('updateProductPrice', {
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
       supplierId: editItem.supplierId,
       productId: editItem.productId,
       newPrice: price,

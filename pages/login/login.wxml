@@ -62,6 +62,6 @@
   </view>
 
   <view class="login-footer">
-    <text class="text-tertiary text-sm">门店采购系统 测试版</text>
+    <text class="text-tertiary text-sm">门店采购系统</text>
   </view>
 </view>

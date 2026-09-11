@@ -20,7 +20,6 @@ Page({
     const app = getApp()
     const result = await cloud.callFunction('getPurchaseOrderDetail', {
       orderId: this.orderId,
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken')
     })
     util.hideLoading()
     if (!result || result.code !== 0) {
@@ -65,7 +64,6 @@ Page({
     util.showLoading('提交中...')
     const app = getApp()
     const result = await cloud.callFunction('createPurchaseOrder', {
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
       orderId: d.purchaseOrderId,
       storeId: d.storeId,
       storeName: d.storeName,

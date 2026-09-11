@@ -11,7 +11,6 @@ Page({
     const user = app.globalData.userInfo || {}
     const store = app.globalData.currentStore || {}
     const result = await cloud.callFunction('getPurchaseOrders', {
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
       role: user.role || 'purchaser',
       storeId: store.storeId || '',
       createdBy: '',
@@ -37,29 +36,50 @@ Page({
     this.setData({ list })
   },
 
+  async onPullDownRefresh() {
+    await this.onShow()
+    wx.stopPullDownRefresh()
+  },
+
   goDetail(e) {
     wx.navigateTo({ url: '/pages/approval-detail/approval-detail?id=' + e.currentTarget.dataset.id })
   },
 
   async approveRequest(e) {
-    const confirmed = await util.showConfirm('确认通过该采购申请？')
-    if (!confirmed) return
-    const app = getApp()
-    const result = await cloud.callFunction('dataService', {
-      action: 'auditOrder', authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
-      orderId: e.currentTarget.dataset.id, status: 'approved', items: []
-    })
-    if (result.code === 0) { util.showSuccess('已通过'); this.onShow() } else util.showToast(result.msg || '审核失败')
+    if (this._submitting) return
+    this._submitting = true
+    try {
+      const confirmed = await util.showConfirm('确认通过该采购申请？')
+      if (!confirmed) return
+      const app = getApp()
+      const result = await cloud.callFunction('dataService', {
+        action: 'auditOrder',
+        orderId: e.currentTarget.dataset.id, status: 'approved', items: []
+      })
+      if (result.code === 0) {
+        const warning = result.data && result.data.reportWarning
+        if (warning) util.showToast(warning); else util.showSuccess('已通过')
+        this.onShow()
+      } else util.showToast(result.msg || '审核失败')
+    } finally {
+      this._submitting = false
+    }
   },
 
   async rejectRequest(e) {
-    const confirmed = await util.showConfirm('确认驳回该采购申请？')
-    if (!confirmed) return
-    const app = getApp()
-    const result = await cloud.callFunction('dataService', {
-      action: 'auditOrder', authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
-      orderId: e.currentTarget.dataset.id, status: 'rejected', auditRemark: '审核驳回', items: []
-    })
-    if (result.code === 0) { util.showToast('已驳回'); this.onShow() } else util.showToast(result.msg || '审核失败')
+    if (this._submitting) return
+    this._submitting = true
+    try {
+      const confirmed = await util.showConfirm('确认驳回该采购申请？')
+      if (!confirmed) return
+      const app = getApp()
+      const result = await cloud.callFunction('dataService', {
+        action: 'auditOrder',
+        orderId: e.currentTarget.dataset.id, status: 'rejected', auditRemark: '审核驳回', items: []
+      })
+      if (result.code === 0) { util.showToast('已驳回'); this.onShow() } else util.showToast(result.msg || '审核失败')
+    } finally {
+      this._submitting = false
+    }
   }
 })

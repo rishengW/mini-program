@@ -12,10 +12,8 @@ Page({
     const store = app.globalData.currentStore || {}
     const role = user.role || 'store_manager'
     const storeId = store.storeId || store.id || ''
-    const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
     const [result, receiptResult] = await Promise.all([
       cloud.callFunction('getPurchaseOrders', {
-        authToken,
         role,
         storeId,
         createdBy: role === 'chef' ? (user.userId || user.id || user.name || '') : '',
@@ -24,7 +22,6 @@ Page({
       cloud.callFunction('getReceipts', {
         role,
         storeId,
-        authToken,
         page: 1,
         pageSize: 5
       })
@@ -48,20 +45,29 @@ Page({
           manualCount: o.items.filter(i => i.isManual).length
         }
       })
-    const receipts = receiptResult && receiptResult.code === 0
-      ? (receiptResult.data || []).map(receipt => ({
-        ...receipt,
-        receiptId: receipt.receiptId || receipt.receipt_id || '',
-        receiptDate: receipt.receiptDate || receipt.receipt_date || '',
-        storeName: receipt.storeName || receipt.store_name || '',
-        receivedBy: receipt.receivedBy || receipt.received_by || '',
-        receiptStatus: receipt.receiptStatus || receipt.receipt_status || '',
-        statusText: (receipt.receiptStatus || receipt.receipt_status) === 'abnormal' ? '收货异常' : '已收货',
-        statusType: (receipt.receiptStatus || receipt.receipt_status) === 'abnormal' ? 'danger' : 'success',
-        items: receipt.items || []
-      }))
-      : []
+    if (!receiptResult || receiptResult.code !== 0) {
+      // 收货记录加载失败时保留旧数据并提示，不渲染成"没有记录"的假空态
+      util.showToast((receiptResult && receiptResult.msg) || '收货记录加载失败')
+      this.setData({ orders })
+      return
+    }
+    const receipts = (receiptResult.data || []).map(receipt => ({
+      ...receipt,
+      receiptId: receipt.receiptId || receipt.receipt_id || '',
+      receiptDate: receipt.receiptDate || receipt.receipt_date || '',
+      storeName: receipt.storeName || receipt.store_name || '',
+      receivedBy: receipt.receivedBy || receipt.received_by || '',
+      receiptStatus: receipt.receiptStatus || receipt.receipt_status || '',
+      statusText: (receipt.receiptStatus || receipt.receipt_status) === 'abnormal' ? '收货异常' : '已收货',
+      statusType: (receipt.receiptStatus || receipt.receipt_status) === 'abnormal' ? 'danger' : 'success',
+      items: receipt.items || []
+    }))
     this.setData({ orders, receipts })
+  },
+
+  async onPullDownRefresh() {
+    await this.onShow()
+    wx.stopPullDownRefresh()
   },
 
   goVerify(e) {

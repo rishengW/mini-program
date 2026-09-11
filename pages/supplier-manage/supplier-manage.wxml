@@ -38,7 +38,7 @@
 
   <!-- 弹窗 -->
   <view wx:if="{{showAdd}}" class="modal-mask" bindtap="closeForm">
-    <view class="modal-body" catchtap="">
+    <view class="modal-body" catchtap="stopBubble">
       <view class="modal-title">{{editItem ? '编辑供应商' : '新增供应商'}}</view>
 
       <view class="form-group">

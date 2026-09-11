@@ -27,10 +27,9 @@ Page({
   async loadData() {
     util.showLoading()
     const app = getApp()
-    const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
     const [usersResult, storesResult] = await Promise.all([
-      cloud.callFunction('authService', { action: 'listUsers', authToken }),
-      cloud.callFunction('authService', { action: 'getStores', authToken })
+      cloud.callFunction('authService', { action: 'listUsers' }),
+      cloud.callFunction('authService', { action: 'getStores' })
     ])
     if (usersResult.code === 0 && storesResult.code === 0) {
       const stores = storesResult.data || []
@@ -116,7 +115,6 @@ Page({
     const app = getApp()
     const res = await cloud.callFunction('authService', {
       action: 'resetPassword',
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
       id: resetItem.id,
       newPassword: resetForm.newPassword
     })
@@ -179,12 +177,11 @@ Page({
     }
 
     const app = getApp()
-    const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
     let res
     if (editItem) {
-      res = await cloud.callFunction('authService', { action: 'updateUser', authToken, id: editItem.id, ...payload })
+      res = await cloud.callFunction('authService', { action: 'updateUser', id: editItem.id, ...payload })
     } else {
-      res = await cloud.callFunction('authService', { action: 'createUser', authToken, ...payload })
+      res = await cloud.callFunction('authService', { action: 'createUser', ...payload })
     }
 
     util.hideLoading()
@@ -208,7 +205,6 @@ Page({
     const app = getApp()
     const res = await cloud.callFunction('authService', {
       action: 'deleteUser',
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
       id: item.id
     })
     util.hideLoading()

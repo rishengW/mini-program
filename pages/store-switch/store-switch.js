@@ -10,7 +10,6 @@ Page({
     const currentStore = app.globalData.currentStore
     const result = await cloud.callFunction('authService', {
       action: 'getStores',
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken')
     })
     if (!result || result.code !== 0) {
       util.showToast((result && result.msg) || '门店加载失败，请稍后重试')

@@ -69,11 +69,15 @@ exports.main = async (event = {}) => {
       .limit(100)
       .get()
 
-    // 查关联报表
+    // 查关联报表。chef 只能看到本店维度的报表记录，
+    // 供应商级报表元数据（含供应商名称）不下发
     const reportRes = await db.collection('report_file')
       .where({ source_order_id: orderId })
       .limit(100)
       .get()
+    const reports = user.role === 'chef'
+      ? reportRes.data.filter(r => r.report_scope === 'store')
+      : reportRes.data
 
     return {
       code: 0,
@@ -82,7 +86,7 @@ exports.main = async (event = {}) => {
         created_by_name: createdByName,
         items: itemsRes.data,
         receipts: receiptRes.data,
-        reports: reportRes.data
+        reports
       }
     }
   } catch (err) {

@@ -12,7 +12,8 @@ Page({
     stats: [],
     recentOrders: [],
     recentReports: [],
-    isSuperAdmin: false
+    isSuperAdmin: false,
+    isManager: false
   },
 
   async onShow() {
@@ -25,25 +26,25 @@ Page({
     const user = app.globalData.userInfo
     const store = app.globalData.currentStore || {}
 
-    const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
-    const [ordersResult, reportsResult, messagesResult] = await Promise.all([
+    const storeId = store.storeId || store.id || ''
+    // 统计走服务端聚合计数；最近订单只取前 3 条，不再为统计拉全量订单
+    const [ordersResult, reportsResult, messagesResult, statsResult] = await Promise.all([
       cloud.callFunction('getPurchaseOrders', {
-        authToken,
         role: user.role,
-        storeId: store.storeId || store.id || '',
+        storeId,
         createdBy: user.role === 'chef' ? (user.userId || user.id || user.name) : '',
-        pageSize: 100
+        pageSize: 3
       }),
       cloud.callFunction('getReports', {
-        authToken,
         role: user.role,
-        storeId: store.storeId,
+        storeId,
         reportType: '',
         relatedDate: ''
       }),
-      cloud.callFunction('dataService', { action: 'getMessages', authToken })
+      cloud.callFunction('dataService', { action: 'getMessages' }),
+      cloud.callFunction('dataService', { action: 'getOrderStats', storeId })
     ])
-    if (ordersResult.code !== 0 || reportsResult.code !== 0 || messagesResult.code !== 0) {
+    if (ordersResult.code !== 0 || reportsResult.code !== 0 || messagesResult.code !== 0 || statsResult.code !== 0) {
       util.showToast('首页数据加载失败，请稍后重试')
       return
     }
@@ -52,19 +53,18 @@ Page({
     const myReports = (reportsResult.data || []).map(cloud.normalizeReport)
     const messages = messagesResult.data || []
 
-    // 统计（全部可点击）
-    const pendingOrders = myOrders.filter(o => o.orderStatus === 'submitted').length
-    const pendingReceive = myOrders.filter(o =>
-      ['submitted', 'approved', 'report_generated', 'partial_received', 'to_receive'].includes(o.orderStatus)
-    ).length
-    const completedOrders = myOrders.filter(o => o.orderStatus === 'received').length
+    // 统计（全部可点击）：来自服务端聚合，不受分页截断影响
+    const statsData = statsResult.data || {}
+    const pendingOrders = statsData.submitted || 0
+    const pendingReceive = statsData.receivable || 0
+    const completedOrders = statsData.received || 0
     const unreadMsg = messages.filter(m => !m.read).length
 
     const stats = [
       { label: '待处理', value: pendingOrders, icon: '📋', color: '#FAAD14', status: 'submitted' },
       { label: '待收货', value: pendingReceive, icon: '📦', color: '#1890FF', status: 'submitted' },
       { label: '已完成', value: completedOrders, icon: '✅', color: '#52C41A', status: 'received' },
-      { label: '需关注', value: unreadMsg, icon: '⚠️', color: '#FF4D4F', status: 'abnormal' }
+      { label: '需关注', value: unreadMsg, icon: '⚠️', color: '#FF4D4F', status: 'message' }
     ]
 
     // 最近采购单
@@ -103,7 +103,6 @@ Page({
     const app = getApp()
     await cloud.callFunction('authService', {
       action: 'logout',
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken')
     })
     app.globalData.isLoggedIn = false
     app.globalData.userInfo = null
@@ -120,7 +119,10 @@ Page({
   // 状态卡片点击
   goStatPage(e) {
     const status = e.currentTarget.dataset.status
-    if (status === 'abnormal') {
+    if (status === 'message') {
+      // "需关注"显示的是未读消息数，跳消息页（tabBar 页面需用 switchTab）
+      wx.switchTab({ url: '/pages/message/message' })
+    } else if (status === 'abnormal') {
       wx.navigateTo({ url: '/pages/abnormal-list/abnormal-list' })
     } else {
       wx.navigateTo({ url: '/pages/purchase-list/purchase-list?status=' + status })

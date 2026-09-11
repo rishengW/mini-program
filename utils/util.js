@@ -59,13 +59,6 @@ function getRelativeTime(dateStr) {
 }
 
 /**
- * 生成唯一ID
- */
-function generateId() {
-    return Date.now() + Math.floor(Math.random() * 1000)
-}
-
-/**
  * 提示
  */
 function showToast(title, icon = 'none') {
@@ -94,28 +87,20 @@ function showConfirm(content, title = '提示') {
             content,
             success(res) {
                 resolve(res.confirm)
+            },
+            fail() {
+                resolve(false)
             }
         })
     })
 }
 
-/**
- * 计算总金额
- */
-function calcTotal(items, qtyField = 'requestedQty', priceField = 'price') {
-    return items.reduce((sum, item) => {
-        return sum + (item[qtyField] || 0) * (item[priceField] || 0)
-    }, 0).toFixed(2)
-}
-
 module.exports = {
     formatDate,
     getRelativeTime,
-    generateId,
     showToast,
     showSuccess,
     showLoading,
     hideLoading,
-    showConfirm,
-    calcTotal
+    showConfirm
 }

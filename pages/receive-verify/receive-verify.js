@@ -2,7 +2,7 @@
 const util = require('../../utils/util')
 const cloud = require('../../utils/cloud')
 
-async function recoverCommittedReceipt(orderId, authToken, failedResult) {
+async function recoverCommittedReceipt(orderId, failedResult) {
   const message = String(failedResult && failedResult.msg || '')
   const shouldCheck = failedResult && (
     failedResult.errorType === 'CLOUD_UNAVAILABLE' ||
@@ -13,7 +13,7 @@ async function recoverCommittedReceipt(orderId, authToken, failedResult) {
   // A cloud request can lose its response after the transaction commits. The
   // detail endpoint is idempotent and lets us distinguish that case from a
   // genuine submission failure before showing an error to the user.
-  const detailResult = await cloud.callFunction('getPurchaseOrderDetail', { orderId, authToken })
+  const detailResult = await cloud.callFunction('getPurchaseOrderDetail', { orderId })
   if (!detailResult || detailResult.code !== 0) return null
   const detail = cloud.normalizePurchaseOrder(detailResult.data)
   const receipts = Array.isArray(detail.receipts) ? detail.receipts : []
@@ -55,7 +55,6 @@ Page({
     const app = getApp()
     const result = await cloud.callFunction('getPurchaseOrderDetail', {
       orderId: id,
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken')
     })
     util.hideLoading()
     if (!result || result.code !== 0) {
@@ -153,23 +152,28 @@ Page({
 
     const hasAbnormal = items.some(i => i.isShortage || i.isQualityIssue || i.isWrongItem)
     const msg = hasAbnormal ? '本次验收有异常标记，确认提交？' : '确认提交验收？'
-    const confirmed = await util.showConfirm(msg)
-    if (!confirmed) return
-
+    // 先置位再弹确认框，避免弹窗期间双击并发提交
     this.setData({ isSubmitting: true })
+    const confirmed = await util.showConfirm(msg)
+    if (!confirmed) {
+      this.setData({ isSubmitting: false })
+      return
+    }
+
     util.showLoading('提交中...')
 
     let result
     try {
       const photoFileIds = await cloud.uploadReceiptPhotos(photos, order.purchaseOrderId)
       result = await cloud.callFunction('createReceipt', {
-        authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
         purchaseOrderId: order.purchaseOrderId,
         storeId,
         storeName,
         receivedBy: user.name || user.username || '',
         overallRemark,
         photoFileIds,
+        // 收货日期以门店本地日期为准，避免凌晨 0-8 点被服务端 UTC 时间归档到前一天
+        receiptDate: util.formatDate(new Date()),
         items: items.map(item => ({
           orderItemId: item.itemId,
           productId: item.productId,
@@ -200,7 +204,6 @@ Page({
       try {
         recovered = await recoverCommittedReceipt(
           order.purchaseOrderId,
-          app.globalData.authToken || wx.getStorageSync('authToken'),
           result
         )
       } finally {

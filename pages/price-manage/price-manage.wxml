@@ -39,7 +39,7 @@
 
   <!-- 编辑弹窗 -->
   <view wx:if="{{showEdit}}" class="modal-mask" bindtap="closeEdit">
-    <view class="modal-body" catchtap="">
+    <view class="modal-body" catchtap="stopBubble">
       <view class="modal-title">修改价格</view>
 
       <view class="edit-info">

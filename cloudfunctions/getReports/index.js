@@ -68,13 +68,17 @@ exports.main = async (event = {}) => {
       query.scope_id = user.default_store_id
     }
 
+    const page = Math.max(1, Math.min(1000, Math.floor(Number(event.page) || 1)))
+    const pageSize = Math.min(50, Math.max(1, Math.floor(Number(event.pageSize) || 20)))
+    const countRes = await db.collection('report_file').where(query).count()
     const res = await db.collection('report_file')
       .where(query)
       .orderBy('generated_at', 'desc')
-      .limit(50)
+      .skip((page - 1) * pageSize)
+      .limit(pageSize)
       .get()
 
-    return { code: 0, data: res.data }
+    return { code: 0, data: res.data, total: countRes.total, page, pageSize }
   } catch (err) {
     console.error('[getReports] 报表查询失败:', err)
     return { code: -1, msg: '报表数据加载失败，请稍后重试' }

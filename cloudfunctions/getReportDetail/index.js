@@ -3,6 +3,7 @@ const cloud = require('wx-server-sdk')
 const crypto = require('crypto')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
+const _ = db.command
 
 function hashToken(token) {
   return crypto.createHash('sha256').update(String(token || '')).digest('hex')
@@ -67,6 +68,7 @@ exports.main = async (event = {}) => {
       // 门店下单报表：从采购单明细中获取
       const itemsRes = await db.collection('purchase_order_item')
         .where({ purchase_order_id: orderId })
+        .limit(1000)
         .get()
       rows = itemsRes.data.map(item => ({
         productName: item.product_name_snapshot,
@@ -86,6 +88,7 @@ exports.main = async (event = {}) => {
         const receiptId = receiptRes.data[0].receipt_id
         const itemsRes = await db.collection('receipt_item')
           .where({ receipt_id: receiptId })
+          .limit(1000)
           .get()
         rows = itemsRes.data.map(item => {
           const abnormalTypeNames = getAbnormalTypeNames(item)
@@ -106,18 +109,26 @@ exports.main = async (event = {}) => {
         })
       }
     } else if (type === 'supplier_order_report') {
-      // 供应商订货汇总：按供应商scope_id筛选采购单明细
+      // 供应商订货汇总：按供应商scope_id筛选采购单明细。
+      // 明细按 purchase_order_id 分块批量取回，不再逐单串行查询。
       const supplierId = report.scope_id
       const date = report.related_date
-      // 查询当天所有采购单
       const ordersRes = await db.collection('purchase_order')
         .where({ order_date: date })
+        .limit(200)
         .get()
-      for (const order of ordersRes.data) {
+      const orderMap = {}
+      ordersRes.data.forEach(order => { orderMap[order.purchase_order_id] = order })
+      const orderIds = ordersRes.data.map(order => order.purchase_order_id)
+      for (let i = 0; i < orderIds.length; i += 20) {
+        const idChunk = orderIds.slice(i, i + 20)
         const itemsRes = await db.collection('purchase_order_item')
-          .where({ purchase_order_id: order.purchase_order_id, supplier_id: supplierId })
+          .where({ purchase_order_id: _.in(idChunk), supplier_id: supplierId })
+          .limit(1000)
           .get()
         itemsRes.data.forEach(item => {
+          const order = orderMap[item.purchase_order_id]
+          if (!order) return
           rows.push({
             storeName: order.store_name,
             productName: item.product_name_snapshot,
@@ -128,42 +139,43 @@ exports.main = async (event = {}) => {
         })
       }
     } else if (type === 'supplier_receipt_report' || type === 'supplier_receipt_price_report') {
-      // 供应商到货/带价格账单：按供应商scope_id筛选收货明细
+      // 供应商到货/带价格账单：收货明细本身已存 supplier_id（createReceipt 写入时从订单明细带过来），
+      // 直接按供应商过滤，不再逐行回查 purchase_order_item（原来是 收货单数×明细数 级别的串行查询）。
       const supplierId = report.scope_id
       const date = report.related_date
       const receiptsRes = await db.collection('receipt')
         .where({ receipt_date: date })
+        .limit(200)
         .get()
-      for (const receipt of receiptsRes.data) {
+      const receiptMap = {}
+      receiptsRes.data.forEach(receipt => { receiptMap[receipt.receipt_id] = receipt })
+      const receiptIds = receiptsRes.data.map(receipt => receipt.receipt_id)
+      for (let i = 0; i < receiptIds.length; i += 20) {
+        const idChunk = receiptIds.slice(i, i + 20)
         const itemsRes = await db.collection('receipt_item')
-          .where({ receipt_id: receipt.receipt_id })
+          .where({ receipt_id: _.in(idChunk), supplier_id: supplierId })
+          .limit(1000)
           .get()
-        // 需要关联采购明细获取供应商信息
-        for (const item of itemsRes.data) {
-          // 检查此商品是否属于该供应商
-          const orderItemRes = await db.collection('purchase_order_item')
-            .where({ item_id: item.purchase_order_item_id, supplier_id: supplierId })
-            .limit(1)
-            .get()
-          if (orderItemRes.data.length > 0) {
-            const abnormalTypeNames = getAbnormalTypeNames(item)
-            rows.push({
-              storeName: receipt.store_name,
-              productName: item.product_name,
-              receivedQty: item.received_qty,
-              orderQty: item.order_qty_snapshot,
-              unit: item.unit_snapshot,
-              unitPrice: item.price_snapshot,
-              subtotal: (item.received_qty * item.price_snapshot).toFixed(2) * 1,
-              payable: item.payable_flag,
-              abnormal: abnormalTypeNames.length > 0,
-              abnormalTypeNames,
-              abnormalText: abnormalTypeNames.join('、'),
-              abnormalStatus: abnormalTypeNames.length > 0 ? '收货异常' : '正常',
-              remark: item.remark || ''
-            })
-          }
-        }
+        itemsRes.data.forEach(item => {
+          const receipt = receiptMap[item.receipt_id]
+          if (!receipt) return
+          const abnormalTypeNames = getAbnormalTypeNames(item)
+          rows.push({
+            storeName: receipt.store_name,
+            productName: item.product_name,
+            receivedQty: item.received_qty,
+            orderQty: item.order_qty_snapshot,
+            unit: item.unit_snapshot,
+            unitPrice: item.price_snapshot,
+            subtotal: (item.received_qty * item.price_snapshot).toFixed(2) * 1,
+            payable: item.payable_flag,
+            abnormal: abnormalTypeNames.length > 0,
+            abnormalTypeNames,
+            abnormalText: abnormalTypeNames.join('、'),
+            abnormalStatus: abnormalTypeNames.length > 0 ? '收货异常' : '正常',
+            remark: item.remark || ''
+          })
+        })
       }
     }
 

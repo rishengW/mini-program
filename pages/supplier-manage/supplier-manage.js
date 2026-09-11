@@ -17,7 +17,6 @@ Page({
     const app = getApp()
     const result = await cloud.callFunction('getSuppliers', {
       includeInactive: true,
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken')
     })
     if (!result || result.code !== 0) {
       util.showToast((result && result.msg) || '供应商数据加载失败')
@@ -55,6 +54,9 @@ Page({
 
   closeForm() { this.setData({ showAdd: false }) },
 
+  // Prevent clicks inside the modal (including picker controls) from closing it.
+  stopBubble() {},
+
   onFormInput(e) {
     this.setData({ [`form.${e.currentTarget.dataset.field}`]: e.detail.value })
   },
@@ -66,7 +68,6 @@ Page({
     const app = getApp()
     const result = await cloud.callFunction('dataService', {
       action: 'saveSupplier',
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
       supplierId: editItem && editItem.supplierId,
       ...form,
       supplierName: form.supplierName.trim()
@@ -84,7 +85,6 @@ Page({
     const app = getApp()
     const result = await cloud.callFunction('dataService', {
       action: 'toggleSupplier',
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
       supplierId: id
     })
     if (result.code !== 0) return util.showToast(result.msg || '供应商状态更新失败')

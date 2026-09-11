@@ -40,7 +40,6 @@ Page({
     const app = getApp()
     const res = await cloud.callFunction('authService', {
       action: 'changePassword',
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
       currentPassword,
       newPassword
     })

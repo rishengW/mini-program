@@ -133,7 +133,24 @@ async function login(event) {
     .limit(1)
     .get()
   const user = result.data[0]
+  // 登录锁定：连续失败 5 次锁定 10 分钟，防凭证爆破
+  if (user) {
+    const lockedUntil = user.login_locked_until ? new Date(user.login_locked_until).getTime() : 0
+    if (Number.isFinite(lockedUntil) && lockedUntil > Date.now()) {
+      const minutes = Math.max(1, Math.ceil((lockedUntil - Date.now()) / 60000))
+      return { code: -1, msg: `账号已锁定，请${minutes}分钟后重试` }
+    }
+  }
   if (!user || !verifyPassword(password, user)) {
+    if (user) {
+      const failCount = (Number(user.login_fail_count) || 0) + 1
+      const updateData = { login_fail_count: failCount, updated_at: db.serverDate() }
+      if (failCount >= 5) {
+        updateData.login_locked_until = new Date(Date.now() + 10 * 60 * 1000)
+        updateData.login_fail_count = 0
+      }
+      await db.collection(USER_COLLECTION).doc(user._id).update({ data: updateData })
+    }
     return { code: -1, msg: '账号或密码错误' }
   }
   if (user.status !== 1) return { code: -1, msg: '账号已停用，请联系管理员' }
@@ -150,6 +167,8 @@ async function login(event) {
     data: {
       session_token_hash: hashToken(sessionToken),
       session_expires_at: sessionExpiresAt,
+      login_fail_count: 0,
+      login_locked_until: null,
       last_login_at: db.serverDate(),
       updated_at: db.serverDate()
     }

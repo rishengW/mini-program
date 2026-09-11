@@ -23,7 +23,9 @@ async function getSessionUser(authToken) {
 
 // 辅助：用双引号包裹CSV字段，防止逗号问题
 function csvField(val) {
-  const s = String(val == null ? '' : val)
+  let s = String(val == null ? '' : val)
+  // 防公式注入：以 = + - @ 开头的值在 Excel/WPS 里会被当作公式执行
+  if (/^[=+\-@]/.test(s)) s = "'" + s
   return '"' + s.replace(/"/g, '""') + '"'
 }
 
@@ -53,16 +55,15 @@ async function createSubmissionMessage(orderNo, orderDate, storeId, storeName) {
   }
 }
 
-// 辅助：查询同类报表最高版本号
+// 辅助：查询同类报表最高版本号。版本号仅用于展示，报表路径已含单号保证唯一；
+// 查询失败必须向上抛出，不能静默回落 v1 加剧版本号竞争。
 async function getNextVersion(reportType, scopeId, relatedDate) {
-  try {
-    const res = await db.collection('report_file')
-      .where({ report_type: reportType, scope_id: scopeId, related_date: relatedDate })
-      .orderBy('file_version', 'desc')
-      .limit(1)
-      .get()
-    return res.data.length > 0 ? (Number(res.data[0].file_version) || 0) + 1 : 1
-  } catch (e) { return 1 }
+  const res = await db.collection('report_file')
+    .where({ report_type: reportType, scope_id: scopeId, related_date: relatedDate })
+    .orderBy('file_version', 'desc')
+    .limit(1)
+    .get()
+  return res.data.length > 0 ? (Number(res.data[0].file_version) || 0) + 1 : 1
 }
 
 exports.main = async (event = {}) => {
@@ -86,7 +87,8 @@ exports.main = async (event = {}) => {
       orderStatus = 'submitted'
     } = event
     let items = inputItems
-    const today = new Date().toISOString().slice(0, 10)
+    // 业务日期按 UTC+8（项目用户全部在中国时区），避免凌晨 0-8 点落到前一天
+    const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10)
     const actualDate = orderDate || today
     // delivery_date was added after the initial schema. Keep orderDate as a
     // backwards-compatible fallback for old callers and old records.
@@ -200,7 +202,9 @@ exports.main = async (event = {}) => {
 
     // 编辑草稿时沿用原订单号；新建时生成订单号。
     const dateStr = actualDate.replace(/-/g, '')
-    const orderNo = orderId || ('PO' + dateStr + String(Date.now()).slice(-4))
+    // 订单号：日期 + 毫秒(base36) + 4位随机hex。旧版只有毫秒低4位（周期10秒），
+    // 无唯一索引兜底时碰撞会静默产生同号双单。
+    const orderNo = orderId || ('PO' + dateStr + Date.now().toString(36) + crypto.randomBytes(2).toString('hex'))
 
     const orderData = {
       store_id: storeId,
@@ -278,8 +282,8 @@ exports.main = async (event = {}) => {
     items.forEach(item => {
       csv1 += [csvField(item.productName), csvField(item.category), csvField(item.unit), csvField(item.orderQty), csvField(item.remark || '')].join(',') + '\n'
     })
-    const f1 = `reports/store/${actualDate}/store-order-${safePathPart(storeName)}-${actualDate}-v${storeVer}.csv`
-    const u1 = await cloud.uploadFile({ cloudPath: f1, fileContent: Buffer.from(csv1, 'utf-8') })
+    const f1 = `reports/store/${actualDate}/store-order-${safePathPart(storeName)}-${actualDate}-${orderNo}-v${storeVer}.csv`
+    const u1 = await cloud.uploadFile({ cloudPath: f1, fileContent: Buffer.from(String.fromCharCode(0xFEFF) + csv1, 'utf-8') })
     await db.collection('report_file').add({
       data: {
         report_id: 'RPT_SO_' + orderNo, report_type: 'store_order_report',
@@ -299,18 +303,15 @@ exports.main = async (event = {}) => {
       supplierMap[sid].items.push(item)
     })
 
-    // 查供应商名称
+    // 查供应商名称（批量，避免每个供应商一次数据库请求）
     let supplierReportsGenerated = 0
-    for (const sid of Object.keys(supplierMap)) {
-      if (sid !== 'unknown') {
-        try {
-          const supRes = await db.collection('supplier')
-            .where({ supplier_id: sid }).limit(1).get()
-          if (supRes.data.length > 0) {
-            supplierMap[sid].name = supRes.data[0].supplier_name
-          }
-        } catch (e) {}
-      }
+    const orderSupplierIds = Object.keys(supplierMap).filter(sid => sid !== 'unknown')
+    for (let i = 0; i < orderSupplierIds.length; i += 20) {
+      const idChunk = orderSupplierIds.slice(i, i + 20)
+      const supRes = await db.collection('supplier').where({ supplier_id: _.in(idChunk) }).limit(100).get()
+      supRes.data.forEach(s => {
+        if (supplierMap[s.supplier_id]) supplierMap[s.supplier_id].name = s.supplier_name
+      })
     }
 
     for (const sid of Object.keys(supplierMap)) {
@@ -324,8 +325,8 @@ exports.main = async (event = {}) => {
         csvSup += [csvField(storeName), csvField(item.productName), csvField(item.orderQty), csvField(item.unit), csvField(item.remark || '')].join(',') + '\n'
       })
 
-      const fSup = `reports/supplier/${actualDate}/supplier-order-${safePathPart(supName)}-${actualDate}-v${supVer}.csv`
-      const uSup = await cloud.uploadFile({ cloudPath: fSup, fileContent: Buffer.from(csvSup, 'utf-8') })
+      const fSup = `reports/supplier/${actualDate}/supplier-order-${safePathPart(supName)}-${actualDate}-${orderNo}-v${supVer}.csv`
+      const uSup = await cloud.uploadFile({ cloudPath: fSup, fileContent: Buffer.from(String.fromCharCode(0xFEFF) + csvSup, 'utf-8') })
       await db.collection('report_file').add({
         data: {
           report_id: 'RPT_SUO_' + sid + '_' + orderNo, report_type: 'supplier_order_report',
@@ -354,6 +355,7 @@ exports.main = async (event = {}) => {
         data: { orderId: persistedOrderNo, reportGenerated: false, reportsGenerated: 0, reportWarning: '订单已保存，但报表生成失败，请联系管理员处理。' }
       }
     }
-    return { code: -1, msg: err.message }
+    console.error('[createPurchaseOrder] 采购订单保存失败:', err)
+    return { code: -1, msg: '采购订单保存失败，请稍后重试' }
   }
 }

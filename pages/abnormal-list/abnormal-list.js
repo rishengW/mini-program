@@ -13,7 +13,6 @@ Page({
     const app = getApp()
     const result = await cloud.callFunction('dataService', {
       action: 'getAbnormalRecords',
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken')
     })
     if (!result || result.code !== 0) {
       util.showToast((result && result.msg) || '异常记录加载失败')
@@ -49,7 +48,6 @@ Page({
     const app = getApp()
     const result = await cloud.callFunction('dataService', {
       action: 'startAbnormal',
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
       id: e.currentTarget.dataset.id
     })
     if (result.code !== 0) return util.showToast(result.msg || '异常处理状态更新失败')
@@ -77,7 +75,6 @@ Page({
     const app = getApp()
     const result = await cloud.callFunction('dataService', {
       action: 'resolveAbnormal',
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
       id: e.currentTarget.dataset.id,
       resolution
     })
@@ -95,7 +92,6 @@ Page({
     const app = getApp()
     const result = await cloud.callFunction('dataService', {
       action: 'closeAbnormal',
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
       id: e.currentTarget.dataset.id
     })
     if (!result || result.code !== 0) {

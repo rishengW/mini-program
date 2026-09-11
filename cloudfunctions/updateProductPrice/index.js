@@ -34,17 +34,18 @@ exports.main = async (event = {}) => {
     if (!Number.isFinite(numericPrice) || numericPrice <= 0) {
       return { code: -1, msg: '价格必须是大于0的数字' }
     }
-    const priceDate = effectiveDate || new Date().toISOString().slice(0, 10)
+    // 生效日期缺省值按 UTC+8 取，避免凌晨 0-8 点落到前一天
+    const priceDate = effectiveDate || new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10)
     const parsedDate = new Date(`${priceDate}T00:00:00Z`)
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(priceDate)) || Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== String(priceDate)) {
       return { code: -1, msg: '生效日期格式无效' }
     }
     const [supplierRes, productRes] = await Promise.all([
-      db.collection('supplier').where({ supplier_id: supplierId }).limit(1).get(),
-      db.collection('product').where({ product_id: productId }).limit(1).get()
+      db.collection('supplier').where({ supplier_id: supplierId, status: 1 }).limit(1).get(),
+      db.collection('product').where({ product_id: productId, status: 1 }).limit(1).get()
     ])
-    if (!supplierRes.data.length) return { code: -1, msg: '供应商不存在' }
-    if (!productRes.data.length) return { code: -1, msg: '商品不存在' }
+    if (!supplierRes.data.length) return { code: -1, msg: '供应商不存在或已停用' }
+    if (!productRes.data.length) return { code: -1, msg: '商品不存在或已停用' }
 
     const priceId = 'PRC_' + Date.now()
     // Switching the current price and inserting the replacement must be one

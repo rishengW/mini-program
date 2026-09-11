@@ -4,6 +4,7 @@ const cloud = require('wx-server-sdk')
 const crypto = require('crypto')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
+const _ = db.command
 
 function hashToken(token) {
   return crypto.createHash('sha256').update(String(token || '')).digest('hex')
@@ -21,7 +22,9 @@ async function getSessionUser(authToken) {
 }
 
 function csvField(val) {
-  const s = String(val == null ? '' : val)
+  let s = String(val == null ? '' : val)
+  // 防公式注入：以 = + - @ 开头的值在 Excel/WPS 里会被当作公式执行
+  if (/^[=+\-@]/.test(s)) s = "'" + s
   return '"' + s.replace(/"/g, '""') + '"'
 }
 
@@ -48,12 +51,12 @@ function getItemAbnormalNames(item) {
 }
 
 async function getNextVersion(reportType, scopeId, relatedDate) {
-  try {
-    const res = await db.collection('report_file')
-      .where({ report_type: reportType, scope_id: scopeId, related_date: relatedDate })
-      .orderBy('file_version', 'desc').limit(1).get()
-    return res.data.length > 0 ? (Number(res.data[0].file_version) || 0) + 1 : 1
-  } catch (e) { return 1 }
+  // 版本号仅用于展示，报表路径已含收货单号保证唯一；
+  // 查询失败必须向上抛出，不能静默回落 v1 加剧版本号竞争。
+  const res = await db.collection('report_file')
+    .where({ report_type: reportType, scope_id: scopeId, related_date: relatedDate })
+    .orderBy('file_version', 'desc').limit(1).get()
+  return res.data.length > 0 ? (Number(res.data[0].file_version) || 0) + 1 : 1
 }
 
 // Backfill the notification for receipts created by an older deployment.
@@ -140,6 +143,14 @@ exports.main = async (event = {}) => {
     if (!Array.isArray(photoFileIds)) {
       return { code: -1, msg: '验收照片信息格式不正确，请重新选择照片' }
     }
+    if (photoFileIds.length > 9) {
+      return { code: -1, msg: '验收照片最多9张' }
+    }
+    // 照片 fileID 必须位于本订单的上传目录下（路径规则见 utils/cloud.js 的 uploadReceiptPhotos）
+    const photoPrefix = `receipts/${purchaseOrderId}/`
+    if (photoFileIds.some(id => typeof id !== 'string' || !id.includes(photoPrefix))) {
+      return { code: -1, msg: '验收照片信息无效，请重新上传' }
+    }
 
     const orderRes = await db.collection('purchase_order')
       .where({ purchase_order_id: purchaseOrderId })
@@ -211,24 +222,43 @@ exports.main = async (event = {}) => {
       return { code: -1, msg: '该订单已完成收货，请勿重复提交' }
     }
 
-    const receiptDate = new Date().toISOString().slice(0, 10)
+    // 收货日期：优先用客户端传入的本地日期（校验格式），否则按 UTC+8 取服务端日期，
+    // 避免凌晨 0-8 点收货被归档到前一天。
+    const isReceiptDate = value => {
+      const text = String(value || '')
+      const date = new Date(`${text}T00:00:00Z`)
+      return /^\d{4}-\d{2}-\d{2}$/.test(text) && !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === text
+    }
+    const receiptDate = isReceiptDate(event.receiptDate)
+      ? event.receiptDate
+      : new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10)
     const receiptId = 'RCP' + Date.now()
+
+    // 实收少于下单即为少货，即使用户未手动勾选也按异常处理：
+    // 避免短收被静默记为"已收货"，少货行不进入付款结算，走异常流程跟进。
+    items.forEach(item => {
+      if (item.receivedQty < item.orderQty) item.isShortage = true
+    })
 
     const hasAbnormal = items.some(item => getItemAbnormalTypes(item).length > 0)
     const abnormalTypeNames = [...new Set(items.reduce((all, item) => all.concat(getItemAbnormalNames(item)), []))]
 
     // 价格以数据库中的当前供应商价格为准，避免客户端旧价格进入结算报表。
+    // 批量取价：按 product_id 分块一次查回，再在内存中按 (供应商, 商品) 匹配，
+    // 避免每条明细一次数据库请求。
+    const priceMap = {}
+    const priceProductIds = [...new Set(items.filter(item => item.supplierId).map(item => item.productId))]
+    for (let i = 0; i < priceProductIds.length; i += 20) {
+      const idChunk = priceProductIds.slice(i, i + 20)
+      const priceRes = await db.collection('supplier_product_price')
+        .where({ product_id: _.in(idChunk), is_current: 1 })
+        .limit(100)
+        .get()
+      priceRes.data.forEach(p => { priceMap[`${p.supplier_id}|${p.product_id}`] = Number(p.price) || 0 })
+    }
     for (let i = 0; i < items.length; i++) {
       const item = items[i]
-      let priceSnapshot = 0
-      if (item.supplierId) {
-        const priceQuery = { product_id: item.productId, is_current: 1 }
-        priceQuery.supplier_id = item.supplierId
-        const priceRes = await db.collection('supplier_product_price')
-          .where(priceQuery)
-          .limit(1).get()
-        if (priceRes.data.length > 0) priceSnapshot = Number(priceRes.data[0].price) || 0
-      }
+      const priceSnapshot = item.supplierId ? (priceMap[`${item.supplierId}|${item.productId}`] || 0) : 0
       item.priceSnapshot = priceSnapshot
       // Never present a zero-priced line as payable. A missing current price
       // requires price setup before it can enter the payable total.
@@ -355,8 +385,8 @@ exports.main = async (event = {}) => {
         const abnormalNames = getItemAbnormalNames(item)
         csv1 += [csvField(item.productName), csvField(item.orderQty), csvField(item.receivedQty), csvField(item.unit), csvField(abnormalNames.length ? '收货异常' : '正常'), csvField(abnormalNames.join('、')), csvField(item.remark || ''), csvField(item.payableFlag !== false ? '是' : '否')].join(',') + '\n'
       })
-      const f1 = `reports/store/${receiptDate}/store-receipt-${safePathPart(storeName)}-${receiptDate}-v${v1}.csv`
-      const u1 = await cloud.uploadFile({ cloudPath: f1, fileContent: Buffer.from(csv1, 'utf-8') })
+      const f1 = `reports/store/${receiptDate}/store-receipt-${safePathPart(storeName)}-${receiptDate}-${receiptId}-v${v1}.csv`
+      const u1 = await cloud.uploadFile({ cloudPath: f1, fileContent: Buffer.from(String.fromCharCode(0xFEFF) + csv1, 'utf-8') })
       await db.collection('report_file').add({
         data: {
           report_id: 'RPT_SR_' + receiptId, report_type: 'store_receipt_report',
@@ -377,13 +407,14 @@ exports.main = async (event = {}) => {
       let totalAmount = 0
       items.forEach(item => {
         const price = item.priceSnapshot || 0
-        const subtotal = item.receivedQty * price
-        totalAmount += subtotal
+        // 逐行先舍入到分再累加，保证"各行小计之和"与"合计"一致
+        const subtotal = Math.round(item.receivedQty * price * 100) / 100
+        totalAmount = Math.round((totalAmount + subtotal) * 100) / 100
         csv2 += [csvField(item.productName), csvField(item.receivedQty), csvField(item.unit), csvField(price), csvField(subtotal.toFixed(2)), csvField(item.payableFlag !== false ? '是' : '否')].join(',') + '\n'
       })
       csv2 += [csvField('合计'), csvField(''), csvField(''), csvField(''), csvField(totalAmount.toFixed(2)), csvField('')].join(',') + '\n'
-      const f2 = `reports/store/${receiptDate}/store-receipt-price-${safePathPart(storeName)}-${receiptDate}-v${v2}.csv`
-      const u2 = await cloud.uploadFile({ cloudPath: f2, fileContent: Buffer.from(csv2, 'utf-8') })
+      const f2 = `reports/store/${receiptDate}/store-receipt-price-${safePathPart(storeName)}-${receiptDate}-${receiptId}-v${v2}.csv`
+      const u2 = await cloud.uploadFile({ cloudPath: f2, fileContent: Buffer.from(String.fromCharCode(0xFEFF) + csv2, 'utf-8') })
       await db.collection('report_file').add({
         data: {
           report_id: 'RPT_SRP_' + receiptId, report_type: 'store_receipt_price_report',
@@ -403,13 +434,14 @@ exports.main = async (event = {}) => {
       if (!supplierMap[sid]) supplierMap[sid] = { items: [], name: '' }
       supplierMap[sid].items.push(item)
     })
-    for (const sid of Object.keys(supplierMap)) {
-      if (sid !== 'unknown') {
-        try {
-          const supRes = await db.collection('supplier').where({ supplier_id: sid }).limit(1).get()
-          if (supRes.data.length > 0) supplierMap[sid].name = supRes.data[0].supplier_name
-        } catch (e) {}
-      }
+    // 批量查供应商名称，避免每个供应商一次数据库请求
+    const receiptSupplierIds = Object.keys(supplierMap).filter(sid => sid !== 'unknown')
+    for (let i = 0; i < receiptSupplierIds.length; i += 20) {
+      const idChunk = receiptSupplierIds.slice(i, i + 20)
+      const supRes = await db.collection('supplier').where({ supplier_id: _.in(idChunk) }).limit(100).get()
+      supRes.data.forEach(s => {
+        if (supplierMap[s.supplier_id]) supplierMap[s.supplier_id].name = s.supplier_name
+      })
     }
 
     // ===== 报表3: 供应商到货汇总（不含价格） =====
@@ -427,8 +459,8 @@ exports.main = async (event = {}) => {
         csv3 += [csvField(item.productName), csvField(storeName), csvField(item.receivedQty), csvField(item.orderQty), csvField(item.unit), csvField(abnormalNames.length ? '收货异常' : '正常'), csvField(abnormalNames.join('、')), csvField(item.remark || '')].join(',') + '\n'
       })
 
-      const f3 = `reports/supplier/${receiptDate}/supplier-receipt-${safePathPart(supName)}-${receiptDate}-v${v3}.csv`
-      const u3 = await cloud.uploadFile({ cloudPath: f3, fileContent: Buffer.from(csv3, 'utf-8') })
+      const f3 = `reports/supplier/${receiptDate}/supplier-receipt-${safePathPart(supName)}-${receiptDate}-${receiptId}-v${v3}.csv`
+      const u3 = await cloud.uploadFile({ cloudPath: f3, fileContent: Buffer.from(String.fromCharCode(0xFEFF) + csv3, 'utf-8') })
       await db.collection('report_file').add({
         data: {
           report_id: 'RPT_SUR_' + sid + '_' + receiptId, report_type: 'supplier_receipt_report',
@@ -453,14 +485,15 @@ exports.main = async (event = {}) => {
       let sTotal = 0
       supItems.forEach(item => {
         const price = item.priceSnapshot || 0
-        const sub = item.receivedQty * price
-        sTotal += sub
+        // 逐行先舍入到分再累加，保证"各行小计之和"与"合计"一致
+        const sub = Math.round(item.receivedQty * price * 100) / 100
+        sTotal = Math.round((sTotal + sub) * 100) / 100
         csv4 += [csvField(item.productName), csvField(storeName), csvField(item.receivedQty), csvField(item.unit), csvField(price), csvField(sub.toFixed(2)), csvField(item.payableFlag !== false ? '是' : '否')].join(',') + '\n'
       })
       csv4 += [csvField('合计'), csvField(''), csvField(''), csvField(''), csvField(''), csvField(sTotal.toFixed(2)), csvField('')].join(',') + '\n'
 
-      const f4 = `reports/supplier/${receiptDate}/supplier-receipt-price-${safePathPart(supName)}-${receiptDate}-v${v4}.csv`
-      const u4 = await cloud.uploadFile({ cloudPath: f4, fileContent: Buffer.from(csv4, 'utf-8') })
+      const f4 = `reports/supplier/${receiptDate}/supplier-receipt-price-${safePathPart(supName)}-${receiptDate}-${receiptId}-v${v4}.csv`
+      const u4 = await cloud.uploadFile({ cloudPath: f4, fileContent: Buffer.from(String.fromCharCode(0xFEFF) + csv4, 'utf-8') })
       await db.collection('report_file').add({
         data: {
           report_id: 'RPT_SURP_' + sid + '_' + receiptId, report_type: 'supplier_receipt_price_report',

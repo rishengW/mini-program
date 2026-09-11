@@ -3,15 +3,19 @@ const meta = require('../../utils/meta')
 const cloud = require('../../utils/cloud')
 const util = require('../../utils/util')
 
+const PAGE_SIZE = 20
+
 Page({
   data: {
     reports: [],
-    filteredReports: [],
     filterScope: 'all',
     filterType: '',
     filterTypeLabel: '全部类型',
     filterDate: '',
     reportTypeOptions: [],
+    page: 1,
+    hasMore: true,
+    isLoadingMore: false,
     scopeOptions: [
       { value: 'all', label: '全部' },
       { value: 'store', label: '门店报表' },
@@ -20,10 +24,6 @@ Page({
   },
 
   onShow() {
-    const app = getApp()
-    const role = app.globalData.userInfo ? app.globalData.userInfo.role : 'purchaser'
-    const storeId = app.globalData.currentStore ? app.globalData.currentStore.storeId : ''
-
     const reportTypeOptions = [
         { value: '', label: '全部类型' },
         ...Object.keys(meta.reportTypeMap).map(k => ({
@@ -32,41 +32,54 @@ Page({
       ]
     const selectedType = reportTypeOptions.find(item => item.value === this.data.filterType)
     this.setData({ reportTypeOptions, filterTypeLabel: selectedType ? selectedType.label : '全部类型' })
-
-    this.loadReports(role, storeId)
+    this.reload()
   },
 
-  async loadReports(role, storeId) {
+  onPullDownRefresh() {
+    this.reload().finally(() => wx.stopPullDownRefresh())
+  },
+
+  onReachBottom() {
+    if (this.data.isLoadingMore || !this.data.hasMore) return
+    this.loadReports(this.data.page + 1, true)
+  },
+
+  reload() {
+    this.setData({ page: 1, hasMore: true })
+    return this.loadReports(1, false)
+  },
+
+  async loadReports(page = 1, append = false) {
     const app = getApp()
-    const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
+    const role = app.globalData.userInfo ? app.globalData.userInfo.role : 'purchaser'
+    const storeId = app.globalData.currentStore ? app.globalData.currentStore.storeId : ''
+    if (append) this.setData({ isLoadingMore: true })
+
     const result = await cloud.callFunction('getReports', {
-      authToken,
       role: role || 'purchaser',
       storeId: storeId || '',
       reportScope: this.data.filterScope !== 'all' ? this.data.filterScope : '',
       reportType: this.data.filterType,
-      relatedDate: this.data.filterDate
+      relatedDate: this.data.filterDate,
+      page,
+      pageSize: PAGE_SIZE
     })
 
     if (result.code === 0) {
-      const reports = (result.data || []).map(r => {
+      const newReports = (result.data || []).map(r => {
         const typeInfo = meta.getReportTypeInfo(r.reportType || r.report_type)
         return {
-          ...r,
-          reportType: r.reportType || r.report_type,
-          scopeName: r.scopeName || r.scope_name || '',
-          relatedDate: r.relatedDate || r.related_date,
-          generatedAt: r.generatedAt || r.generated_at || '',
-          fileVersion: r.fileVersion || r.file_version || 1,
+          ...cloud.normalizeReport(r),
           typeLabel: typeInfo.label,
           typeIcon: typeInfo.icon,
           typeColor: typeInfo.color
         }
       })
-      // 按日期倒序
-      reports.sort((a, b) => b.relatedDate.localeCompare(a.relatedDate))
-      this.setData({ reports, filteredReports: reports })
+      const reports = append ? this.data.reports.concat(newReports) : newReports
+      const total = Number(result.total) || 0
+      this.setData({ reports, page, hasMore: reports.length < total, isLoadingMore: false })
     } else {
+      this.setData({ isLoadingMore: false })
       util.showToast(result.msg || '报表加载失败')
     }
   },
@@ -74,23 +87,23 @@ Page({
   onScopeChange(e) {
     const scope = this.data.scopeOptions[e.detail.value].value
     this.setData({ filterScope: scope })
-    this.onShow()
+    this.reload()
   },
 
   onTypeChange(e) {
     const selected = this.data.reportTypeOptions[e.detail.value]
     this.setData({ filterType: selected.value, filterTypeLabel: selected.label })
-    this.onShow()
+    this.reload()
   },
 
   onDateChange(e) {
     this.setData({ filterDate: e.detail.value })
-    this.onShow()
+    this.reload()
   },
 
   clearDate() {
     this.setData({ filterDate: '' })
-    this.onShow()
+    this.reload()
   },
 
   goDetail(e) {

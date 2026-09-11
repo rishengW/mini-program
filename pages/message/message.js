@@ -12,7 +12,6 @@ Page({
         const app = getApp()
         const result = await cloud.callFunction('dataService', {
             action: 'getMessages',
-            authToken: app.globalData.authToken || wx.getStorageSync('authToken')
         })
         if (!result || result.code !== 0) {
             util.showToast((result && result.msg) || '消息加载失败')
@@ -35,7 +34,6 @@ Page({
             const app = getApp()
             const result = await cloud.callFunction('dataService', {
                 action: 'markMessageRead',
-                authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
                 id
             })
             if (result.code !== 0) return util.showToast(result.msg || '消息状态更新失败')
@@ -51,7 +49,6 @@ Page({
         const app = getApp()
         const result = await cloud.callFunction('dataService', {
             action: 'markAllMessagesRead',
-            authToken: app.globalData.authToken || wx.getStorageSync('authToken')
         })
         if (result.code !== 0) return util.showToast(result.msg || '消息状态更新失败')
         const messages = this.data.messages.map(m => ({ ...m, read: true }))

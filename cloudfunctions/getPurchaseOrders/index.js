@@ -25,7 +25,7 @@ exports.main = async (event = {}) => {
     const user = await getSessionUser(event.authToken)
     if (!user) return { code: -401, msg: '登录已过期，请重新登录' }
     const { role, storeId, orderStatus, orderDate, createdBy } = event || {}
-    const page = Math.max(1, Math.floor(Number(event.page) || 1))
+    const page = Math.max(1, Math.min(1000, Math.floor(Number(event.page) || 1)))
     const pageSize = Math.min(100, Math.max(1, Math.floor(Number(event.pageSize) || 20)))
     const _ = db.command
     let query = {}
@@ -51,6 +51,24 @@ exports.main = async (event = {}) => {
 
     if (orderStatus) query.order_status = orderStatus
     if (orderDate) query.order_date = orderDate
+
+    // 各状态数量用于前端筛选 tab：在角色约束的基准条件上统计，不受当前 orderStatus 过滤影响
+    const baseQuery = { ...query }
+    delete baseQuery.order_status
+    const [allRes, draftRes, submittedRes, receivedRes, abnormalRes] = await Promise.all([
+      db.collection('purchase_order').where(baseQuery).count(),
+      db.collection('purchase_order').where({ ...baseQuery, order_status: 'draft' }).count(),
+      db.collection('purchase_order').where({ ...baseQuery, order_status: 'submitted' }).count(),
+      db.collection('purchase_order').where({ ...baseQuery, order_status: 'received' }).count(),
+      db.collection('purchase_order').where({ ...baseQuery, order_status: 'receipt_abnormal' }).count()
+    ])
+    const statusCounts = {
+      all: allRes.total,
+      draft: draftRes.total,
+      submitted: submittedRes.total,
+      received: receivedRes.total,
+      receiptAbnormal: abnormalRes.total
+    }
 
     const countRes = await db.collection('purchase_order').where(query).count()
     const res = await db.collection('purchase_order')
@@ -87,7 +105,7 @@ exports.main = async (event = {}) => {
       items: itemGroups[order.purchase_order_id] || []
     }))
 
-    return { code: 0, data: orders, total: countRes.total, page, pageSize }
+    return { code: 0, data: orders, total: countRes.total, page, pageSize, statusCounts }
   } catch (err) {
     console.error('[getPurchaseOrders] 采购订单加载失败:', err)
     return { code: -1, msg: '采购订单加载失败，请稍后重试' }

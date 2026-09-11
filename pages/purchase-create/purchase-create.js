@@ -24,7 +24,9 @@ Page({
     today: '',
     tomorrow: '',
     // 汇总
-    totalCount: 0
+    totalCount: 0,
+    // 提交防重入：confirm 弹窗期间双击会并发创建两张订单
+    isSubmitting: false
   },
 
   async onLoad(options = {}) {
@@ -44,7 +46,6 @@ Page({
     const app = getApp()
     const result = await cloud.callFunction('getPurchaseOrderDetail', {
       orderId: this.editingOrderId,
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken')
     })
     util.hideLoading()
     if (!result || result.code !== 0) {
@@ -91,8 +92,7 @@ Page({
 
   async loadReferenceData() {
     const app = getApp()
-    const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
-    const categoryResult = await cloud.callFunction('dataService', { action: 'getCategories', authToken })
+    const categoryResult = await cloud.callFunction('dataService', { action: 'getCategories' })
     if (!categoryResult || categoryResult.code !== 0) {
       util.showToast((categoryResult && categoryResult.msg) || '分类数据加载失败')
       return
@@ -112,7 +112,6 @@ Page({
     const app = getApp()
     const result = await cloud.callFunction('getProducts', {
       includeInactive: false,
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken')
     })
     if (!result || result.code !== 0) {
       util.showToast((result && result.msg) || '商品数据加载失败')
@@ -276,6 +275,7 @@ Page({
   async submitRequest() { return this._saveOrder('submitted') },
 
   async _saveOrder(orderStatus) {
+    if (this.data.isSubmitting) return
     if (!this.data.deliveryDate) { util.showToast('请选择到货日期'); return }
 
     // 收集数量>0的库存商品
@@ -291,18 +291,19 @@ Page({
     const allItems = [...selectedProducts, ...this.data.manualItems]
     if (allItems.length === 0) { util.showToast('请至少填写一种商品的数量'); return }
 
-    const confirmed = await util.showConfirm(orderStatus === 'draft' ? '确认保存采购草稿？' : '确认提交门店采购申请？')
-    if (!confirmed) return
-
-    util.showLoading(orderStatus === 'draft' ? '保存中...' : '提交中...')
     const app = getApp()
     const store = app.globalData.currentStore || {}
     const user = app.globalData.userInfo || {}
     if (!store.storeId && !store.id) {
-      util.hideLoading()
       util.showToast('当前未选择门店，请先切换门店')
       return
     }
+
+    const confirmed = await util.showConfirm(orderStatus === 'draft' ? '确认保存采购草稿？' : '确认提交门店采购申请？')
+    if (!confirmed) return
+
+    this.setData({ isSubmitting: true })
+    util.showLoading(orderStatus === 'draft' ? '保存中...' : '提交中...')
 
     const items = allItems.map(item => {
       const l1 = (this.data.categoryL1List || []).find(c => c.id === item.categoryL1)
@@ -322,7 +323,6 @@ Page({
     })
 
     const result = await cloud.callFunction('createPurchaseOrder', {
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
       storeId: store.storeId || store.id,
       storeName: store.storeName || store.name,
       orderId: this.editingOrderId || undefined,
@@ -336,6 +336,7 @@ Page({
     })
 
     util.hideLoading()
+    this.setData({ isSubmitting: false })
     if (result.code === 0) {
       const warning = result.data && result.data.reportWarning
       wx.showModal({

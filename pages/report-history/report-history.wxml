@@ -28,7 +28,7 @@
     <view class="report-row">
       <view class="report-icon" style="background:{{item.typeColor}}20; color:{{item.typeColor}};">{{item.typeIcon}}</view>
       <view class="report-info">
-        <view class="report-name">{{item.typeLabel}}</view>
+        <view class="report-name">{{item.typeLabel}}<text wx:if="{{item.status === 'superseded'}}" class="tag tag-grey" style="margin-left:12rpx;">已作废</text></view>
         <view class="report-meta">{{item.scopeName}} · {{item.relatedDate}}</view>
         <view class="report-version">v{{item.fileVersion}} · {{item.generatedAt}}</view>
       </view>

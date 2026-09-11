@@ -1,7 +1,10 @@
 // pages/purchase-list/purchase-list.js
+// 分页版：服务端状态筛选 + statusCounts 服务端计数 + 上拉加载 + 下拉刷新
 const meta = require('../../utils/meta')
 const util = require('../../utils/util')
 const cloud = require('../../utils/cloud')
+
+const PAGE_SIZE = 20
 
 Page({
   data: {
@@ -9,7 +12,10 @@ Page({
     filterTabs: [],
     filteredList: [],
     orders: [],
-    isLoading: false
+    isLoading: false,
+    isLoadingMore: false,
+    hasMore: true,
+    page: 1
   },
 
   onLoad(options) {
@@ -19,60 +25,77 @@ Page({
     }
   },
 
-  onShow() { this.loadData() },
+  onShow() { this.reload() },
 
-  async loadData() {
+  onPullDownRefresh() {
+    this.reload().finally(() => wx.stopPullDownRefresh())
+  },
+
+  onReachBottom() {
+    if (this.data.isLoading || this.data.isLoadingMore || !this.data.hasMore) return
+    this.loadData(this.data.page + 1, true)
+  },
+
+  reload() {
+    this.setData({ page: 1, hasMore: true })
+    return this.loadData(1, false)
+  },
+
+  async loadData(page, append) {
     const app = getApp()
     const user = app.globalData.userInfo || {}
     const store = app.globalData.currentStore || {}
-    this.setData({ isLoading: true })
+    this.setData(page === 1 ? { isLoading: true } : { isLoadingMore: true })
 
-    const result = await cloud.callFunction('getPurchaseOrders', {
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
+    const params = {
       role: user.role || 'purchaser',
       storeId: store.storeId || store.id || '',
       createdBy: user.role === 'chef' ? (user.userId || user.id || user.name || '') : '',
-      pageSize: 100
-    })
+      page,
+      pageSize: PAGE_SIZE
+    }
+    // 状态过滤下推到服务端，翻页时口径一致
+    if (this.data.activeFilter !== 'all') params.orderStatus = this.data.activeFilter
+
+    const result = await cloud.callFunction('getPurchaseOrders', params)
     if (!result || result.code !== 0) {
-      this.setData({ isLoading: false })
+      this.setData({ isLoading: false, isLoadingMore: false })
       util.showToast((result && result.msg) || '采购订单加载失败，请稍后重试')
       return
     }
 
-    const orders = (result.data || []).map(cloud.normalizePurchaseOrder)
-    const counts = {
-      all: orders.length,
-      draft: orders.filter(o => o.orderStatus === 'draft').length,
-      submitted: orders.filter(o => o.orderStatus === 'submitted').length,
-      received: orders.filter(o => o.orderStatus === 'received').length,
-      receiptAbnormal: orders.filter(o => o.orderStatus === 'receipt_abnormal').length
-    }
+    const newOrders = (result.data || []).map(cloud.normalizePurchaseOrder)
+    const orders = append ? this.data.orders.concat(newOrders) : newOrders
+    const total = Number(result.total) || 0
+    // tab 计数来自服务端 statusCounts，不受分页截断影响
+    const counts = result.statusCounts || {}
     const filterTabs = [
-      { label: '全部', value: 'all', count: 0 },
-      { label: '草稿', value: 'draft', count: counts.draft },
-      { label: '已提交', value: 'submitted', count: counts.submitted },
-      { label: '已收货', value: 'received', count: 0 },
-      { label: '收货异常', value: 'receipt_abnormal', count: counts.receiptAbnormal }
+      { label: '全部', value: 'all', count: counts.all || 0 },
+      { label: '草稿', value: 'draft', count: counts.draft || 0 },
+      { label: '已提交', value: 'submitted', count: counts.submitted || 0 },
+      { label: '已收货', value: 'received', count: counts.received || 0 },
+      { label: '收货异常', value: 'receipt_abnormal', count: counts.receiptAbnormal || 0 }
     ]
-    this.setData({ filterTabs, orders, isLoading: false })
-    this.applyFilter()
+    this.setData({
+      filterTabs,
+      orders,
+      page,
+      hasMore: orders.length < total,
+      isLoading: false,
+      isLoadingMore: false
+    })
+    this.renderList()
   },
 
   switchFilter(e) {
     this.setData({ activeFilter: e.currentTarget.dataset.value })
-    this.applyFilter()
+    this.reload()
   },
 
-  applyFilter() {
-    const { activeFilter } = this.data
+  renderList() {
     const currentUser = getApp().globalData.userInfo || {}
     const canReceiveRole = currentUser.role !== 'chef'
-    let list = this.data.orders
-    if (activeFilter !== 'all') {
-      list = list.filter(o => o.orderStatus === activeFilter)
-    }
-    const filteredList = list.map(o => {
+    const filteredList = this.data.orders.map(o => {
       const statusInfo = meta.getStatusInfo(o.orderStatus)
       const manualCount = o.items.filter(i => i.isManual).length
       // 判断是否可直接收货

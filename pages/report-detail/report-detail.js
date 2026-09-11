@@ -21,7 +21,6 @@ Page({
 
     const result = await cloud.callFunction('getReportDetail', {
       reportId,
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken')
     })
     util.hideLoading()
 
@@ -72,7 +71,6 @@ Page({
       // 有云存储文件，通过云函数获取临时链接后下载
       const fileResult = await cloud.callFunction('getReportFileUrl', {
         fileId: report.fileUrl || report.file_url,
-        authToken: getApp().globalData.authToken || wx.getStorageSync('authToken')
       })
       const fileUrl = fileResult && fileResult.code === 0 && fileResult.data
         ? fileResult.data.url
