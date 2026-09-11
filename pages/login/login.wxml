@@ -34,7 +34,7 @@
       </view>
 
       <button class="btn btn-primary btn-block login-btn" bindtap="login">进入系统</button>
-      
+
       <view style="text-align:center; margin-top:32rpx;" bindtap="toggleSuperAdmin">
         <text style="color:#1890FF; font-size:26rpx;">超级管理员登录</text>
       </view>
@@ -54,7 +54,7 @@
       </view>
 
       <button class="btn btn-primary btn-block login-btn" bindtap="login">安全登录</button>
-      
+
       <view style="text-align:center; margin-top:32rpx;" bindtap="toggleSuperAdmin">
         <text style="color:#8C8C8C; font-size:26rpx;">返回普通角色登录</text>
       </view>
@@ -62,6 +62,6 @@
   </view>
 
   <view class="login-footer">
-    <text class="text-tertiary text-sm">门店采购系统 测试版</text>
+    <text class="text-tertiary text-sm">门店采购系统</text>
   </view>
 </view>

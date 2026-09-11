@@ -1,6 +1,7 @@
 {
   "pages": [
     "pages/login/login",
+    "pages/account/account",
     "pages/index/index",
     "pages/store-switch/store-switch",
     "pages/purchase-create/purchase-create",
@@ -61,5 +62,6 @@
   },
   "style": "v2",
   "sitemapLocation": "sitemap.json",
-  "cloud": true
+  "cloud": true,
+  "lazyCodeLoading": "requiredComponents"
 }

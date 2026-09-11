@@ -17,10 +17,11 @@ Page({
   async onLoad(options) {
     const reportId = options.id
     const app = getApp()
-    const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
     util.showLoading('加载报表...')
 
-    const result = await cloud.callFunction('getReportDetail', { reportId, authToken })
+    const result = await cloud.callFunction('getReportDetail', {
+      reportId,
+    })
     util.hideLoading()
 
     if (result.code === 0 && result.data) {
@@ -33,11 +34,18 @@ Page({
         relatedDate: report.relatedDate || report.related_date,
         generatedAt: report.generatedAt || report.generated_at || '',
         fileVersion: report.fileVersion || report.file_version || 1,
-        reportScope: report.reportScope || report.report_scope
+        reportScope: report.reportScope || report.report_scope,
+        hasAbnormal: report.hasAbnormal !== undefined ? !!report.hasAbnormal : !!report.has_abnormal,
+        abnormalSummary: report.abnormalSummary || report.abnormal_summary || ''
       }
 
       let totalAmount = '0.00'
       const rows = report.rows || []
+      const inferredAbnormal = rows.some(row => row.abnormal)
+      rpt.hasAbnormal = rpt.hasAbnormal || inferredAbnormal
+      if (!rpt.abnormalSummary && inferredAbnormal) {
+        rpt.abnormalSummary = [...new Set(rows.reduce((all, row) => all.concat(row.abnormalTypeNames || []), []))].join('、')
+      }
       if (rpt.reportType.includes('price')) {
         const sum = rows.reduce((s, r) => s + (r.subtotal || 0), 0)
         totalAmount = sum.toFixed(2)
@@ -60,8 +68,13 @@ Page({
   async exportReport() {
     const { report } = this.data
     if (report.fileUrl || report.file_url) {
-      // 有云存储文件，获取临时链接下载
-      const fileUrl = await cloud.getFileUrl(report.fileUrl || report.file_url)
+      // 有云存储文件，通过云函数获取临时链接后下载
+      const fileResult = await cloud.callFunction('getReportFileUrl', {
+        fileId: report.fileUrl || report.file_url,
+      })
+      const fileUrl = fileResult && fileResult.code === 0 && fileResult.data
+        ? fileResult.data.url
+        : null
       if (fileUrl) {
         wx.downloadFile({
           url: fileUrl,

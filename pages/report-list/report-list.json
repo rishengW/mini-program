@@ -1,3 +1,4 @@
 {
-  "navigationBarTitleText": "报表中心"
+  "navigationBarTitleText": "报表中心",
+  "enablePullDownRefresh": true
 }

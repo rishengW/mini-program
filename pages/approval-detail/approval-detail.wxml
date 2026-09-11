@@ -28,7 +28,7 @@
   <!-- 商品清单（可修改数量） -->
   <view class="card">
     <view class="card-title">商品清单</view>
-    <view wx:for="{{detail.items}}" wx:key="id" class="goods-row">
+    <view wx:for="{{detail.items}}" wx:key="itemId" class="goods-row">
       <view class="goods-info">
         <view class="goods-name">{{item.productName}}</view>
         <view class="goods-spec text-sm text-tertiary">{{item.spec}} · {{item.unit}}</view>

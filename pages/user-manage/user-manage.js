@@ -7,6 +7,9 @@ Page({
     users: [],
     showAdd: false,
     editItem: null,
+    showReset: false,
+    resetItem: null,
+    resetForm: { newPassword: '', confirmPassword: '' },
     form: { username: '', name: '', password: '', role: 'chef', roleLabel: '门店下单人员', defaultStoreId: '', storeName: '' },
     roles: [
       { key: 'chef', label: '门店下单人员' },
@@ -24,10 +27,9 @@ Page({
   async loadData() {
     util.showLoading()
     const app = getApp()
-    const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
     const [usersResult, storesResult] = await Promise.all([
-      cloud.callFunction('authService', { action: 'listUsers', authToken }),
-      cloud.callFunction('authService', { action: 'getStores', authToken })
+      cloud.callFunction('authService', { action: 'listUsers' }),
+      cloud.callFunction('authService', { action: 'getStores' })
     ])
     if (usersResult.code === 0 && storesResult.code === 0) {
       const stores = storesResult.data || []
@@ -75,6 +77,55 @@ Page({
 
   closeForm() {
     this.setData({ showAdd: false })
+  },
+
+  showResetForm(e) {
+    const item = e.currentTarget.dataset.item
+    this.setData({
+      showReset: true,
+      resetItem: item,
+      resetForm: { newPassword: '', confirmPassword: '' }
+    })
+  },
+
+  closeResetForm() {
+    this.setData({ showReset: false, resetItem: null })
+  },
+
+  onResetInput(e) {
+    const field = e.currentTarget.dataset.field
+    this.setData({ [`resetForm.${field}`]: e.detail.value })
+  },
+
+  async saveResetPassword() {
+    const { resetItem, resetForm } = this.data
+    if (!resetItem) return
+    if (!resetForm.newPassword || !resetForm.confirmPassword) {
+      return util.showToast('请输入并确认新密码')
+    }
+    if (resetForm.newPassword.length < 6) return util.showToast('新密码至少需要6位')
+    if (resetForm.newPassword !== resetForm.confirmPassword) {
+      return util.showToast('两次输入的新密码不一致')
+    }
+
+    const confirmed = await util.showConfirm(`确认重置 ${resetItem.name} 的登录密码吗？`)
+    if (!confirmed) return
+
+    util.showLoading()
+    const app = getApp()
+    const res = await cloud.callFunction('authService', {
+      action: 'resetPassword',
+      id: resetItem.id,
+      newPassword: resetForm.newPassword
+    })
+    util.hideLoading()
+
+    if (res.code === 0) {
+      this.closeResetForm()
+      util.showSuccess('密码已重置')
+    } else {
+      util.showToast(res.msg || '密码重置失败')
+    }
   },
 
   onFormInput(e) {
@@ -126,12 +177,11 @@ Page({
     }
 
     const app = getApp()
-    const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
     let res
     if (editItem) {
-      res = await cloud.callFunction('authService', { action: 'updateUser', authToken, id: editItem.id, ...payload })
+      res = await cloud.callFunction('authService', { action: 'updateUser', id: editItem.id, ...payload })
     } else {
-      res = await cloud.callFunction('authService', { action: 'createUser', authToken, ...payload })
+      res = await cloud.callFunction('authService', { action: 'createUser', ...payload })
     }
 
     util.hideLoading()
@@ -155,7 +205,6 @@ Page({
     const app = getApp()
     const res = await cloud.callFunction('authService', {
       action: 'deleteUser',
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
       id: item.id
     })
     util.hideLoading()

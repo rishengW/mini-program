@@ -37,3 +37,8 @@
 .order-amount {
   font-size: 28rpx;
 }
+
+.receipt-history { margin-top: 24rpx; }
+.receipt-history-item { padding: 16rpx 0; border-bottom: 1rpx solid #F0F0F0; }
+.receipt-history-item:last-child { border-bottom: none; }
+.receipt-history-item > view:last-child { margin-top: 6rpx; }

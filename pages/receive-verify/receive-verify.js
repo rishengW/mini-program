@@ -2,6 +2,39 @@
 const util = require('../../utils/util')
 const cloud = require('../../utils/cloud')
 
+async function recoverCommittedReceipt(orderId, failedResult) {
+  const message = String(failedResult && failedResult.msg || '')
+  const shouldCheck = failedResult && (
+    failedResult.errorType === 'CLOUD_UNAVAILABLE' ||
+    /已完成收货|不可收货|连接失败|Not connected/i.test(message)
+  )
+  if (!shouldCheck) return null
+
+  // A cloud request can lose its response after the transaction commits. The
+  // detail endpoint is idempotent and lets us distinguish that case from a
+  // genuine submission failure before showing an error to the user.
+  const detailResult = await cloud.callFunction('getPurchaseOrderDetail', { orderId })
+  if (!detailResult || detailResult.code !== 0) return null
+  const detail = cloud.normalizePurchaseOrder(detailResult.data)
+  const receipts = Array.isArray(detail.receipts) ? detail.receipts : []
+  if (detail.orderStatus !== 'received' && receipts.length === 0) return null
+
+  const receipt = receipts[0] || {}
+  const hasAbnormal = detail.orderStatus === 'receipt_abnormal' ||
+    receipt.receiptStatus === 'abnormal' || receipt.receipt_status === 'abnormal'
+  return {
+    code: 0,
+    data: {
+      receiptId: receipt.receiptId || receipt.receipt_id || '',
+      reportsGenerated: 0,
+      reportWarning: '连接中断导致报表状态未返回，请稍后在报表中心查看。',
+      hasAbnormal,
+      abnormalTypeNames: [],
+      recovered: true
+    }
+  }
+}
+
 Page({
   data: {
     order: {},
@@ -20,8 +53,9 @@ Page({
 
     util.showLoading('加载中...')
     const app = getApp()
-    const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
-    const result = await cloud.callFunction('getPurchaseOrderDetail', { orderId: id, authToken })
+    const result = await cloud.callFunction('getPurchaseOrderDetail', {
+      orderId: id,
+    })
     util.hideLoading()
     if (!result || result.code !== 0) {
       util.showToast((result && result.msg) || '采购订单加载失败，请稍后重试')
@@ -97,6 +131,14 @@ Page({
       util.showToast('订单中没有可验收的商品，请返回后重试')
       return
     }
+    const invalidQty = items.some(item => (
+      typeof item.receivedQty !== 'number' || !Number.isFinite(item.receivedQty) ||
+      item.receivedQty < 0 || item.receivedQty > item.orderQty
+    ))
+    if (invalidQty) {
+      util.showToast('实收数量不能超过订单数量，请检查后重试')
+      return
+    }
 
     const app = getApp()
     const currentStore = app.globalData.currentStore || {}
@@ -110,10 +152,14 @@ Page({
 
     const hasAbnormal = items.some(i => i.isShortage || i.isQualityIssue || i.isWrongItem)
     const msg = hasAbnormal ? '本次验收有异常标记，确认提交？' : '确认提交验收？'
-    const confirmed = await util.showConfirm(msg)
-    if (!confirmed) return
-
+    // 先置位再弹确认框，避免弹窗期间双击并发提交
     this.setData({ isSubmitting: true })
+    const confirmed = await util.showConfirm(msg)
+    if (!confirmed) {
+      this.setData({ isSubmitting: false })
+      return
+    }
+
     util.showLoading('提交中...')
 
     let result
@@ -126,7 +172,8 @@ Page({
         receivedBy: user.name || user.username || '',
         overallRemark,
         photoFileIds,
-        authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
+        // 收货日期以门店本地日期为准，避免凌晨 0-8 点被服务端 UTC 时间归档到前一天
+        receiptDate: util.formatDate(new Date()),
         items: items.map(item => ({
           orderItemId: item.itemId,
           productId: item.productId,
@@ -151,20 +198,38 @@ Page({
       this.setData({ isSubmitting: false })
     }
 
+    if (!result || result.code !== 0) {
+      util.showLoading('确认收货状态...')
+      let recovered
+      try {
+        recovered = await recoverCommittedReceipt(
+          order.purchaseOrderId,
+          result
+        )
+      } finally {
+        util.hideLoading()
+      }
+      if (recovered) result = recovered
+    }
+
     if (result && result.code === 0) {
       const reportsGenerated = result.data.reportsGenerated || 0
       const hasReportWarning = !!result.data.reportWarning
+      const hasAbnormal = !!result.data.hasAbnormal
+      const abnormalTypes = (result.data.abnormalTypeNames || []).join('、')
       const content = hasReportWarning
-        ? `收货已保存。${result.data.reportWarning}`
-        : `收货已提交，${reportsGenerated}份报表已自动生成。可在报表中心查看。`
+        ? `${hasAbnormal ? '收货异常已保存。' : '收货已保存。'}${result.data.reportWarning}`
+        : hasAbnormal
+          ? `收货异常，已记录${abnormalTypes ? `：${abnormalTypes}` : ''}。已生成${reportsGenerated}份不含价格的收货报表，带价格报表未生成，请到异常记录处理。`
+          : `收货已提交，${reportsGenerated}份报表已自动生成。可在报表中心查看。`
       wx.showModal({
-        title: '验收完成',
+        title: hasAbnormal ? '收货异常' : '验收完成',
         content,
-        confirmText: hasReportWarning ? '返回' : '查看报表',
+        confirmText: hasReportWarning || hasAbnormal ? '返回' : '查看报表',
         cancelText: '返回',
-        showCancel: !hasReportWarning,
+        showCancel: !hasReportWarning && !hasAbnormal,
         success(res) {
-          if (res.confirm && !hasReportWarning) {
+          if (res.confirm && !hasReportWarning && !hasAbnormal) {
             wx.switchTab({ url: '/pages/report-list/report-list' })
           } else {
             wx.navigateBack()

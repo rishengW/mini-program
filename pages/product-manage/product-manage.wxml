@@ -51,7 +51,7 @@
 
   <!-- 添加/编辑弹窗 -->
   <view wx:if="{{showAdd}}" class="modal-mask" bindtap="closeForm">
-    <view class="modal-body" catchtap="">
+    <view class="modal-body" catchtap="stopBubble">
       <view class="modal-title">{{editItem ? '编辑商品' : '新增商品'}}</view>
 
       <view class="form-group">
@@ -61,8 +61,8 @@
 
       <view class="form-group">
         <view class="form-label">一级分类 *</view>
-        <picker range="{{['后厨','前厅']}}" bindchange="onL1Change">
-          <view class="form-input picker-display">{{form.categoryL1 === 'kitchen' ? '后厨' : '前厅'}} ▾</view>
+        <picker range="{{categoryL1List}}" range-key="name" bindchange="onL1Change">
+          <view class="form-input picker-display">{{form.categoryL1Name || '请选择'}} ▾</view>
         </picker>
       </view>
 
@@ -94,7 +94,7 @@
         <view class="form-label">默认供应商</view>
         <picker range="{{suppliers}}" range-key="supplierName" bindchange="onSupplierChange">
           <view class="form-input picker-display">
-            {{form.defaultSupplierId ? '已选择' : '请选择'}} ▾
+            {{form.supplierName || '请选择'}} ▾
           </view>
         </picker>
       </view>

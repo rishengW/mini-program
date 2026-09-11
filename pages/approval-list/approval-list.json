@@ -1,3 +1,4 @@
 {
-    "navigationBarTitleText": "待审核申请"
+    "navigationBarTitleText": "待审核申请",
+    "enablePullDownRefresh": true
 }

@@ -3,17 +3,36 @@ const meta = require('../../utils/meta')
 const cloud = require('../../utils/cloud')
 const util = require('../../utils/util')
 
+const PAGE_SIZE = 20
+
 Page({
   data: {
     activeType: 'all',
     filterDate: '',
     typeTabs: [],
-    reports: []
+    reports: [],
+    page: 1,
+    hasMore: true,
+    isLoadingMore: false
   },
 
   onShow() {
     this.initTabs()
-    this.loadReports()
+    this.reload()
+  },
+
+  onPullDownRefresh() {
+    this.reload().finally(() => wx.stopPullDownRefresh())
+  },
+
+  onReachBottom() {
+    if (this.data.isLoadingMore || !this.data.hasMore) return
+    this.loadReports(this.data.page + 1, true)
+  },
+
+  reload() {
+    this.setData({ page: 1, hasMore: true })
+    return this.loadReports(1, false)
   },
 
   initTabs() {
@@ -36,63 +55,68 @@ Page({
         { value: 'store_receipt_report', label: '收货报表', icon: '📦' },
         { value: 'store_receipt_price_report', label: '带价格收货', icon: '💰' },
         { value: 'supplier_order_report', label: '供应商订货', icon: '🏭' },
+        { value: 'supplier_receipt_report', label: '供应商到货', icon: '🚛' },
         { value: 'supplier_receipt_price_report', label: '供应商账单', icon: '📊' }
       )
     }
     this.setData({ typeTabs: tabs })
   },
 
-  async loadReports() {
+  async loadReports(page = 1, append = false) {
     const app = getApp()
     const role = app.globalData.userInfo?.role || 'purchaser'
     const storeId = app.globalData.currentStore?.storeId
+    if (append) this.setData({ isLoadingMore: true })
 
     const result = await cloud.callFunction('getReports', {
       role,
       storeId,
       reportType: this.data.activeType === 'all' ? '' : this.data.activeType,
       relatedDate: this.data.filterDate || '',
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken')
+      page,
+      pageSize: PAGE_SIZE
     })
 
     if (result.code === 0) {
-      const list = result.data || []
-      // 附加类型信息
-      const reports = list.map(r => {
+      const newReports = (result.data || []).map(r => {
         const typeInfo = meta.getReportTypeInfo(r.reportType || r.report_type)
+        const abnormalSummary = r.abnormalSummary || r.abnormal_summary || ''
         return {
-          ...r,
-          reportType: r.reportType || r.report_type,
-          reportId: r.reportId || r.report_id,
-          reportScope: r.reportScope || r.report_scope,
-          scopeName: r.scopeName || r.scope_name || '',
-          relatedDate: r.relatedDate || r.related_date,
-          generatedAt: r.generatedAt || r.generated_at || '',
-          fileVersion: r.fileVersion || r.file_version || 1,
+          ...cloud.normalizeReport(r),
+          hasAbnormal: r.hasAbnormal !== undefined ? !!r.hasAbnormal : !!r.has_abnormal,
+          abnormalSummary,
+          abnormalLabel: `收货异常${abnormalSummary ? ` · ${abnormalSummary}` : ''}`,
           typeLabel: typeInfo.label,
           typeIcon: typeInfo.icon,
           typeColor: typeInfo.color
         }
       })
-      this.setData({ reports })
+      const reports = append ? this.data.reports.concat(newReports) : newReports
+      const total = Number(result.total) || 0
+      this.setData({ reports, page, hasMore: reports.length < total, isLoadingMore: false })
     } else {
+      this.setData({ isLoadingMore: false })
       util.showToast(result.msg || '报表加载失败')
     }
   },
 
   switchType(e) {
     this.setData({ activeType: e.currentTarget.dataset.value })
-    this.loadReports()
+    this.reload()
   },
 
   onDateFilter(e) {
     this.setData({ filterDate: e.detail.value })
-    this.loadReports()
+    this.reload()
   },
 
   clearDateFilter() {
     this.setData({ filterDate: '' })
-    this.loadReports()
+    this.reload()
+  },
+
+  goHistory() {
+    wx.navigateTo({ url: '/pages/report-history/report-history' })
   },
 
   goDetail(e) {

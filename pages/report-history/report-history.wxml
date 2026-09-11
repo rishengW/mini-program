@@ -12,7 +12,7 @@
         <view class="filter-picker">📂 {{scopeOptions[filterScope === 'all' ? 0 : (filterScope === 'store' ? 1 : 2)].label}} ▾</view>
       </picker>
       <picker range="{{reportTypeOptions}}" range-key="label" bindchange="onTypeChange" style="flex:1;">
-        <view class="filter-picker">📋 {{filterType ? reportTypeOptions[0].label : '全部类型'}} ▾</view>
+        <view class="filter-picker">📋 {{filterTypeLabel}} ▾</view>
       </picker>
     </view>
     <view class="filter-row">
@@ -28,7 +28,7 @@
     <view class="report-row">
       <view class="report-icon" style="background:{{item.typeColor}}20; color:{{item.typeColor}};">{{item.typeIcon}}</view>
       <view class="report-info">
-        <view class="report-name">{{item.typeLabel}}</view>
+        <view class="report-name">{{item.typeLabel}}<text wx:if="{{item.status === 'superseded'}}" class="tag tag-grey" style="margin-left:12rpx;">已作废</text></view>
         <view class="report-meta">{{item.scopeName}} · {{item.relatedDate}}</view>
         <view class="report-version">v{{item.fileVersion}} · {{item.generatedAt}}</view>
       </view>

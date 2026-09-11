@@ -7,9 +7,17 @@
  * @param {string|Date} date 日期
  * @param {string} format 格式 'YYYY-MM-DD' | 'YYYY-MM-DD HH:mm' | 'MM-DD HH:mm'
  */
+function parseDate(date) {
+    if (!date) return null
+    const text = typeof date === 'string' ? date.trim() : ''
+    if (text && /^-?\d+(?:\.\d+)?$/.test(text)) return parseDate(Number(text))
+    const d = typeof date === 'string' ? new Date(text.includes('T') ? text : text.replace(/-/g, '/')) : new Date(date)
+    return Number.isNaN(d.getTime()) ? null : d
+}
+
 function formatDate(date, format = 'YYYY-MM-DD') {
-    if (!date) return ''
-    const d = typeof date === 'string' ? new Date(date.replace(/-/g, '/')) : date
+    const d = parseDate(date)
+    if (!d) return ''
     const year = d.getFullYear()
     const month = String(d.getMonth() + 1).padStart(2, '0')
     const day = String(d.getDate()).padStart(2, '0')
@@ -34,11 +42,11 @@ function formatDate(date, format = 'YYYY-MM-DD') {
  * 获取相对时间
  */
 function getRelativeTime(dateStr) {
-    if (!dateStr) return ''
-    const normalized = typeof dateStr === 'string' ? dateStr.replace(/-/g, '/') : dateStr
-    const d = new Date(normalized)
+    const d = parseDate(dateStr)
+    if (!d) return ''
     const now = new Date()
     const diff = now - d
+    if (!Number.isFinite(diff)) return ''
     const minutes = Math.floor(diff / 60000)
     const hours = Math.floor(diff / 3600000)
     const days = Math.floor(diff / 86400000)
@@ -79,18 +87,12 @@ function showConfirm(content, title = '提示') {
             content,
             success(res) {
                 resolve(res.confirm)
+            },
+            fail() {
+                resolve(false)
             }
         })
     })
-}
-
-/**
- * 计算总金额
- */
-function calcTotal(items, qtyField = 'requestedQty', priceField = 'price') {
-    return items.reduce((sum, item) => {
-        return sum + (item[qtyField] || 0) * (item[priceField] || 0)
-    }, 0).toFixed(2)
 }
 
 module.exports = {
@@ -100,6 +102,5 @@ module.exports = {
     showSuccess,
     showLoading,
     hideLoading,
-    showConfirm,
-    calcTotal
+    showConfirm
 }

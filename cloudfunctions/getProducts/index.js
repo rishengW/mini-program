@@ -9,10 +9,13 @@ exports.main = async (event = {}) => {
   try {
     const check = await auth.requireUser(event)
     if (check.error) return check.error
+    const user = check.user
 
     const { categoryL1, categoryId, keyword, includeInactive } = event
+    const isManager = ['super_admin', 'purchaser'].includes(user.role)
+    if (includeInactive && !isManager) return { code: -403, msg: '当前账号无权查看停用商品' }
     const where = {}
-    if (!includeInactive) where.status = 1
+    if (!includeInactive || !isManager) where.status = 1
     if (categoryL1) where.category_level_1 = categoryL1
     if (categoryId !== undefined && categoryId !== null && categoryId !== '') {
       where.category_level_2_id = Number(categoryId)

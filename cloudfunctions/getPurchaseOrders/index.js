@@ -25,7 +25,7 @@ exports.main = async (event = {}) => {
         total: 0,
         page,
         pageSize,
-        statusCounts: { all: 0, draft: 0, submitted: 0, to_receive: 0, received: 0 }
+        statusCounts: { all: 0, draft: 0, submitted: 0, to_receive: 0, received: 0, receiptAbnormal: 0 }
       }
     }
 
@@ -42,16 +42,25 @@ exports.main = async (event = {}) => {
     }
     if (orderDate) query.order_date = orderDate
 
-    const countRes = await db.collection('purchase_order').where(query).count()
-
-    // 各状态计数（套用同样的角色 where 条件，不受本次状态筛选影响）
-    const [allRes, draftRes, submittedRes, toReceiveRes, receivedRes] = await Promise.all([
+    // 各状态数量用于前端筛选 tab：在角色约束的基准条件上统计，不受当前 orderStatus 过滤影响
+    const [allRes, draftRes, submittedRes, toReceiveRes, receivedRes, abnormalRes] = await Promise.all([
       db.collection('purchase_order').where(baseQuery).count(),
       db.collection('purchase_order').where({ ...baseQuery, order_status: 'draft' }).count(),
       db.collection('purchase_order').where({ ...baseQuery, order_status: 'submitted' }).count(),
       db.collection('purchase_order').where({ ...baseQuery, order_status: _.in(TO_RECEIVE_STATUS) }).count(),
-      db.collection('purchase_order').where({ ...baseQuery, order_status: 'received' }).count()
+      db.collection('purchase_order').where({ ...baseQuery, order_status: 'received' }).count(),
+      db.collection('purchase_order').where({ ...baseQuery, order_status: 'receipt_abnormal' }).count()
     ])
+    const statusCounts = {
+      all: allRes.total,
+      draft: draftRes.total,
+      submitted: submittedRes.total,
+      to_receive: toReceiveRes.total,
+      received: receivedRes.total,
+      receiptAbnormal: abnormalRes.total
+    }
+
+    const countRes = await db.collection('purchase_order').where(query).count()
 
     const res = await db.collection('purchase_order')
       .where(query)
@@ -74,10 +83,11 @@ exports.main = async (event = {}) => {
         itemGroups[item.purchase_order_id].push(item)
       })
     }
-    const creatorIds = [...new Set(res.data.map(order => order.created_by).filter(Boolean))]
     const creatorMap = {}
-    if (creatorIds.length) {
-      const creators = await db.collection('app_user').where({ user_id: _.in(creatorIds) }).limit(100).get()
+    const creatorIds = [...new Set(res.data.map(order => order.created_by).filter(Boolean))]
+    for (let i = 0; i < creatorIds.length; i += 20) {
+      const idChunk = creatorIds.slice(i, i + 20)
+      const creators = await db.collection('app_user').where({ user_id: _.in(idChunk) }).limit(100).get()
       creators.data.forEach(user => { creatorMap[user.user_id] = user.name })
     }
     const orders = res.data.map(order => ({
@@ -86,20 +96,7 @@ exports.main = async (event = {}) => {
       items: itemGroups[order.purchase_order_id] || []
     }))
 
-    return {
-      code: 0,
-      data: orders,
-      total: countRes.total,
-      page,
-      pageSize,
-      statusCounts: {
-        all: allRes.total,
-        draft: draftRes.total,
-        submitted: submittedRes.total,
-        to_receive: toReceiveRes.total,
-        received: receivedRes.total
-      }
-    }
+    return { code: 0, data: orders, total: countRes.total, page, pageSize, statusCounts }
   } catch (err) {
     console.error('[getPurchaseOrders] 采购订单加载失败:', err)
     return { code: -1, msg: '采购订单加载失败，请稍后重试' }

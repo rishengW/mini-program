@@ -22,6 +22,7 @@
         </view>
         <view class="item-actions">
           <view class="action-btn" bindtap="showEditForm" data-item="{{item}}">✏️ 编辑</view>
+          <view class="action-btn action-reset" bindtap="showResetForm" data-item="{{item}}">🔑 重置密码</view>
           <view class="action-btn action-delete" bindtap="deleteUser" data-item="{{item}}">🗑️ 删除</view>
         </view>
       </view>
@@ -35,6 +36,28 @@
   </view>
 
   <view class="fab" bindtap="showAddForm">＋</view>
+
+  <!-- 重置密码弹窗 -->
+  <view wx:if="{{showReset}}" class="modal-mask" bindtap="closeResetForm">
+    <view class="modal-body reset-modal" catchtap="stopBubble">
+      <view class="modal-title">重置登录密码</view>
+      <view class="reset-target">{{resetItem.name}}（{{resetItem.username}}）</view>
+
+      <view class="form-group">
+        <view class="form-label">新密码</view>
+        <input class="form-input" password placeholder="至少6位" value="{{resetForm.newPassword}}" bindinput="onResetInput" data-field="newPassword" />
+      </view>
+      <view class="form-group">
+        <view class="form-label">确认新密码</view>
+        <input class="form-input" password placeholder="请再次输入新密码" value="{{resetForm.confirmPassword}}" bindinput="onResetInput" data-field="confirmPassword" />
+      </view>
+
+      <view class="btn-group" style="margin-top:40rpx;">
+        <button class="btn btn-outline flex-1" bindtap="closeResetForm">取消</button>
+        <button class="btn btn-primary flex-1" bindtap="saveResetPassword">确认重置</button>
+      </view>
+    </view>
+  </view>
 
   <!-- 弹窗 -->
   <view wx:if="{{showAdd}}" class="modal-mask" bindtap="closeForm">

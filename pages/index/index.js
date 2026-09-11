@@ -12,7 +12,8 @@ Page({
     stats: [],
     recentOrders: [],
     recentReports: [],
-    isSuperAdmin: false
+    isSuperAdmin: false,
+    isManager: false
   },
 
   async onShow() {
@@ -23,7 +24,7 @@ Page({
     }
 
     const user = app.globalData.userInfo
-    const store = app.globalData.currentStore
+    const store = app.globalData.currentStore || {}
     const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
 
     // 一次请求取回首页全部数据（统计 + 最近采购单 + 最近报表）
@@ -63,21 +64,23 @@ Page({
     })
 
     this.setData({
-      storeName: store.storeName || store.name,
+      storeName: store.storeName || store.name || '未选择门店',
       userName: user.name,
       roleLabel: user.roleLabel || user.role,
       isSuperAdmin: user.role === 'super_admin',
+      isManager: ['super_admin', 'purchaser'].includes(user.role),
       stats, recentOrders, recentReports
     })
   },
 
   goStore() { wx.navigateTo({ url: '/pages/store-switch/store-switch' }) },
 
+  goAccount() { wx.navigateTo({ url: '/pages/account/account' }) },
+
   async switchAccount() {
     const app = getApp()
     await cloud.callFunction('authService', {
       action: 'logout',
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken')
     })
     app.globalData.isLoggedIn = false
     app.globalData.userInfo = null
@@ -94,7 +97,10 @@ Page({
   // 状态卡片点击
   goStatPage(e) {
     const status = e.currentTarget.dataset.status
-    if (status === 'abnormal') {
+    if (status === 'message') {
+      // "需关注"显示的是未读消息数，跳消息页（tabBar 页面需用 switchTab）
+      wx.switchTab({ url: '/pages/message/message' })
+    } else if (status === 'abnormal') {
       wx.navigateTo({ url: '/pages/abnormal-list/abnormal-list' })
     } else {
       // purchase-list 是 tabBar 页面，switchTab 无法带参，通过 globalData 传递筛选状态

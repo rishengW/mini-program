@@ -1,5 +1,5 @@
 // pages/purchase-list/purchase-list.js
-// 重写：筛选与统计由服务端完成（getPurchaseOrders），支持真分页与下拉刷新
+// 分页版：服务端状态筛选 + statusCounts 服务端计数 + 上拉加载 + 下拉刷新
 const meta = require('../../utils/meta')
 const util = require('../../utils/util')
 const cloud = require('../../utils/cloud')
@@ -15,13 +15,15 @@ Page({
       { label: '草稿', value: 'draft', count: 0 },
       { label: '已提交', value: 'submitted', count: 0 },
       { label: '待收货', value: 'to_receive', count: 0 },
-      { label: '已收货', value: 'received', count: 0 }
+      { label: '已收货', value: 'received', count: 0 },
+      { label: '收货异常', value: 'receipt_abnormal', count: 0 }
     ],
     filteredList: [],
     orders: [],
     isLoading: false,
-    page: 1,
-    hasMore: false
+    isLoadingMore: false,
+    hasMore: false,
+    page: 1
   },
 
   onLoad() {
@@ -38,45 +40,58 @@ Page({
         this.setData({ activeFilter: pendingStatus })
       }
     }
-    this.loadOrders(1)
+    this.reload()
+  },
+
+  onPullDownRefresh() {
+    this.reload().finally(() => wx.stopPullDownRefresh())
+  },
+
+  onReachBottom() {
+    if (this.data.isLoading || this.data.isLoadingMore || !this.data.hasMore) return
+    this.loadOrders(this.data.page + 1, true)
+  },
+
+  reload() {
+    this.setData({ page: 1, hasMore: true })
+    return this.loadOrders(1, false)
   },
 
   buildQueryParams(page) {
-    const app = getApp()
-    const params = {
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
-      page,
-      pageSize: PAGE_SIZE
-    }
+    const params = { page, pageSize: PAGE_SIZE }
     const filter = this.data.activeFilter
-    if (filter === 'draft' || filter === 'submitted' || filter === 'received') {
-      params.orderStatus = filter
-    } else if (filter === 'to_receive') {
+    if (filter === 'to_receive') {
       params.orderStatusList = TO_RECEIVE_STATUS
+    } else if (filter !== 'all') {
+      params.orderStatus = filter
     }
-    // 'all'：不传状态条件
+    // 'all'：不传状态条件；角色/门店范围由服务端按登录身份推导
     return params
   },
 
-  async loadOrders(page) {
+  async loadOrders(page, append = false) {
     const requestId = ++this._requestSeq
-    this.setData({ isLoading: true })
+    this.setData(page === 1 ? { isLoading: true } : { isLoadingMore: true })
     const result = await cloud.callFunction('getPurchaseOrders', this.buildQueryParams(page))
     if (requestId !== this._requestSeq) return // 已有更新的请求，丢弃过期响应
 
     if (!result || result.code !== 0) {
-      this.setData({ isLoading: false })
-      wx.stopPullDownRefresh()
+      this.setData({ isLoading: false, isLoadingMore: false })
       util.showToast((result && result.msg) || '采购订单加载失败，请稍后重试')
       return
     }
 
-    const incoming = (result.data || []).map(cloud.normalizePurchaseOrder).map(order => this.decorateOrder(order))
-    const orders = page === 1 ? incoming : this.data.orders.concat(incoming)
-    // tab 徽标使用服务端统计（契约：{ all, draft, submitted, to_receive, received }）
-    const counts = { all: 0, draft: 0, submitted: 0, to_receive: 0, received: 0, ...(result.statusCounts || {}) }
+    const currentUser = getApp().globalData.userInfo || {}
+    const canReceiveRole = currentUser.role !== 'chef'
+    const incoming = (result.data || []).map(cloud.normalizePurchaseOrder).map(order => this.decorateOrder(order, canReceiveRole))
+    const orders = append ? this.data.orders.concat(incoming) : incoming
+    // tab 徽标使用服务端统计（契约：{ all, draft, submitted, to_receive, received, receiptAbnormal }）
+    const counts = { all: 0, draft: 0, submitted: 0, to_receive: 0, received: 0, receiptAbnormal: 0, ...(result.statusCounts || {}) }
     if (!result.statusCounts && typeof result.total === 'number') counts.all = result.total
-    const filterTabs = this.data.filterTabs.map(tab => ({ ...tab, count: counts[tab.value] || 0 }))
+    const filterTabs = this.data.filterTabs.map(tab => ({
+      ...tab,
+      count: counts[tab.value === 'receipt_abnormal' ? 'receiptAbnormal' : tab.value] || 0
+    }))
     const total = typeof result.total === 'number' ? result.total : orders.length
 
     this.setData({
@@ -85,16 +100,16 @@ Page({
       filterTabs,
       page,
       hasMore: orders.length < total,
-      isLoading: false
+      isLoading: false,
+      isLoadingMore: false
     })
-    wx.stopPullDownRefresh()
   },
 
-  decorateOrder(order) {
+  decorateOrder(order, canReceiveRole) {
     const statusInfo = meta.getStatusInfo(order.orderStatus)
     const manualCount = order.items.filter(i => i.isManual).length
-    // 判断是否可直接收货
-    const canReceive = TO_RECEIVE_STATUS.includes(order.orderStatus)
+    // 判断是否可直接收货（chef 无收货权限）
+    const canReceive = canReceiveRole && TO_RECEIVE_STATUS.includes(order.orderStatus)
     return {
       ...order,
       statusText: statusInfo.text,
@@ -109,17 +124,8 @@ Page({
   switchFilter(e) {
     const value = e.currentTarget.dataset.value
     if (value === this.data.activeFilter) return
-    this.setData({ activeFilter: value, orders: [], filteredList: [], page: 1, hasMore: false })
-    this.loadOrders(1)
-  },
-
-  onPullDownRefresh() {
-    this.loadOrders(1)
-  },
-
-  onReachBottom() {
-    if (this.data.isLoading || !this.data.hasMore) return
-    this.loadOrders(this.data.page + 1)
+    this.setData({ activeFilter: value, orders: [], filteredList: [] })
+    this.reload()
   },
 
   goDetail(e) {

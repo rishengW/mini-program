@@ -13,7 +13,7 @@
       </view>
     </view>
     <view class="item-products">
-      <text wx:for="{{item.items}}" wx:for-item="prod" wx:key="id" class="product-tag">{{prod.productName}} ×{{prod.requestedQty}}</text>
+      <text wx:for="{{item.items}}" wx:for-item="prod" wx:key="itemId" class="product-tag">{{prod.productName}} ×{{prod.requestedQty}}</text>
     </view>
     <view class="item-meta">
       <text>提交时间: {{item.submittedAt}}</text>

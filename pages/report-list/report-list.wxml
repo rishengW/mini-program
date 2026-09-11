@@ -1,5 +1,9 @@
 <!-- pages/report-list/report-list.wxml -->
 <view class="container">
+  <view class="report-page-header flex-between">
+    <view class="page-title">报表中心</view>
+    <view class="more-link" bindtap="goHistory">历史报表 ▸</view>
+  </view>
   <!-- 报表类型筛选 -->
   <view class="filter-section">
     <scroll-view class="type-tabs" scroll-x>
@@ -29,6 +33,8 @@
       <view class="report-type-badge" style="background:{{item.typeColor}}22; color:{{item.typeColor}};">
         <text>{{item.typeIcon}} {{item.typeLabel}}</text>
       </view>
+      <view wx:if="{{item.hasAbnormal}}" class="tag tag-danger">{{item.abnormalLabel}}</view>
+      <view wx:if="{{item.status === 'superseded'}}" class="tag tag-grey">已作废</view>
       <view class="report-version">v{{item.fileVersion || 1}}</view>
     </view>
     <view class="report-meta">

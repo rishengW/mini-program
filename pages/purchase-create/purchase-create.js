@@ -24,10 +24,13 @@ Page({
     today: '',
     tomorrow: '',
     // 汇总
-    totalCount: 0
+    totalCount: 0,
+    // 提交防重入：confirm 弹窗期间双击会并发创建两张订单
+    isSubmitting: false
   },
 
-  async onLoad() {
+  async onLoad(options = {}) {
+    this.editingOrderId = options.orderId || options.id || ''
     const now = new Date()
     const today = util.formatDate(now)
     const tmr = new Date(now.getTime() + 86400000)
@@ -35,12 +38,61 @@ Page({
 
     this.setData({ today, tomorrow, orderDate: today, deliveryDate: tomorrow })
     await this.loadReferenceData()
+    if (this.editingOrderId) await this.loadExistingOrder()
+  },
+
+  async loadExistingOrder() {
+    util.showLoading('加载草稿...')
+    const app = getApp()
+    const result = await cloud.callFunction('getPurchaseOrderDetail', {
+      orderId: this.editingOrderId,
+    })
+    util.hideLoading()
+    if (!result || result.code !== 0) {
+      util.showToast((result && result.msg) || '草稿加载失败')
+      return
+    }
+    const order = cloud.normalizePurchaseOrder(result.data)
+    if (order.orderStatus !== 'draft') {
+      util.showToast('只有草稿订单可以编辑')
+      setTimeout(() => wx.navigateBack(), 600)
+      return
+    }
+
+    const qtyMap = {}
+    const manualItems = []
+    const sourceItems = order.items || []
+    sourceItems.forEach((item, index) => {
+      if (item.isManual) {
+        const categoryText = item.categorySnapshot || ''
+        const categoryL1 = /前厅|front/i.test(categoryText) ? 'front' : 'kitchen'
+        manualItems.push({
+          tempId: item.productId || item.itemId || ('MANUAL_' + index),
+          name: item.productNameSnapshot || '',
+          categoryL1,
+          unit: item.unitSnapshot || '',
+          qty: Number(item.orderQty) || 1,
+          remark: item.remark || '',
+          isManual: true
+        })
+      } else if (item.productId) {
+        qtyMap[item.productId] = Number(item.orderQty) || 0
+      }
+    })
+    this._qtyMap = qtyMap
+    this.setData({
+      orderDate: order.orderDate || this.data.orderDate,
+      deliveryDate: order.deliveryDate || order.orderDate || this.data.deliveryDate,
+      remark: order.remark || '',
+      manualItems
+    })
+    this.filterProducts()
+    this._updateTotal()
   },
 
   async loadReferenceData() {
     const app = getApp()
-    const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
-    const categoryResult = await cloud.callFunction('dataService', { action: 'getCategories', authToken })
+    const categoryResult = await cloud.callFunction('dataService', { action: 'getCategories' })
     if (!categoryResult || categoryResult.code !== 0) {
       util.showToast((categoryResult && categoryResult.msg) || '分类数据加载失败')
       return
@@ -58,8 +110,9 @@ Page({
 
   async loadProducts() {
     const app = getApp()
-    const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
-    const result = await cloud.callFunction('getProducts', { includeInactive: false, authToken })
+    const result = await cloud.callFunction('getProducts', {
+      includeInactive: false,
+    })
     if (!result || result.code !== 0) {
       util.showToast((result && result.msg) || '商品数据加载失败')
       this.setData({ displayProducts: [] })
@@ -222,6 +275,7 @@ Page({
   async submitRequest() { return this._saveOrder('submitted') },
 
   async _saveOrder(orderStatus) {
+    if (this.data.isSubmitting) return
     if (!this.data.deliveryDate) { util.showToast('请选择到货日期'); return }
 
     // 收集数量>0的库存商品
@@ -237,18 +291,19 @@ Page({
     const allItems = [...selectedProducts, ...this.data.manualItems]
     if (allItems.length === 0) { util.showToast('请至少填写一种商品的数量'); return }
 
-    const confirmed = await util.showConfirm(orderStatus === 'draft' ? '确认保存采购草稿？' : '确认提交门店采购申请？')
-    if (!confirmed) return
-
-    util.showLoading(orderStatus === 'draft' ? '保存中...' : '提交中...')
     const app = getApp()
     const store = app.globalData.currentStore || {}
     const user = app.globalData.userInfo || {}
     if (!store.storeId && !store.id) {
-      util.hideLoading()
       util.showToast('当前未选择门店，请先切换门店')
       return
     }
+
+    const confirmed = await util.showConfirm(orderStatus === 'draft' ? '确认保存采购草稿？' : '确认提交门店采购申请？')
+    if (!confirmed) return
+
+    this.setData({ isSubmitting: true })
+    util.showLoading(orderStatus === 'draft' ? '保存中...' : '提交中...')
 
     const items = allItems.map(item => {
       const l1 = (this.data.categoryL1List || []).find(c => c.id === item.categoryL1)
@@ -268,9 +323,9 @@ Page({
     })
 
     const result = await cloud.callFunction('createPurchaseOrder', {
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
       storeId: store.storeId || store.id,
       storeName: store.storeName || store.name,
+      orderId: this.editingOrderId || undefined,
       orderDate: this.data.orderDate,
       deliveryDate: this.data.deliveryDate,
       createdBy: user.userId || user.id || user.name || user.username,
@@ -281,10 +336,14 @@ Page({
     })
 
     util.hideLoading()
+    this.setData({ isSubmitting: false })
     if (result.code === 0) {
+      const warning = result.data && result.data.reportWarning
       wx.showModal({
         title: orderStatus === 'draft' ? '草稿已保存' : '提交成功',
-        content: orderStatus === 'draft' ? '采购草稿已保存到数据库' : '采购申请已提交，下单报表已自动生成',
+        content: warning
+          ? warning
+          : (orderStatus === 'draft' ? '采购草稿已保存到数据库' : '采购申请已提交，下单报表已自动生成'),
         showCancel: false,
         success() { wx.navigateBack() }
       })

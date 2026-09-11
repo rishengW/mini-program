@@ -10,7 +10,7 @@ Page({
     keyword: '',
     showAdd: false,
     editItem: null,
-    form: { name: '', categoryL1: 'kitchen', categoryId: '', categoryName: '', unit: '', spec: '', defaultSupplierId: '', manufacturerName: '默认' },
+    form: { name: '', categoryL1: '', categoryL1Name: '', categoryId: '', categoryName: '', unit: '', spec: '', defaultSupplierId: '', supplierName: '', manufacturerName: '默认' },
     categoryL1List: [],
     categories: [],
     filteredCategories: [],
@@ -23,11 +23,10 @@ Page({
 
   async loadData() {
     const app = getApp()
-    const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
     const [productResult, categoryResult, supplierResult] = await Promise.all([
-      cloud.callFunction('getProducts', { includeInactive: true, authToken }),
-      cloud.callFunction('dataService', { action: 'getCategories', authToken }),
-      cloud.callFunction('getSuppliers', { includeInactive: true, authToken })
+      cloud.callFunction('getProducts', { includeInactive: true }),
+      cloud.callFunction('dataService', { action: 'getCategories' }),
+      cloud.callFunction('getSuppliers', { includeInactive: true })
     ])
     if (productResult.code !== 0 || categoryResult.code !== 0 || supplierResult.code !== 0) {
       util.showToast((productResult.code !== 0 ? productResult : categoryResult.code !== 0 ? categoryResult : supplierResult).msg || '商品数据加载失败')
@@ -78,10 +77,11 @@ Page({
   },
 
   showAddForm() {
+    const firstL1 = this.data.categoryL1List[0] || {}
     this.setData({
       showAdd: true, editItem: null,
-      form: { name: '', categoryL1: 'kitchen', categoryId: '', categoryName: '', unit: '', spec: '', defaultSupplierId: '', manufacturerName: '默认' },
-      filteredCategories: this.data.categories.filter(c => c.categoryL1 === 'kitchen')
+      form: { name: '', categoryL1: firstL1.id || '', categoryL1Name: firstL1.name || '', categoryId: '', categoryName: '', unit: '', spec: '', defaultSupplierId: '', supplierName: '', manufacturerName: '默认' },
+      filteredCategories: this.data.categories.filter(c => c.categoryL1 === firstL1.id)
     })
   },
 
@@ -90,7 +90,7 @@ Page({
     if (p) {
       this.setData({
         showAdd: true, editItem: p,
-        form: { name: p.name, categoryL1: p.categoryL1, categoryId: p.categoryId, categoryName: p.categoryName || '', unit: p.unit, spec: p.spec || '', defaultSupplierId: p.defaultSupplierId || '', manufacturerName: p.manufacturerName || '默认' },
+        form: { name: p.name, categoryL1: p.categoryL1, categoryL1Name: p.l1Name || '', categoryId: p.categoryId, categoryName: p.categoryName || '', unit: p.unit, spec: p.spec || '', defaultSupplierId: p.defaultSupplierId || '', supplierName: p.defaultSupplierId ? p.supplierName : '', manufacturerName: p.manufacturerName || '默认' },
         filteredCategories: this.data.categories.filter(c => c.categoryL1 === p.categoryL1)
       })
     }
@@ -98,18 +98,22 @@ Page({
 
   closeForm() { this.setData({ showAdd: false }) },
 
+  // Prevent clicks inside the modal (including picker controls) from closing it.
+  stopBubble() {},
+
   onFormInput(e) {
     const field = e.currentTarget.dataset.field
     this.setData({ [`form.${field}`]: e.detail.value })
   },
 
   onL1Change(e) {
-    const val = this.data.categoryL1List[e.detail.value] && this.data.categoryL1List[e.detail.value].id
+    const selected = this.data.categoryL1List[e.detail.value] || {}
     this.setData({
-      'form.categoryL1': val,
+      'form.categoryL1': selected.id || '',
+      'form.categoryL1Name': selected.name || '',
       'form.categoryId': '',
       'form.categoryName': '',
-      filteredCategories: this.data.categories.filter(c => c.categoryL1 === val)
+      filteredCategories: this.data.categories.filter(c => c.categoryL1 === selected.id)
     })
   },
 
@@ -123,7 +127,7 @@ Page({
 
   onSupplierChange(e) {
       const supplier = this.data.suppliers[e.detail.value]
-      if (supplier) this.setData({ 'form.defaultSupplierId': supplier.supplierId })
+      if (supplier) this.setData({ 'form.defaultSupplierId': supplier.supplierId, 'form.supplierName': supplier.supplierName })
   },
 
   async saveProduct() {
@@ -135,7 +139,6 @@ Page({
     const app = getApp()
     const result = await cloud.callFunction('dataService', {
       action: 'saveProduct',
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
       productId: editItem && editItem.productId,
       ...form,
       name: form.name.trim(),
@@ -154,7 +157,6 @@ Page({
     const app = getApp()
     const result = await cloud.callFunction('dataService', {
       action: 'toggleProduct',
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
       productId: id
     })
     if (result.code !== 0) return util.showToast(result.msg || '商品状态更新失败')

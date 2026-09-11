@@ -7,7 +7,7 @@ const db = cloud.database()
 
 exports.main = async (event = {}) => {
   try {
-    const check = await auth.requireUser(event)
+    const check = await auth.requireUser(event, ['super_admin', 'purchaser'])
     if (check.error) return check.error
 
     const { supplierId, productId, onlyCurrent } = event
