@@ -1,29 +1,58 @@
-// 云函数 getPurchaseOrders - 获取采购单列表（按角色+门店过滤）
+// 云函数 getPurchaseOrders - 获取采购单列表（登录态鉴权 + 服务端角色/门店过滤）
 const cloud = require('wx-server-sdk')
+const auth = require('./auth')
+
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
+const TO_RECEIVE_STATUS = ['submitted', 'approved', 'report_generated', 'partial_received', 'to_receive']
+
 exports.main = async (event = {}) => {
   try {
-    const { role, storeId, orderStatus, orderDate, createdBy, page = 1, pageSize = 20 } = event || {}
+    const check = await auth.requireUser(event)
+    if (check.error) return check.error
+    const user = check.user
+
+    // 客户端传的 role/createdBy 一律忽略；storeId 仅对全局角色作为查询过滤条件
+    const { storeId, orderStatus, orderStatusList, orderDate, page = 1, pageSize = 20 } = event || {}
     const _ = db.command
-    let query = {}
 
-    // 角色权限过滤
-    if (role === 'chef') {
-      // 下单人员：只看本店+自己创建的
-      if (storeId) query.store_id = storeId
-      if (createdBy) query.created_by = createdBy
-    } else if (role === 'store_manager') {
-      // 店长：看本店全部
-      if (storeId) query.store_id = storeId
+    const scope = auth.buildOrderScope(user)
+    if (scope._no_access) {
+      return {
+        code: 0,
+        data: [],
+        total: 0,
+        page,
+        pageSize,
+        statusCounts: { all: 0, draft: 0, submitted: 0, to_receive: 0, received: 0 }
+      }
     }
-    // purchaser/admin: 不加门店限制
 
-    if (orderStatus) query.order_status = orderStatus
+    // 基础条件 = 服务端角色范围（+ 全局角色可选门店过滤），统计与列表共用
+    const baseQuery = { ...scope }
+    if (auth.GLOBAL_ROLES.includes(user.role) && storeId) baseQuery.store_id = storeId
+
+    // 状态筛选：orderStatusList 优先，其次单个 orderStatus
+    const query = { ...baseQuery }
+    if (Array.isArray(orderStatusList) && orderStatusList.length > 0) {
+      query.order_status = _.in(orderStatusList)
+    } else if (orderStatus) {
+      query.order_status = orderStatus
+    }
     if (orderDate) query.order_date = orderDate
 
     const countRes = await db.collection('purchase_order').where(query).count()
+
+    // 各状态计数（套用同样的角色 where 条件，不受本次状态筛选影响）
+    const [allRes, draftRes, submittedRes, toReceiveRes, receivedRes] = await Promise.all([
+      db.collection('purchase_order').where(baseQuery).count(),
+      db.collection('purchase_order').where({ ...baseQuery, order_status: 'draft' }).count(),
+      db.collection('purchase_order').where({ ...baseQuery, order_status: 'submitted' }).count(),
+      db.collection('purchase_order').where({ ...baseQuery, order_status: _.in(TO_RECEIVE_STATUS) }).count(),
+      db.collection('purchase_order').where({ ...baseQuery, order_status: 'received' }).count()
+    ])
+
     const res = await db.collection('purchase_order')
       .where(query)
       .orderBy('created_at', 'desc')
@@ -57,7 +86,20 @@ exports.main = async (event = {}) => {
       items: itemGroups[order.purchase_order_id] || []
     }))
 
-    return { code: 0, data: orders, total: countRes.total, page, pageSize }
+    return {
+      code: 0,
+      data: orders,
+      total: countRes.total,
+      page,
+      pageSize,
+      statusCounts: {
+        all: allRes.total,
+        draft: draftRes.total,
+        submitted: submittedRes.total,
+        to_receive: toReceiveRes.total,
+        received: receivedRes.total
+      }
+    }
   } catch (err) {
     console.error('[getPurchaseOrders] 采购订单加载失败:', err)
     return { code: -1, msg: '采购订单加载失败，请稍后重试' }

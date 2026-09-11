@@ -51,7 +51,8 @@ Page({
       role,
       storeId,
       reportType: this.data.activeType === 'all' ? '' : this.data.activeType,
-      relatedDate: this.data.filterDate || ''
+      relatedDate: this.data.filterDate || '',
+      authToken: app.globalData.authToken || wx.getStorageSync('authToken')
     })
 
     if (result.code === 0) {

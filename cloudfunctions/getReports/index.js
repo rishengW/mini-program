@@ -1,27 +1,31 @@
-// 云函数 getReports - 按角色查询报表列表
+// 云函数 getReports - 按登录角色查询报表列表（不信任客户端传参）
 const cloud = require('wx-server-sdk')
+const auth = require('./auth')
+
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
 exports.main = async (event = {}) => {
   try {
-    const { role, storeId, reportScope, reportType, relatedDate } = event || {}
-    const _ = db.command
+    const check = await auth.requireUser(event)
+    if (check.error) return check.error
+    const user = check.user
+
+    // 客户端传的 role 一律忽略；storeId 仅对全局角色作为查询过滤条件
+    const { storeId, reportScope, reportType, relatedDate } = event || {}
     let query = {}
 
-    // 按角色过滤
-    if (role === 'chef') {
-      // 厨师/下单人员：只看门店下单报表
+    if (!auth.GLOBAL_ROLES.includes(user.role)) {
+      // 门店角色：强制只看本店报表（厨师仅看门店下单报表）
+      if (!user.default_store_id) return { code: 0, data: [] }
       query.report_scope = 'store'
-      query.report_type = 'store_order_report'
-      if (storeId) query.scope_id = storeId
-    } else if (role === 'store_manager') {
-      // 店长：看门店所有报表
-      query.report_scope = 'store'
-      if (storeId) query.scope_id = storeId
-    } else if (role === 'purchaser' || role === 'admin') {
-      // 管理员：看全部
+      if (user.role === 'chef') query.report_type = 'store_order_report'
+      query.scope_id = user.default_store_id
+    } else {
+      // 全局角色：看全部，可按报表维度过滤
       if (reportScope) query.report_scope = reportScope
+      // 客户端门店过滤仅在明确查看门店维度报表时生效，避免误伤供应商维度报表
+      if (storeId && reportScope === 'store') query.scope_id = storeId
     }
 
     if (reportType) query.report_type = reportType

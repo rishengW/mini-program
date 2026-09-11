@@ -1,10 +1,16 @@
 // 云函数 getPurchaseOrderDetail - 获取采购单详情
 const cloud = require('wx-server-sdk')
+const auth = require('./auth')
+
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
 exports.main = async (event = {}) => {
   try {
+    const check = await auth.requireUser(event)
+    if (check.error) return check.error
+    const user = check.user
+
     const { orderId } = event || {}
     if (!orderId) return { code: -1, msg: '订单信息缺失，请返回后重试' }
 
@@ -19,6 +25,16 @@ exports.main = async (event = {}) => {
     }
 
     const order = orderRes.data[0]
+
+    // 门店角色只能看本店订单；厨师（下单人员）还只能看自己创建的订单
+    if (auth.STORE_ROLES.includes(user.role)) {
+      let allowed = !!user.default_store_id && order.store_id === user.default_store_id
+      if (allowed && user.role === 'chef') {
+        const identities = [user.user_id, user._id, user.name].filter(Boolean)
+        allowed = identities.includes(order.created_by)
+      }
+      if (!allowed) return { code: -403, msg: '无权查看该订单' }
+    }
     let createdByName = order.created_by_name || order.created_by || ''
     if (!order.created_by_name && order.created_by) {
       const userRes = await db.collection('app_user')

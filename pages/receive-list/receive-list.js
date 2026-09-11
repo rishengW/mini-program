@@ -14,7 +14,8 @@ Page({
       role: user.role || 'store_manager',
       storeId: store.storeId || store.id || '',
       createdBy: user.role === 'chef' ? (user.userId || user.id || user.name || '') : '',
-      pageSize: 100
+      pageSize: 100,
+      authToken: app.globalData.authToken || wx.getStorageSync('authToken')
     })
     if (!result || result.code !== 0) {
       util.showToast((result && result.msg) || '待收货订单加载失败，请稍后重试')

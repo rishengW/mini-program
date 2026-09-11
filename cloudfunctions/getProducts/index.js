@@ -1,10 +1,15 @@
 // 云函数 getProducts - 查询商品列表
 const cloud = require('wx-server-sdk')
+const auth = require('./auth')
+
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
 exports.main = async (event = {}) => {
   try {
+    const check = await auth.requireUser(event)
+    if (check.error) return check.error
+
     const { categoryL1, categoryId, keyword, includeInactive } = event
     const where = {}
     if (!includeInactive) where.status = 1

@@ -33,9 +33,14 @@
     </view>
   </view>
 
-  <view wx:if="{{filteredList.length === 0}}" class="empty-state">
+  <view wx:if="{{filteredList.length === 0 && !isLoading}}" class="empty-state">
     <view class="empty-state-icon">📋</view>
     <view class="empty-state-text">暂无采购申请</view>
+  </view>
+
+  <!-- 分页状态提示 -->
+  <view wx:if="{{filteredList.length > 0}}" class="item-meta" style="text-align:center; padding: 20rpx 0;">
+    {{isLoading ? '加载中...' : (hasMore ? '上拉加载更多' : '没有更多了')}}
   </view>
 
   <view class="fab" bindtap="goCreate"><text>+</text></view>

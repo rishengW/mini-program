@@ -18,69 +18,48 @@ Page({
   async onShow() {
     const app = getApp()
     if (!app.globalData.isLoggedIn) {
-      wx.redirectTo({ url: '/pages/login/login' })
+      wx.reLaunch({ url: '/pages/login/login' })
       return
     }
 
     const user = app.globalData.userInfo
     const store = app.globalData.currentStore
-
     const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
-    const [ordersResult, reportsResult, messagesResult] = await Promise.all([
-      cloud.callFunction('getPurchaseOrders', {
-        role: user.role,
-        storeId: store.storeId,
-        createdBy: user.role === 'chef' ? (user.userId || user.id || user.name) : '',
-        pageSize: 100
-      }),
-      cloud.callFunction('getReports', {
-        role: user.role,
-        storeId: store.storeId,
-        reportType: '',
-        relatedDate: ''
-      }),
-      cloud.callFunction('dataService', { action: 'getMessages', authToken })
-    ])
-    if (ordersResult.code !== 0 || reportsResult.code !== 0 || messagesResult.code !== 0) {
-      util.showToast('首页数据加载失败，请稍后重试')
+
+    // 一次请求取回首页全部数据（统计 + 最近采购单 + 最近报表）
+    const result = await cloud.callFunction('dataService', { action: 'getHomeStats', authToken })
+    if (!result || result.code !== 0) {
+      util.showToast((result && result.msg) || '首页数据加载失败，请稍后重试')
       return
     }
 
-    const myOrders = (ordersResult.data || []).map(cloud.normalizePurchaseOrder)
-    const myReports = (reportsResult.data || []).map(cloud.normalizeReport)
-    const messages = messagesResult.data || []
-
+    const statsData = result.data || {}
     // 统计（全部可点击）
-    const pendingOrders = myOrders.filter(o => o.orderStatus === 'submitted').length
-    const pendingReceive = myOrders.filter(o =>
-      ['submitted', 'approved', 'report_generated', 'to_receive'].includes(o.orderStatus)
-    ).length
-    const completedOrders = myOrders.filter(o => o.orderStatus === 'received').length
-    const unreadMsg = messages.filter(m => !m.read).length
-
     const stats = [
-      { label: '待处理', value: pendingOrders, icon: '📋', color: '#FAAD14', status: 'submitted' },
-      { label: '待收货', value: pendingReceive, icon: '📦', color: '#1890FF', status: 'submitted' },
-      { label: '已完成', value: completedOrders, icon: '✅', color: '#52C41A', status: 'received' },
-      { label: '需关注', value: unreadMsg, icon: '⚠️', color: '#FF4D4F', status: 'abnormal' }
+      { label: '待处理', value: statsData.pendingApproval || 0, icon: '📋', color: '#FAAD14', status: 'submitted' },
+      { label: '待收货', value: statsData.pendingReceive || 0, icon: '📦', color: '#1890FF', status: 'to_receive' },
+      { label: '已完成', value: statsData.completed || 0, icon: '✅', color: '#52C41A', status: 'received' },
+      { label: '需关注', value: statsData.attention || 0, icon: '⚠️', color: '#FF4D4F', status: 'abnormal' }
     ]
 
     // 最近采购单
-    const recentOrders = myOrders.slice(0, 3).map(o => {
-      const statusInfo = meta.getStatusInfo(o.orderStatus)
+    const recentOrders = (statsData.recentOrders || []).map(o => {
+      const normalized = cloud.normalizePurchaseOrder(o)
+      const statusInfo = meta.getStatusInfo(normalized.orderStatus)
       return {
-        ...o,
+        ...normalized,
         statusText: statusInfo.text,
         statusType: statusInfo.type,
-        itemCount: o.items.length,
-        manualCount: o.items.filter(i => i.isManual).length
+        itemCount: normalized.items.length,
+        manualCount: normalized.items.filter(i => i.isManual).length
       }
     })
 
     // 最近报表
-    const recentReports = myReports.slice(0, 3).map(r => {
-      const typeInfo = meta.getReportTypeInfo(r.reportType)
-      return { ...r, typeLabel: typeInfo.label, typeIcon: typeInfo.icon, typeColor: typeInfo.color }
+    const recentReports = (statsData.recentReports || []).map(r => {
+      const normalized = cloud.normalizeReport(r)
+      const typeInfo = meta.getReportTypeInfo(normalized.reportType)
+      return { ...normalized, typeLabel: typeInfo.label, typeIcon: typeInfo.icon, typeColor: typeInfo.color }
     })
 
     this.setData({
@@ -118,7 +97,9 @@ Page({
     if (status === 'abnormal') {
       wx.navigateTo({ url: '/pages/abnormal-list/abnormal-list' })
     } else {
-      wx.navigateTo({ url: '/pages/purchase-list/purchase-list?status=' + status })
+      // purchase-list 是 tabBar 页面，switchTab 无法带参，通过 globalData 传递筛选状态
+      getApp().globalData.pendingPurchaseStatus = status
+      wx.switchTab({ url: '/pages/purchase-list/purchase-list' })
     }
   },
 

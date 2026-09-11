@@ -51,13 +51,6 @@ function getRelativeTime(dateStr) {
 }
 
 /**
- * 生成唯一ID
- */
-function generateId() {
-    return Date.now() + Math.floor(Math.random() * 1000)
-}
-
-/**
  * 提示
  */
 function showToast(title, icon = 'none') {
@@ -103,7 +96,6 @@ function calcTotal(items, qtyField = 'requestedQty', priceField = 'price') {
 module.exports = {
     formatDate,
     getRelativeTime,
-    generateId,
     showToast,
     showSuccess,
     showLoading,

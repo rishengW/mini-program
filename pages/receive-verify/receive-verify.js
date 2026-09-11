@@ -19,7 +19,9 @@ Page({
     }
 
     util.showLoading('加载中...')
-    const result = await cloud.callFunction('getPurchaseOrderDetail', { orderId: id })
+    const app = getApp()
+    const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
+    const result = await cloud.callFunction('getPurchaseOrderDetail', { orderId: id, authToken })
     util.hideLoading()
     if (!result || result.code !== 0) {
       util.showToast((result && result.msg) || '采购订单加载失败，请稍后重试')
@@ -124,6 +126,7 @@ Page({
         receivedBy: user.name || user.username || '',
         overallRemark,
         photoFileIds,
+        authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
         items: items.map(item => ({
           orderItemId: item.itemId,
           productId: item.productId,

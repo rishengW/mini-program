@@ -36,12 +36,15 @@ Page({
   },
 
   async loadReports(role, storeId) {
+    const app = getApp()
+    const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
     const result = await cloud.callFunction('getReports', {
       role: role || 'purchaser',
       storeId: storeId || '',
       reportScope: this.data.filterScope !== 'all' ? this.data.filterScope : '',
       reportType: this.data.filterType,
-      relatedDate: this.data.filterDate
+      relatedDate: this.data.filterDate,
+      authToken
     })
 
     if (result.code === 0) {

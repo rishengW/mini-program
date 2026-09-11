@@ -1,10 +1,15 @@
 // 云函数 getSuppliers - 获取供应商列表
 const cloud = require('wx-server-sdk')
+const auth = require('./auth')
+
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
 exports.main = async (event = {}) => {
   try {
+    const check = await auth.requireUser(event)
+    if (check.error) return check.error
+
     const { status, keyword, includeInactive } = event
     const _ = db.command
     let query = {}

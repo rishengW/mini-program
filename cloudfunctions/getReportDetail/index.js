@@ -1,10 +1,16 @@
 // 云函数 getReportDetail - 获取报表详情（含行数据）
 const cloud = require('wx-server-sdk')
+const auth = require('./auth')
+
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
 exports.main = async (event = {}) => {
   try {
+    const check = await auth.requireUser(event)
+    if (check.error) return check.error
+    const user = check.user
+
     const { reportId } = event || {}
     if (!reportId) return { code: -1, msg: '缺少reportId' }
 
@@ -19,6 +25,14 @@ exports.main = async (event = {}) => {
     }
 
     const report = reportRes.data[0]
+
+    // 门店角色只能看本店的门店维度报表
+    if (!auth.GLOBAL_ROLES.includes(user.role)) {
+      if (report.report_scope !== 'store' || report.scope_id !== user.default_store_id) {
+        return { code: -403, msg: '无权查看该报表' }
+      }
+    }
+
     let rows = []
 
     // 根据报表类型，从原始数据重新构建行数据

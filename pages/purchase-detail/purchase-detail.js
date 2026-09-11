@@ -16,8 +16,10 @@ Page({
   },
 
   async loadData() {
+    const app = getApp()
+    const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
     util.showLoading('加载中...')
-    const result = await cloud.callFunction('getPurchaseOrderDetail', { orderId: this.orderId })
+    const result = await cloud.callFunction('getPurchaseOrderDetail', { orderId: this.orderId, authToken })
     util.hideLoading()
     if (!result || result.code !== 0) {
       util.showToast((result && result.msg) || '采购订单加载失败，请稍后重试')

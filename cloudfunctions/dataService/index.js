@@ -7,6 +7,7 @@ const _ = db.command
 
 const GLOBAL_ROLES = ['super_admin', 'purchaser']
 const MANAGEMENT_ROLES = ['super_admin', 'purchaser']
+const TO_RECEIVE_STATUS = ['submitted', 'approved', 'report_generated', 'partial_received', 'to_receive']
 
 function hashToken(token) {
   return crypto.createHash('sha256').update(String(token || '')).digest('hex')
@@ -254,15 +255,112 @@ async function markMessageRead(event) {
   return { code: 0 }
 }
 
+// 与 getMessages 的可见性过滤一致：收件人为空（广播）或本人；门店角色限定本店消息
+function messageVisibilityWhere(user) {
+  const where = { recipient_user_id: _.in([user.user_id || '', '', null]) }
+  if (!GLOBAL_ROLES.includes(user.role)) {
+    where.store_id = _.in([user.default_store_id || '', '', null])
+  }
+  return where
+}
+
 async function markAllMessagesRead(event) {
   const auth = await requireUser(event)
   if (auth.error) return auth.error
-  const result = await getMessages(event)
-  if (result.code !== 0) return result
-  for (const message of result.data.filter(item => !item.read)) {
-    await db.collection('message').doc(message.id).update({ data: { read: true, read_at: db.serverDate() } })
-  }
+  // 服务端 where().update() 会更新全部匹配文档，替代逐条循环
+  await db.collection('message')
+    .where(messageVisibilityWhere(auth.user))
+    .update({ data: { read: true, read_at: db.serverDate() } })
   return { code: 0 }
+}
+
+// 与 getPurchaseOrders 的服务端角色过滤规则一致（不信任客户端传参）
+function buildOrderScopeQuery(user) {
+  const query = {}
+  if (user.role === 'chef') {
+    query.store_id = user.default_store_id
+    const identities = [user.user_id, user._id, user.name].filter(Boolean)
+    query.created_by = identities.length ? _.in(identities) : _.in([''])
+  } else if (user.role === 'store_manager') {
+    query.store_id = user.default_store_id
+  }
+  // purchaser / super_admin：不限门店
+  return query
+}
+
+// 与 getReports 的角色可见性一致（不信任客户端传参）
+function buildReportScopeQuery(user) {
+  const query = {}
+  if (!GLOBAL_ROLES.includes(user.role)) {
+    query.report_scope = 'store'
+    if (user.role === 'chef') query.report_type = 'store_order_report'
+    query.scope_id = user.default_store_id
+  }
+  return query
+}
+
+async function getHomeStats(event) {
+  const auth = await requireUser(event)
+  if (auth.error) return auth.error
+  const user = auth.user
+
+  // 门店角色缺少默认门店时无可见数据
+  if (!GLOBAL_ROLES.includes(user.role) && !user.default_store_id) {
+    return {
+      code: 0,
+      data: { pendingApproval: 0, pendingReceive: 0, completed: 0, attention: 0, recentOrders: [], recentReports: [] }
+    }
+  }
+
+  const scopeQuery = buildOrderScopeQuery(user)
+  const [pendingApprovalRes, pendingReceiveRes, completedRes, attentionRes, ordersRes, reportsRes] = await Promise.all([
+    db.collection('purchase_order').where({ ...scopeQuery, order_status: 'submitted' }).count(),
+    db.collection('purchase_order').where({ ...scopeQuery, order_status: _.in(TO_RECEIVE_STATUS) }).count(),
+    db.collection('purchase_order').where({ ...scopeQuery, order_status: 'received' }).count(),
+    db.collection('message').where({ ...messageVisibilityWhere(user), read: false }).count(),
+    db.collection('purchase_order').where(scopeQuery).orderBy('created_at', 'desc').limit(3).get(),
+    db.collection('report_file').where(buildReportScopeQuery(user)).orderBy('generated_at', 'desc').limit(3).get()
+  ])
+
+  // 批量查询订单明细（参考 getPurchaseOrders 的 _.in 批量查法）
+  const orderList = ordersRes.data
+  const orderIds = orderList.map(order => order.purchase_order_id).filter(Boolean)
+  const itemGroups = {}
+  for (let i = 0; i < orderIds.length; i += 20) {
+    const idChunk = orderIds.slice(i, i + 20)
+    const itemsRes = await db.collection('purchase_order_item')
+      .where({ purchase_order_id: _.in(idChunk) })
+      .limit(1000)
+      .get()
+    itemsRes.data.forEach(item => {
+      if (!itemGroups[item.purchase_order_id]) itemGroups[item.purchase_order_id] = []
+      itemGroups[item.purchase_order_id].push(item)
+    })
+  }
+  const creatorIds = [...new Set(orderList.map(order => order.created_by).filter(Boolean))]
+  const creatorMap = {}
+  if (creatorIds.length) {
+    const creators = await db.collection('app_user').where({ user_id: _.in(creatorIds) }).limit(100).get()
+    creators.data.forEach(creator => { creatorMap[creator.user_id] = creator.name })
+  }
+
+  const recentOrders = orderList.map(order => ({
+    ...order,
+    created_by_name: order.created_by_name || creatorMap[order.created_by] || order.created_by,
+    items: itemGroups[order.purchase_order_id] || []
+  }))
+
+  return {
+    code: 0,
+    data: {
+      pendingApproval: pendingApprovalRes.total,
+      pendingReceive: pendingReceiveRes.total,
+      completed: completedRes.total,
+      attention: attentionRes.total,
+      recentOrders,
+      recentReports: reportsRes.data
+    }
+  }
 }
 
 const ABNORMAL_TYPE_NAMES = {
@@ -337,6 +435,7 @@ exports.main = async (event = {}) => {
       case 'getMessages': return await getMessages(event)
       case 'markMessageRead': return await markMessageRead(event)
       case 'markAllMessagesRead': return await markAllMessagesRead(event)
+      case 'getHomeStats': return await getHomeStats(event)
       case 'getAbnormalRecords': return await getAbnormalRecords(event)
       case 'startAbnormal': return await startAbnormal(event)
       default: return { code: -1, msg: '不支持的数据操作' }

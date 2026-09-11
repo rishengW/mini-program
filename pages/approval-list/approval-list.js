@@ -14,7 +14,8 @@ Page({
       role: user.role || 'purchaser',
       storeId: store.storeId || '',
       createdBy: '',
-      pageSize: 100
+      pageSize: 100,
+      authToken: app.globalData.authToken || wx.getStorageSync('authToken')
     })
     if (!result || result.code !== 0) {
       util.showToast((result && result.msg) || '审核列表加载失败')

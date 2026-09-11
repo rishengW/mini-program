@@ -57,7 +57,9 @@ Page({
   },
 
   async loadProducts() {
-    const result = await cloud.callFunction('getProducts', { includeInactive: false })
+    const app = getApp()
+    const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
+    const result = await cloud.callFunction('getProducts', { includeInactive: false, authToken })
     if (!result || result.code !== 0) {
       util.showToast((result && result.msg) || '商品数据加载失败')
       this.setData({ displayProducts: [] })
@@ -266,9 +268,11 @@ Page({
     })
 
     const result = await cloud.callFunction('createPurchaseOrder', {
+      authToken: app.globalData.authToken || wx.getStorageSync('authToken'),
       storeId: store.storeId || store.id,
       storeName: store.storeName || store.name,
-      orderDate: this.data.deliveryDate,
+      orderDate: this.data.orderDate,
+      deliveryDate: this.data.deliveryDate,
       createdBy: user.userId || user.id || user.name || user.username,
       createdByName: user.name || user.username,
       items,

@@ -25,9 +25,9 @@ Page({
     const app = getApp()
     const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
     const [productResult, categoryResult, supplierResult] = await Promise.all([
-      cloud.callFunction('getProducts', { includeInactive: true }),
+      cloud.callFunction('getProducts', { includeInactive: true, authToken }),
       cloud.callFunction('dataService', { action: 'getCategories', authToken }),
-      cloud.callFunction('getSuppliers', { includeInactive: true })
+      cloud.callFunction('getSuppliers', { includeInactive: true, authToken })
     ])
     if (productResult.code !== 0 || categoryResult.code !== 0 || supplierResult.code !== 0) {
       util.showToast((productResult.code !== 0 ? productResult : categoryResult.code !== 0 ? categoryResult : supplierResult).msg || '商品数据加载失败')

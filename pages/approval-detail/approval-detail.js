@@ -10,7 +10,9 @@ Page({
 
   async onLoad(options = {}) {
     this.orderId = options.id || options.orderId || ''
-    const result = await cloud.callFunction('getPurchaseOrderDetail', { orderId: this.orderId })
+    const app = getApp()
+    const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
+    const result = await cloud.callFunction('getPurchaseOrderDetail', { orderId: this.orderId, authToken })
     if (!result || result.code !== 0) {
       util.showToast((result && result.msg) || '采购申请加载失败')
       return

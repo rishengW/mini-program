@@ -14,7 +14,9 @@ Page({
   onShow() { this.loadData() },
 
   async loadData() {
-    const result = await cloud.callFunction('getSuppliers', { includeInactive: true })
+    const app = getApp()
+    const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
+    const result = await cloud.callFunction('getSuppliers', { includeInactive: true, authToken })
     if (!result || result.code !== 0) {
       util.showToast((result && result.msg) || '供应商数据加载失败')
       return

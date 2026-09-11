@@ -23,10 +23,12 @@ Page({
   onShow() { this.loadData() },
 
   async loadData() {
+    const app = getApp()
+    const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
     const [supplierResult, productResult, priceResult] = await Promise.all([
-      cloud.callFunction('getSuppliers', { includeInactive: true }),
-      cloud.callFunction('getProducts', { includeInactive: true }),
-      cloud.callFunction('getProductPrices', { onlyCurrent: true })
+      cloud.callFunction('getSuppliers', { includeInactive: true, authToken }),
+      cloud.callFunction('getProducts', { includeInactive: true, authToken }),
+      cloud.callFunction('getProductPrices', { onlyCurrent: true, authToken })
     ])
     if (supplierResult.code !== 0 || productResult.code !== 0 || priceResult.code !== 0) {
       const failed = supplierResult.code !== 0 ? supplierResult : productResult.code !== 0 ? productResult : priceResult
@@ -121,7 +123,8 @@ Page({
       supplierId: editItem.supplierId,
       productId: editItem.productId,
       newPrice: price,
-      updatedBy: (app.globalData.userInfo && app.globalData.userInfo.name) || ''
+      updatedBy: (app.globalData.userInfo && app.globalData.userInfo.name) || '',
+      authToken: app.globalData.authToken || wx.getStorageSync('authToken')
     })
 
     if (result.code === 0) {

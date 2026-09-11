@@ -16,9 +16,11 @@ Page({
 
   async onLoad(options) {
     const reportId = options.id
+    const app = getApp()
+    const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
     util.showLoading('加载报表...')
 
-    const result = await cloud.callFunction('getReportDetail', { reportId })
+    const result = await cloud.callFunction('getReportDetail', { reportId, authToken })
     util.hideLoading()
 
     if (result.code === 0 && result.data) {
