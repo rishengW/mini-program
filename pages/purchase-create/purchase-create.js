@@ -58,6 +58,16 @@ Page({
       setTimeout(() => wx.navigateBack(), 600)
       return
     }
+    // 与服务端 createPurchaseOrder 的草稿编辑口径一致：仅创建者本人
+    // （或全局角色）可编辑。店长对他人草稿只读，在这里挡在门外，
+    // 而不是等保存时才被后端 403 拒绝。
+    const currentUser = app.globalData.userInfo || {}
+    const isGlobalRole = ['super_admin', 'purchaser'].includes(currentUser.role)
+    if (!isGlobalRole && order.createdById !== (currentUser.userId || currentUser.id)) {
+      util.showToast('仅创建者本人可编辑该草稿')
+      setTimeout(() => wx.navigateBack(), 600)
+      return
+    }
 
     const qtyMap = {}
     const manualItems = []
