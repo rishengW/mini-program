@@ -194,26 +194,30 @@ Page({
     }
   },
 
-  async deleteUser(e) {
+  // 离职/停用走软删除：账号无法登录但记录保留；停用后可再启用
+  async toggleUserStatus(e) {
     const item = e.currentTarget.dataset.item
-    if (item.username === 'admin') return util.showToast('无法删除默认系统超管')
-    
-    const confirmed = await util.showConfirm(`确认删除账号 ${item.name}(${item.username}) 吗？`)
+    if (item.username === 'admin') return util.showToast('默认系统超管不可停用')
+
+    const disabling = item.status === 1
+    const confirmed = await util.showConfirm(disabling
+      ? `确认停用账号 ${item.name}(${item.username}) 吗？\n停用后该账号无法登录，历史单据与记录保留`
+      : `确认恢复账号 ${item.name}(${item.username}) 的登录权限吗？`)
     if (!confirmed) return
 
     util.showLoading()
-    const app = getApp()
     const res = await cloud.callFunction('authService', {
-      action: 'deleteUser',
-      id: item.id
+      action: 'setUserStatus',
+      id: item.id,
+      status: disabling ? 0 : 1
     })
     util.hideLoading()
 
     if (res.code === 0) {
-      util.showSuccess('已删除')
+      util.showSuccess(disabling ? '已停用' : '已启用')
       this.loadData()
     } else {
-      util.showToast(res.msg || '删除失败')
+      util.showToast(res.msg || '操作失败')
     }
   }
 })

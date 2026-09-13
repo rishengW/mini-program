@@ -363,6 +363,36 @@ async function resetPassword(event) {
   return { code: 0 }
 }
 
+// 离职/停用口径：只改状态不删记录，历史单据的 created_by 追溯链保留。
+// 停用即可断会话：getSessionUser 按 status:1 过滤，这里再清 token，
+// 防止将来重新启用时旧会话复活。
+async function setUserStatus(event) {
+  const auth = await requireSuperAdmin(event)
+  if (auth.error) return auth.error
+  if (!event.id) return { code: -1, msg: '用户信息缺失' }
+  const status = Number(event.status)
+  if (![0, 1].includes(status)) return { code: -1, msg: '账号状态无效' }
+  if (event.id === auth.user._id) return { code: -1, msg: '不能操作当前登录账号的状态' }
+
+  const targetResult = await db.collection(USER_COLLECTION).doc(event.id).get()
+  const target = targetResult.data
+  if (!target) return { code: -1, msg: '用户不存在' }
+  if (target.username === 'admin') return { code: -1, msg: '默认系统超管不可停用' }
+  if ((target.status === undefined ? 1 : target.status) === status) {
+    return { code: -1, msg: status === 0 ? '该账号已是停用状态' : '该账号已是正常状态' }
+  }
+
+  const updateData = { status, updated_at: db.serverDate() }
+  if (status === 0) {
+    updateData.session_token_hash = ''
+    updateData.session_expires_at = null
+  }
+  await db.collection(USER_COLLECTION).doc(target._id).update({ data: updateData })
+  return { code: 0, data: { status } }
+}
+
+// 物理删除仅保留给"建错从未使用的账号"。名下还有未完结单据或处理中
+// 异常时拒绝删除，引导改用停用（软删除）。
 async function deleteUser(event) {
   const auth = await requireSuperAdmin(event)
   if (auth.error) return auth.error
@@ -373,6 +403,24 @@ async function deleteUser(event) {
   const target = targetResult.data
   if (!target) return { code: -1, msg: '用户不存在' }
   if (target.username === 'admin') return { code: -1, msg: '无法删除默认系统超管' }
+
+  const _ = db.command
+  const identities = [target.user_id, target._id, target.name].filter(Boolean)
+  const ACTIVE_ORDER_STATUS = ['draft', 'submitted', 'pending_approval', 'approved', 'report_generated', 'partial_received', 'to_receive']
+  const [orderRes, abnormalRes] = await Promise.all([
+    db.collection('purchase_order')
+      .where({ created_by: _.in(identities), order_status: _.in(ACTIVE_ORDER_STATUS) })
+      .count(),
+    db.collection('abnormal_record')
+      .where({ handled_by: target.name, status: _.in(['pending', 'processing']) })
+      .count()
+  ])
+  if (orderRes.total > 0) {
+    return { code: -1, msg: `该账号名下还有 ${orderRes.total} 张未完结采购单，离职请改用「停用」` }
+  }
+  if (abnormalRes.total > 0) {
+    return { code: -1, msg: `该账号还有 ${abnormalRes.total} 条处理中的异常记录，离职请改用「停用」` }
+  }
 
   await db.collection(USER_COLLECTION).doc(target._id).remove()
   return { code: 0 }
@@ -389,6 +437,7 @@ exports.main = async (event = {}) => {
       case 'createUser': return await createUser(event)
       case 'updateUser': return await updateUser(event)
       case 'resetPassword': return await resetPassword(event)
+      case 'setUserStatus': return await setUserStatus(event)
       case 'deleteUser': return await deleteUser(event)
       default: return { code: -1, msg: '不支持的认证操作' }
     }

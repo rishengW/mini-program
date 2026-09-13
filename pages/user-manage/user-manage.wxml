@@ -23,7 +23,7 @@
         <view class="item-actions">
           <view class="action-btn" bindtap="showEditForm" data-item="{{item}}">✏️ 编辑</view>
           <view class="action-btn action-reset" bindtap="showResetForm" data-item="{{item}}">🔑 重置密码</view>
-          <view class="action-btn action-delete" bindtap="deleteUser" data-item="{{item}}">🗑️ 删除</view>
+          <view class="action-btn action-delete" bindtap="toggleUserStatus" data-item="{{item}}">{{item.status === 1 ? '🚫 停用' : '✅ 启用'}}</view>
         </view>
       </view>
     </view>
