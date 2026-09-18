@@ -111,6 +111,22 @@ async function loadProductCategoryMap(productIds) {
   return map
 }
 
+// 批量查供应商名称
+async function loadSupplierNameMap(supplierIds) {
+  const map = {}
+  const ids = [...new Set(supplierIds.filter(Boolean))]
+  for (let i = 0; i < ids.length; i += 20) {
+    const chunk = ids.slice(i, i + 20)
+    const res = await db.collection('supplier')
+      .where({ supplier_id: _.in(chunk) })
+      .field({ supplier_id: true, supplier_name: true })
+      .limit(100)
+      .get()
+    res.data.forEach(s => { map[s.supplier_id] = s.supplier_name })
+  }
+  return map
+}
+
 exports.main = async (event = {}) => {
   try {
     const user = await getSessionUser(event.authToken)
@@ -140,15 +156,19 @@ exports.main = async (event = {}) => {
     const receipts = await getStoreReceipts(storeId, period, date)
     const items = receipts.length ? await loadReceiptItems(receipts) : []
     const categoryMap = await loadProductCategoryMap(items.map(it => it.product_id))
+    const supplierNameMap = await loadSupplierNameMap(items.map(it => it.supplier_id))
 
-    // 按商品聚合
+    // 按供应商+商品聚合（同一商品多供应商时分行体现）
     const productMap = {}
     items.forEach(item => {
       const pid = item.product_id || 'unknown'
-      if (!productMap[pid]) {
+      const sid = item.supplier_id || ''
+      const key = sid + '|' + pid
+      if (!productMap[key]) {
         const meta = categoryMap[pid] || {}
-        productMap[pid] = {
+        productMap[key] = {
           productName: item.product_name || '',
+          supplierName: supplierNameMap[sid] || sid || '未指定供应商',
           category: meta.category || '',
           unit: item.unit_snapshot || meta.unit || '',
           orderQty: 0,
@@ -156,7 +176,7 @@ exports.main = async (event = {}) => {
           amount: 0
         }
       }
-      const agg = productMap[pid]
+      const agg = productMap[key]
       agg.orderQty = Math.round((agg.orderQty + (Number(item.order_qty_snapshot) || 0)) * 1000) / 1000
       agg.receivedQty = Math.round((agg.receivedQty + (Number(item.received_qty) || 0)) * 1000) / 1000
       // 逐行舍入到分再累加
@@ -169,11 +189,11 @@ exports.main = async (event = {}) => {
     // CSV 组装
     const summaryType = period === 'daily' ? '日汇总' : '月汇总'
     let csv = [csvField('门店'), csvField(storeName), csvField('汇总类型'), csvField(summaryType), csvField('汇总日期'), csvField(date)].join(',') + '\n'
-    csv += [csvField('商品名称'), csvField('分类'), csvField('单位'), csvField('下单数量'), csvField('实收数量'), csvField('金额小计')].join(',') + '\n'
+    csv += [csvField('商品名称'), csvField('供应商'), csvField('分类'), csvField('单位'), csvField('下单数量'), csvField('实收数量'), csvField('金额小计')].join(',') + '\n'
     rows.forEach(r => {
-      csv += [csvField(r.productName), csvField(r.category), csvField(r.unit), csvField(r.orderQty), csvField(r.receivedQty), csvField(r.amount.toFixed(2))].join(',') + '\n'
+      csv += [csvField(r.productName), csvField(r.supplierName), csvField(r.category), csvField(r.unit), csvField(r.orderQty), csvField(r.receivedQty), csvField(r.amount.toFixed(2))].join(',') + '\n'
     })
-    csv += [csvField('合计'), csvField(''), csvField(''), csvField(''), csvField(''), csvField(totalAmount.toFixed(2))].join(',') + '\n'
+    csv += [csvField('合计'), csvField(''), csvField(''), csvField(''), csvField(''), csvField(''), csvField(totalAmount.toFixed(2))].join(',') + '\n'
 
     const reportType = period === 'daily' ? 'store_daily_summary_report' : 'store_monthly_summary_report'
     const relatedDate = date // 月汇总也存传入日期

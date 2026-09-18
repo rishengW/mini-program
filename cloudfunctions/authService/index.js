@@ -91,14 +91,27 @@ async function getDefaultStore(user) {
 
 async function getSessionUser(authToken) {
   if (!authToken) return null
+  const tokenHash = hashToken(authToken)
   const result = await db.collection(USER_COLLECTION)
-    .where({ session_token_hash: hashToken(authToken), status: 1 })
+    .where({ status: 1, sessions: { token_hash: tokenHash } })
     .limit(1)
     .get()
-  const user = result.data[0]
-  if (!user || !user.session_expires_at) return null
-
-  const expiresAt = new Date(user.session_expires_at).getTime()
+  let user = result.data[0]
+  if (!user) {
+    // 兼容旧单会话字段（未重新登录的历史设备）
+    const legacy = await db.collection(USER_COLLECTION)
+      .where({ session_token_hash: tokenHash, status: 1 })
+      .limit(1)
+      .get()
+    user = legacy.data[0]
+    if (!user || !user.session_expires_at) return null
+    const legacyExpires = new Date(user.session_expires_at).getTime()
+    if (!Number.isFinite(legacyExpires) || legacyExpires <= Date.now()) return null
+    return user
+  }
+  const session = (user.sessions || []).find(s => s && s.token_hash === tokenHash)
+  if (!session || !session.expires_at) return null
+  const expiresAt = new Date(session.expires_at).getTime()
   if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return null
   return user
 }
@@ -163,10 +176,17 @@ async function login(event) {
 
   const sessionToken = crypto.randomBytes(32).toString('hex')
   const sessionExpiresAt = new Date(Date.now() + SESSION_TTL_MS)
+  // B12 多设备会话：每台设备一条会话记录，最多保留 5 条（挤出最旧的）
+  const sessions = (Array.isArray(user.sessions) ? user.sessions : [])
+    .filter(s => s && new Date(s.expires_at).getTime() > Date.now())
+  sessions.push({ token_hash: hashToken(sessionToken), expires_at: sessionExpiresAt })
+  while (sessions.length > 5) sessions.shift()
   await db.collection(USER_COLLECTION).doc(user._id).update({
     data: {
+      // session_token_hash 兼容保留（指向最新会话），旧版云函数未重部署时仍可用
       session_token_hash: hashToken(sessionToken),
       session_expires_at: sessionExpiresAt,
+      sessions,
       login_fail_count: 0,
       login_locked_until: null,
       last_login_at: db.serverDate(),
@@ -188,8 +208,17 @@ async function login(event) {
 async function logout(event) {
   const user = await getSessionUser(event.authToken)
   if (user) {
+    // 仅移除当前设备的会话，其他设备不受影响
+    const tokenHash = hashToken(event.authToken || '')
+    const sessions = (Array.isArray(user.sessions) ? user.sessions : [])
+      .filter(s => s && s.token_hash !== tokenHash)
     await db.collection(USER_COLLECTION).doc(user._id).update({
-      data: { session_token_hash: '', session_expires_at: null, updated_at: db.serverDate() }
+      data: {
+        sessions,
+        session_token_hash: '',
+        session_expires_at: null,
+        updated_at: db.serverDate()
+      }
     })
   }
   return { code: 0 }
@@ -212,6 +241,7 @@ async function changePassword(event) {
       password_salt: salt,
       password_hash: hashPassword(newPassword, salt),
       password_iterations: PASSWORD_ITERATIONS,
+      sessions: [],
       session_token_hash: '',
       session_expires_at: null,
       updated_at: db.serverDate()
@@ -328,6 +358,7 @@ async function updateUser(event) {
     updateData.password_salt = salt
     updateData.password_hash = hashPassword(input.password, salt)
     updateData.password_iterations = PASSWORD_ITERATIONS
+    updateData.sessions = []
     updateData.session_token_hash = ''
     updateData.session_expires_at = null
   }
@@ -355,6 +386,7 @@ async function resetPassword(event) {
       password_salt: salt,
       password_hash: hashPassword(newPassword, salt),
       password_iterations: PASSWORD_ITERATIONS,
+      sessions: [],
       session_token_hash: '',
       session_expires_at: null,
       updated_at: db.serverDate()
