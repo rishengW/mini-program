@@ -61,6 +61,14 @@
     <button class="btn btn-primary flex-1" bindtap="submitRequest">提交审核</button>
   </view>
 
+  <view wx:if="{{canCopy}}" class="bottom-actions">
+    <button class="btn btn-outline btn-block" bindtap="copyToDraft">📄 复制为新草稿</button>
+  </view>
+
+  <view wx:if="{{canCancel}}" class="bottom-actions">
+    <button class="btn btn-danger btn-block" bindtap="cancelOrder">作废</button>
+  </view>
+
   <view wx:if="{{canReceive}}" class="bottom-actions">
     <button class="btn btn-success btn-block" bindtap="goReceive">📦 去收货</button>
   </view>

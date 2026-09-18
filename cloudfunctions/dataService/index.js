@@ -227,7 +227,8 @@ async function regenerateApprovedOrderReports(order, orderItems, qtyMap) {
 
   // 门店下单报表（审核后数量）
   const storeVer = await getNextVersion('store_order_report', storeId, orderDate)
-  let csv1 = [csvField('商品名称'), csvField('分类'), csvField('单位'), csvField('下单数量'), csvField('备注')].join(',') + '\n'
+  const csv1Info = [csvField('采购单号'), csvField(orderNo), csvField('门店'), csvField(storeName), csvField('下单日期'), csvField(orderDate), csvField('期望到货'), csvField(order.delivery_date || ''), csvField('经办人'), csvField(order.created_by_name || ''), csvField('备注'), csvField('审核后重发')].join(',') + '\n'
+  let csv1 = csv1Info + [csvField('商品名称'), csvField('分类'), csvField('单位'), csvField('下单数量'), csvField('备注')].join(',') + '\n'
   items.forEach(item => {
     csv1 += [csvField(item.productName), csvField(item.category), csvField(item.unit), csvField(item.orderQty), csvField(item.remark)].join(',') + '\n'
   })
@@ -252,16 +253,21 @@ async function regenerateApprovedOrderReports(order, orderItems, qtyMap) {
   })
   const supplierIds = Object.keys(supplierMap).filter(sid => sid !== 'unknown')
   const supplierNames = {}
+  const supplierContacts = {}
   for (let i = 0; i < supplierIds.length; i += 20) {
     const idChunk = supplierIds.slice(i, i + 20)
     const supRes = await db.collection('supplier').where({ supplier_id: _.in(idChunk) }).limit(100).get()
-    supRes.data.forEach(s => { supplierNames[s.supplier_id] = s.supplier_name })
+    supRes.data.forEach(s => {
+      supplierNames[s.supplier_id] = s.supplier_name
+      supplierContacts[s.supplier_id] = [s.contact_name, s.contact_phone].filter(Boolean).join(' ')
+    })
   }
   for (const sid of supplierIds) {
     const supItems = supplierMap[sid]
     const supName = supplierNames[sid] || sid
     const supVer = await getNextVersion('supplier_order_report', sid, orderDate)
-    let csvSup = [csvField('门店'), csvField('商品名称'), csvField('订货数量'), csvField('单位'), csvField('备注')].join(',') + '\n'
+    let csvSup = [csvField('采购单号'), csvField(orderNo), csvField('供应商'), csvField(supName), csvField('联系人'), csvField(supplierContacts[sid] || ''), csvField('下单日期'), csvField(orderDate), csvField('期望到货'), csvField(order.delivery_date || '')].join(',') + '\n'
+    csvSup += [csvField('门店'), csvField('商品名称'), csvField('订货数量'), csvField('单位'), csvField('备注')].join(',') + '\n'
     supItems.forEach(item => {
       csvSup += [csvField(storeName), csvField(item.productName), csvField(item.orderQty), csvField(item.unit), csvField(item.remark)].join(',') + '\n'
     })
@@ -582,7 +588,7 @@ async function getOrderStats(event) {
   } else {
     return { code: -403, msg: '当前账号无权查看采购订单' }
   }
-  const receivableStatuses = ['submitted', 'approved', 'report_generated', 'partial_received', 'to_receive']
+  const receivableStatuses = ['approved', 'report_generated', 'partial_received', 'to_receive']
   const [submittedRes, receivableRes, receivedRes] = await Promise.all([
     db.collection('purchase_order').where({ ...baseQuery, order_status: 'submitted' }).count(),
     db.collection('purchase_order').where({ ...baseQuery, order_status: _.in(receivableStatuses) }).count(),
@@ -596,6 +602,145 @@ async function getOrderStats(event) {
       received: receivedRes.total
     }
   }
+}
+
+// ===== B5 异常处理后补结算 =====
+// 收货单存在异常行被剔除后，异常全部处理完成时，按当前 receipt_item 的
+// payable_flag / price_snapshot 重新生成补充带价账单（每供应商一份）。
+async function settleReceipt(event) {
+  const auth = await requireUser(event, GLOBAL_ROLES)
+  if (auth.error) return auth.error
+  const receiptId = String(event.receiptId || '').trim()
+  if (!receiptId) return { code: -1, msg: '缺少收货单号' }
+
+  const receiptRes = await db.collection('receipt').where({ receipt_id: receiptId }).limit(1).get()
+  const receipt = receiptRes.data[0]
+  if (!receipt) return { code: -1, msg: '收货单不存在' }
+
+  // 异常记录必须全部处理完成（resolved/closed）才允许补结算
+  const abnormalRes = await db.collection('abnormal_record')
+    .where({ receipt_id: receiptId })
+    .limit(100)
+    .get()
+  const openAbnormal = abnormalRes.data.filter(item => ['pending', 'processing'].includes(item.status))
+  if (openAbnormal.length > 0) return { code: -1, msg: '尚有未处理完成的异常，无法补结算' }
+
+  // 已补结算过则拒绝重复（补充账单 report_id 带 _S 后缀）
+  const settledRes = await db.collection('report_file')
+    .where({ report_type: 'supplier_receipt_price_report', source_order_id: receipt.purchase_order_id || '' })
+    .limit(100)
+    .get()
+  if (settledRes.data.some(r => String(r.report_id || '').endsWith(receiptId + '_S'))) {
+    return { code: -1, msg: '该收货单已补结算，请勿重复操作' }
+  }
+
+  const itemRes = await db.collection('receipt_item')
+    .where({ receipt_id: receiptId })
+    .limit(1000)
+    .get()
+  // payable_flag 缺失（旧数据）视为可付款；价格为 0 的行跳过不结算
+  const payableItems = itemRes.data.filter(item => item.payable_flag !== false && Number(item.price_snapshot) > 0)
+  if (payableItems.length === 0) return { code: -1, msg: '无可结算的明细行' }
+
+  const receiptDate = receipt.receipt_date || new Date().toISOString().slice(0, 10)
+  const storeId = receipt.store_id || ''
+  const storeName = receipt.store_name || ''
+  const purchaseOrderId = receipt.purchase_order_id || ''
+
+  // 按供应商分组
+  const supplierMap = {}
+  payableItems.forEach(item => {
+    const sid = item.supplier_id || 'unknown'
+    if (!supplierMap[sid]) supplierMap[sid] = { items: [], name: '' }
+    supplierMap[sid].items.push(item)
+  })
+  const supplierIds = Object.keys(supplierMap).filter(sid => sid !== 'unknown')
+  for (let i = 0; i < supplierIds.length; i += 20) {
+    const idChunk = supplierIds.slice(i, i + 20)
+    const supRes = await db.collection('supplier').where({ supplier_id: _.in(idChunk) }).limit(100).get()
+    supRes.data.forEach(s => {
+      if (supplierMap[s.supplier_id]) supplierMap[s.supplier_id].name = s.supplier_name
+    })
+  }
+
+  const infoHead = [csvField('采购单号'), csvField(purchaseOrderId), csvField('门店'), csvField(storeName), csvField('收货日期'), csvField(receiptDate), csvField('备注'), csvField('异常处理后补结算')].join(',') + '\n'
+  const generatedSuppliers = []
+  for (const sid of supplierIds) {
+    const supItems = supplierMap[sid].items
+    const supName = supplierMap[sid].name || sid
+    const ver = await getNextVersion('supplier_receipt_price_report', sid, receiptDate)
+
+    let csv = infoHead + [csvField('商品名称'), csvField('门店'), csvField('到货数量'), csvField('单位'), csvField('单价'), csvField('小计')].join(',') + '\n'
+    let total = 0
+    supItems.forEach(item => {
+      const price = Number(item.price_snapshot) || 0
+      const qty = Number(item.received_qty) || 0
+      const sub = Math.round(qty * price * 100) / 100
+      total = Math.round((total + sub) * 100) / 100
+      csv += [csvField(item.product_name), csvField(storeName), csvField(qty), csvField(item.unit_snapshot || ''), csvField(price), csvField(sub.toFixed(2))].join(',') + '\n'
+    })
+    csv += [csvField('合计'), csvField(''), csvField(''), csvField(''), csvField(''), csvField(total.toFixed(2))].join(',') + '\n'
+
+    const filePath = `reports/supplier/${receiptDate}/supplier-receipt-price-${safePathPart(supName)}-${receiptDate}-${receiptId}-settle-v${ver}.csv`
+    const uploadRes = await cloud.uploadFile({ cloudPath: filePath, fileContent: Buffer.from(String.fromCharCode(0xFEFF) + csv, 'utf-8') })
+    await db.collection('report_file').add({
+      data: {
+        report_id: 'RPT_SURP_' + sid + '_' + receiptId + '_S', report_type: 'supplier_receipt_price_report',
+        report_scope: 'supplier', scope_id: sid, scope_name: supName,
+        related_date: receiptDate, source_order_id: purchaseOrderId,
+        file_name: filePath, file_url: uploadRes.fileID, file_version: ver,
+        generated_at: db.serverDate(), generated_by_system: true, status: 'generated',
+        settle_for_receipt: receiptId
+      }
+    })
+    generatedSuppliers.push(sid)
+  }
+  return { code: 0, data: { generatedSuppliers, count: generatedSuppliers.length } }
+}
+
+// ===== B8 提交后作废 =====
+// 仅审批前（submitted）可由采购员/管理员作废；报表标记 superseded，线下通知供应商。
+async function cancelOrder(event) {
+  const auth = await requireUser(event, GLOBAL_ROLES)
+  if (auth.error) return auth.error
+  const reason = String(event.reason || '').trim()
+  if (!reason) return { code: -1, msg: '作废必须填写原因' }
+  if (!event.orderId) return { code: -1, msg: '缺少订单号' }
+
+  const orderResult = await db.collection('purchase_order')
+    .where({ purchase_order_id: event.orderId })
+    .limit(1)
+    .get()
+  const order = orderResult.data[0]
+  if (!order) return { code: -1, msg: '采购订单不存在' }
+  if (order.order_status !== 'submitted') {
+    return { code: -1, msg: '仅已提交待审核的订单可作废' }
+  }
+
+  await db.runTransaction(async transaction => {
+    await transaction.collection('purchase_order').doc(order._id).update({
+      data: {
+        order_status: 'cancelled',
+        cancel_reason: reason,
+        cancelled_by: auth.user.name,
+        cancelled_at: db.serverDate(),
+        updated_at: db.serverDate()
+      }
+    })
+    // 关联报表标记 superseded（保留审计痕迹）
+    await transaction.collection('report_file')
+      .where({ source_order_id: event.orderId, report_type: _.in(['store_order_report', 'supplier_order_report']) })
+      .update({ data: { status: 'superseded', updated_at: db.serverDate() } })
+  })
+
+  await createMessage({
+    type: 'cancel',
+    title: '采购单已作废',
+    content: `采购单 ${order.order_no || event.orderId} 已作废，原因：${reason}`,
+    bizId: event.orderId,
+    storeId: order.store_id
+  })
+  return { code: 0 }
 }
 
 exports.main = async (event = {}) => {
@@ -615,6 +760,8 @@ exports.main = async (event = {}) => {
       case 'resolveAbnormal': return await resolveAbnormal(event)
       case 'closeAbnormal': return await closeAbnormal(event)
       case 'getOrderStats': return await getOrderStats(event)
+      case 'settleReceipt': return await settleReceipt(event)
+      case 'cancelOrder': return await cancelOrder(event)
       default: return { code: -1, msg: '不支持的数据操作' }
     }
   } catch (err) {

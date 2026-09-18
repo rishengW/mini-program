@@ -34,7 +34,7 @@ Page({
     // 显示已提交但未收货的采购单
     const orders = (result.data || [])
       .map(cloud.normalizePurchaseOrder)
-      .filter(o => ['submitted', 'approved', 'report_generated', 'partial_received', 'to_receive'].includes(o.orderStatus))
+      .filter(o => ['approved', 'report_generated', 'partial_received', 'to_receive'].includes(o.orderStatus))
       .map(o => {
         const statusInfo = meta.getStatusInfo(o.orderStatus)
         return {

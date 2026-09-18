@@ -15,6 +15,7 @@ const statusMap = {
   processing: { text: '处理中', type: 'primary' },
   resolved: { text: '已解决', type: 'success' },
   closed: { text: '已关闭', type: 'grey' },
+  cancelled: { text: '已作废', type: 'grey' },
   generated: { text: '已生成', type: 'success' }
 }
 

@@ -15,6 +15,7 @@
   <!-- 逐项验收 -->
   <view class="card">
     <view class="card-title">商品验收</view>
+    <view class="photo-hint">分批收货：本次实收数量（留空/0 表示本批不收该行）</view>
     <view wx:for="{{items}}" wx:key="itemId" class="verify-item">
       <view class="verify-header">
         <view class="verify-product-name">{{item.productName}}</view>

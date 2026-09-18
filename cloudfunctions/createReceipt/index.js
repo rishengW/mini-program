@@ -163,8 +163,8 @@ exports.main = async (event = {}) => {
     if (order.store_id && order.store_id !== storeId) {
       return { code: -1, msg: '订单门店与当前门店不一致，请切换门店后重试' }
     }
-    if (!['submitted', 'approved', 'report_generated', 'partial_received', 'to_receive'].includes(order.order_status)) {
-      return { code: -1, msg: '当前订单状态不可收货' }
+    if (!['approved', 'report_generated', 'partial_received', 'to_receive'].includes(order.order_status)) {
+      return { code: -1, msg: '订单尚未审批通过，不可收货' }
     }
     storeName = order.store_name || storeName
     receivedBy = user.name || user.username || receivedBy
@@ -185,6 +185,19 @@ exports.main = async (event = {}) => {
     })
     const seenOrderItems = {}
     const canonicalItems = []
+    // B3 分批收货：只校验本次提交的订单行，并限制「本次实收 + 历史累计实收 ≤ 下单量」。
+    // 历史累计按全部订单行聚合，用于判断本批收完后订单是否收齐。
+    const allOrderItemIds = orderItems.map(oi => oi.item_id || oi._id).filter(Boolean)
+    const historyRes = await db.collection('receipt_item')
+      .where({ purchase_order_item_id: _.in(allOrderItemIds) })
+      .limit(1000)
+      .get()
+    const historyQtyMap = {}
+    ;(historyRes.data || []).forEach(h => {
+      const key = h.purchase_order_item_id
+      if (!key) return
+      historyQtyMap[key] = (historyQtyMap[key] || 0) + (Number(h.received_qty) || 0)
+    })
     for (let i = 0; i < items.length; i++) {
       const inputItem = items[i]
       const orderItemId = inputItem.orderItemId
@@ -195,8 +208,12 @@ exports.main = async (event = {}) => {
       seenOrderItems[orderItemId] = true
       const orderQty = Number(orderItem.order_qty)
       const receivedQty = Number(inputItem.receivedQty)
-      if (!Number.isFinite(orderQty) || orderQty < 0 || !Number.isFinite(receivedQty) || receivedQty < 0 || receivedQty > orderQty) {
+      const historyQty = historyQtyMap[orderItemId] || 0
+      if (!Number.isFinite(orderQty) || orderQty < 0 || !Number.isFinite(receivedQty) || receivedQty < 0) {
         return { code: -1, msg: '实收数量不能超过订单数量，请检查后重试' }
+      }
+      if (historyQty + receivedQty > orderQty) {
+        return { code: -1, msg: `商品${orderItem.product_name_snapshot}累计实收超过下单量，请检查后重试` }
       }
       canonicalItems.push({
         ...inputItem,
@@ -209,17 +226,21 @@ exports.main = async (event = {}) => {
         receivedQty
       })
     }
-    if (canonicalItems.length !== orderItems.length) {
-      return { code: -1, msg: '验收明细不完整，请确认所有商品后重试' }
-    }
     items = canonicalItems
-    const existingReceiptRes = await db.collection('receipt')
+    // 本批至少要收一件商品（或有异常标记），避免空批次
+    const hasReceivedAny = items.some(item => item.receivedQty > 0)
+    const hasMarkedAny = items.some(item => getItemAbnormalTypes(item).length > 0)
+    if (!hasReceivedAny && !hasMarkedAny) {
+      return { code: -1, msg: '本批未收任何商品，请填写本次实收数量后重试' }
+    }
+    // B3 批次号：历史收货单数量 + 1
+    const historyReceiptRes = await db.collection('receipt')
       .where({ purchase_order_id: purchaseOrderId })
-      .limit(1)
+      .limit(1000)
       .get()
-    if (existingReceiptRes.data.length > 0 || order.order_status === 'received') {
-      await ensureReceiptMessage(existingReceiptRes.data[0], storeId, storeName)
-      return { code: -1, msg: '该订单已完成收货，请勿重复提交' }
+    const batchNo = historyReceiptRes.data.length + 1
+    if (order.order_status === 'received') {
+      return { code: -1, msg: '该订单已全部收货完成，请勿重复提交' }
     }
 
     // 收货日期：优先用客户端传入的本地日期（校验格式），否则按 UTC+8 取服务端日期，
@@ -236,8 +257,10 @@ exports.main = async (event = {}) => {
 
     // 实收少于下单即为少货，即使用户未手动勾选也按异常处理：
     // 避免短收被静默记为"已收货"，少货行不进入付款结算，走异常流程跟进。
+    // B3 分批收货：按「历史累计实收 + 本次实收」与下单量比较，未收完的行不算少货。
     items.forEach(item => {
-      if (item.receivedQty < item.orderQty) item.isShortage = true
+      const cumulativeQty = (historyQtyMap[item.orderItemId] || 0) + item.receivedQty
+      if (cumulativeQty < item.orderQty) item.isShortage = true
     })
 
     const hasAbnormal = items.some(item => getItemAbnormalTypes(item).length > 0)
@@ -266,15 +289,25 @@ exports.main = async (event = {}) => {
       item.payableFlag = getItemAbnormalTypes(item).length === 0 && item.payableFlag !== false && priceSnapshot > 0
     }
 
+    // B3 分批收货：判断本批收完后是否所有订单行都已收齐（累计实收 = 下单量）
+    const isFinalBatch = orderItems.every(oi => {
+      const key = oi.item_id || oi._id
+      const orderQty = Number(oi.order_qty) || 0
+      const thisQtyMap = {}
+      items.forEach(item => { thisQtyMap[item.orderItemId] = (thisQtyMap[item.orderItemId] || 0) + item.receivedQty })
+      return (historyQtyMap[key] || 0) + (thisQtyMap[key] || 0) >= orderQty
+    })
+
     // 收货主表、明细和订单状态必须同时成功或同时回滚。
     await db.runTransaction(async transaction => {
       const latestOrderRes = await transaction.collection('purchase_order').doc(order._id).get()
-      if (!latestOrderRes.data || ['received', 'receipt_abnormal'].includes(latestOrderRes.data.order_status)) {
+      // B3 分批收货：已全部收齐（received）才拦截；receipt_abnormal 状态允许继续补收
+      if (!latestOrderRes.data || latestOrderRes.data.order_status === 'received') {
         const duplicateError = new Error('RECEIPT_EXISTS')
         duplicateError.code = 'RECEIPT_EXISTS'
         throw duplicateError
       }
-      if (!['submitted', 'approved', 'report_generated', 'partial_received', 'to_receive'].includes(latestOrderRes.data.order_status)) {
+      if (!['approved', 'report_generated', 'partial_received', 'to_receive'].includes(latestOrderRes.data.order_status)) {
         const statusError = new Error('ORDER_NOT_RECEIVABLE')
         statusError.code = 'ORDER_NOT_RECEIVABLE'
         throw statusError
@@ -287,6 +320,8 @@ exports.main = async (event = {}) => {
           receipt_date: receiptDate, received_by: receivedBy,
           receipt_status: hasAbnormal ? 'abnormal' : 'completed', overall_remark: overallRemark,
           photo_file_ids: photoFileIds.filter(Boolean),
+          batch_no: batchNo,
+          is_final: isFinalBatch,
           created_at: db.serverDate()
         }
       })
@@ -349,9 +384,11 @@ exports.main = async (event = {}) => {
         }
       }
 
+      // B3 分批收货：本批收齐→received（有异常则 receipt_abnormal），未收齐→partial_received
+      const nextStatus = isFinalBatch ? (hasAbnormal ? 'receipt_abnormal' : 'received') : 'partial_received'
       await transaction.collection('purchase_order')
         .doc(order._id)
-        .update({ data: { order_status: hasAbnormal ? 'receipt_abnormal' : 'received', updated_at: db.serverDate() } })
+        .update({ data: { order_status: nextStatus, updated_at: db.serverDate() } })
 
       // The message is part of the same transaction as the receipt, so a
       // committed receipt always appears in the message center.  A stable id
@@ -376,11 +413,15 @@ exports.main = async (event = {}) => {
 
     const reportsGenerated = []
     let reportWarning = ''
+    // 单据信息头共用字段：订单号、门店、收货日期、下单日期、期望到货、经办人
+    const orderDateStr = order.order_date || ''
+    const deliveryDateStr = order.delivery_date || ''
+    const infoHead = [csvField('采购单号'), csvField(purchaseOrderId), csvField('门店'), csvField(storeName), csvField('收货日期'), csvField(receiptDate), csvField('下单日期'), csvField(orderDateStr), csvField('期望到货'), csvField(deliveryDateStr), csvField('验收人'), csvField(receivedBy || ''), csvField('批次'), csvField(`第${batchNo}批${isFinalBatch ? '（收齐）' : ''}`)].join(',') + '\n'
 
     try {
       // ===== 报表1: 门店收货报表 =====
       const v1 = await getNextVersion('store_receipt_report', storeId, receiptDate)
-      let csv1 = [csvField('商品名称'), csvField('下单数量'), csvField('实收数量'), csvField('单位'), csvField('验收状态'), csvField('异常类型'), csvField('备注'), csvField('是否可付款')].join(',') + '\n'
+      let csv1 = infoHead + [csvField('商品名称'), csvField('下单数量'), csvField('实收数量'), csvField('单位'), csvField('验收状态'), csvField('异常类型'), csvField('备注'), csvField('是否可付款')].join(',') + '\n'
       items.forEach(item => {
         const abnormalNames = getItemAbnormalNames(item)
         csv1 += [csvField(item.productName), csvField(item.orderQty), csvField(item.receivedQty), csvField(item.unit), csvField(abnormalNames.length ? '收货异常' : '正常'), csvField(abnormalNames.join('、')), csvField(item.remark || ''), csvField(item.payableFlag !== false ? '是' : '否')].join(',') + '\n'
@@ -399,32 +440,39 @@ exports.main = async (event = {}) => {
       })
       reportsGenerated.push('store_receipt_report')
 
-    // 异常验收不生成任何带价格报表，避免异常商品进入付款结算。
-    if (!hasAbnormal) {
-      // ===== 报表2: 门店带价格收货报表 =====
-      const v2 = await getNextVersion('store_receipt_price_report', storeId, receiptDate)
-      let csv2 = [csvField('商品名称'), csvField('实收数量'), csvField('单位'), csvField('单价'), csvField('小计'), csvField('是否可付款')].join(',') + '\n'
-      let totalAmount = 0
-      items.forEach(item => {
-        const price = item.priceSnapshot || 0
-        // 逐行先舍入到分再累加，保证"各行小计之和"与"合计"一致
-        const subtotal = Math.round(item.receivedQty * price * 100) / 100
-        totalAmount = Math.round((totalAmount + subtotal) * 100) / 100
-        csv2 += [csvField(item.productName), csvField(item.receivedQty), csvField(item.unit), csvField(price), csvField(subtotal.toFixed(2)), csvField(item.payableFlag !== false ? '是' : '否')].join(',') + '\n'
-      })
-      csv2 += [csvField('合计'), csvField(''), csvField(''), csvField(''), csvField(totalAmount.toFixed(2)), csvField('')].join(',') + '\n'
-      const f2 = `reports/store/${receiptDate}/store-receipt-price-${safePathPart(storeName)}-${receiptDate}-${receiptId}-v${v2}.csv`
-      const u2 = await cloud.uploadFile({ cloudPath: f2, fileContent: Buffer.from(String.fromCharCode(0xFEFF) + csv2, 'utf-8') })
-      await db.collection('report_file').add({
-        data: {
-          report_id: 'RPT_SRP_' + receiptId, report_type: 'store_receipt_price_report',
-          report_scope: 'store', scope_id: storeId, scope_name: storeName,
-          related_date: receiptDate, source_order_id: purchaseOrderId,
-          file_name: f2, file_url: u2.fileID, file_version: v2,
-          generated_at: db.serverDate(), generated_by_system: true, status: 'generated'
-        }
-      })
-      reportsGenerated.push('store_receipt_price_report')
+    // 行级结算隔离（B4/B6）：异常只阻塞异常行，不阻塞正常商品。
+    // 带价报表始终生成，但只包含可付款（payableFlag=true）的正常行；
+    // 异常行的数量与异常类型记录在不含价的收货报表中，走异常流程跟进。
+    // ===== 报表2: 门店带价格收货报表（仅可付款行） =====
+    {
+      const payableItems = items.filter(item => item.payableFlag)
+      if (payableItems.length > 0) {
+        const v2 = await getNextVersion('store_receipt_price_report', storeId, receiptDate)
+        let csv2 = infoHead + [csvField('商品名称'), csvField('实收数量'), csvField('单位'), csvField('单价'), csvField('小计'), csvField('是否可付款')].join(',') + '\n'
+        let totalAmount = 0
+        payableItems.forEach(item => {
+          const price = item.priceSnapshot || 0
+          // 逐行先舍入到分再累加，保证"各行小计之和"与"合计"一致
+          const subtotal = Math.round(item.receivedQty * price * 100) / 100
+          totalAmount = Math.round((totalAmount + subtotal) * 100) / 100
+          csv2 += [csvField(item.productName), csvField(item.receivedQty), csvField(item.unit), csvField(price), csvField(subtotal.toFixed(2)), csvField('是')].join(',') + '\n'
+        })
+        csv2 += [csvField('合计'), csvField(''), csvField(''), csvField(''), csvField(totalAmount.toFixed(2)), csvField('')].join(',') + '\n'
+        const f2 = `reports/store/${receiptDate}/store-receipt-price-${safePathPart(storeName)}-${receiptDate}-${receiptId}-v${v2}.csv`
+        const u2 = await cloud.uploadFile({ cloudPath: f2, fileContent: Buffer.from(String.fromCharCode(0xFEFF) + csv2, 'utf-8') })
+        await db.collection('report_file').add({
+          data: {
+            report_id: 'RPT_SRP_' + receiptId, report_type: 'store_receipt_price_report',
+            report_scope: 'store', scope_id: storeId, scope_name: storeName,
+            related_date: receiptDate, source_order_id: purchaseOrderId,
+            file_name: f2, file_url: u2.fileID, file_version: v2,
+            generated_at: db.serverDate(), generated_by_system: true, status: 'generated',
+            has_abnormal: hasAbnormal, abnormal_summary: abnormalTypeNames.join('、'),
+            excluded_rows: items.length - payableItems.length
+          }
+        })
+        reportsGenerated.push('store_receipt_price_report')
+      }
     }
 
     // ===== 按供应商分组 =====
@@ -453,7 +501,7 @@ exports.main = async (event = {}) => {
       const supplierAbnormalSummary = [...new Set(supItems.reduce((all, item) => all.concat(getItemAbnormalNames(item)), []))].join('、')
       const v3 = await getNextVersion('supplier_receipt_report', sid, receiptDate)
 
-      let csv3 = [csvField('商品名称'), csvField('门店'), csvField('到货数量'), csvField('下单数量'), csvField('单位'), csvField('验收状态'), csvField('异常类型'), csvField('备注')].join(',') + '\n'
+      let csv3 = infoHead + [csvField('商品名称'), csvField('门店'), csvField('到货数量'), csvField('下单数量'), csvField('单位'), csvField('验收状态'), csvField('异常类型'), csvField('备注')].join(',') + '\n'
       supItems.forEach(item => {
         const abnormalNames = getItemAbnormalNames(item)
         csv3 += [csvField(item.productName), csvField(storeName), csvField(item.receivedQty), csvField(item.orderQty), csvField(item.unit), csvField(abnormalNames.length ? '收货异常' : '正常'), csvField(abnormalNames.join('、')), csvField(item.remark || '')].join(',') + '\n'
@@ -474,21 +522,22 @@ exports.main = async (event = {}) => {
       reportsGenerated.push('supplier_receipt_report:' + sid)
     }
 
-    // ===== 报表4: 供应商带价格账单 =====
-    if (!hasAbnormal) for (const sid of Object.keys(supplierMap)) {
+    // ===== 报表4: 供应商带价格账单（仅可付款行，行级隔离） =====
+    for (const sid of Object.keys(supplierMap)) {
       if (sid === 'unknown') continue
-      const supItems = supplierMap[sid].items
+      const supPayableItems = supplierMap[sid].items.filter(item => item.payableFlag)
+      if (supPayableItems.length === 0) continue
       const supName = supplierMap[sid].name || sid
       const v4 = await getNextVersion('supplier_receipt_price_report', sid, receiptDate)
 
-      let csv4 = [csvField('商品名称'), csvField('门店'), csvField('到货数量'), csvField('单位'), csvField('单价'), csvField('小计'), csvField('可付款')].join(',') + '\n'
+      let csv4 = infoHead + [csvField('商品名称'), csvField('门店'), csvField('到货数量'), csvField('单位'), csvField('单价'), csvField('小计'), csvField('可付款')].join(',') + '\n'
       let sTotal = 0
-      supItems.forEach(item => {
+      supPayableItems.forEach(item => {
         const price = item.priceSnapshot || 0
         // 逐行先舍入到分再累加，保证"各行小计之和"与"合计"一致
         const sub = Math.round(item.receivedQty * price * 100) / 100
         sTotal = Math.round((sTotal + sub) * 100) / 100
-        csv4 += [csvField(item.productName), csvField(storeName), csvField(item.receivedQty), csvField(item.unit), csvField(price), csvField(sub.toFixed(2)), csvField(item.payableFlag !== false ? '是' : '否')].join(',') + '\n'
+        csv4 += [csvField(item.productName), csvField(storeName), csvField(item.receivedQty), csvField(item.unit), csvField(price), csvField(sub.toFixed(2)), csvField('是')].join(',') + '\n'
       })
       csv4 += [csvField('合计'), csvField(''), csvField(''), csvField(''), csvField(''), csvField(sTotal.toFixed(2)), csvField('')].join(',') + '\n'
 
@@ -500,7 +549,8 @@ exports.main = async (event = {}) => {
           report_scope: 'supplier', scope_id: sid, scope_name: supName,
           related_date: receiptDate, source_order_id: purchaseOrderId,
           file_name: f4, file_url: u4.fileID, file_version: v4,
-          generated_at: db.serverDate(), generated_by_system: true, status: 'generated'
+          generated_at: db.serverDate(), generated_by_system: true, status: 'generated',
+          excluded_rows: supplierMap[sid].items.length - supPayableItems.length
         }
       })
       reportsGenerated.push('supplier_receipt_price_report:' + sid)

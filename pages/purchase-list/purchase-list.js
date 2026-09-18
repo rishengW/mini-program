@@ -74,7 +74,8 @@ Page({
       { label: '草稿', value: 'draft', count: counts.draft || 0 },
       { label: '已提交', value: 'submitted', count: counts.submitted || 0 },
       { label: '已收货', value: 'received', count: counts.received || 0 },
-      { label: '收货异常', value: 'receipt_abnormal', count: counts.receiptAbnormal || 0 }
+      { label: '收货异常', value: 'receipt_abnormal', count: counts.receiptAbnormal || 0 },
+      { label: '已作废', value: 'cancelled', count: counts.cancelled || 0 }
     ]
     this.setData({
       filterTabs,
@@ -99,7 +100,7 @@ Page({
       const statusInfo = meta.getStatusInfo(o.orderStatus)
       const manualCount = o.items.filter(i => i.isManual).length
       // 判断是否可直接收货
-      const canReceive = canReceiveRole && ['submitted', 'approved', 'report_generated', 'partial_received', 'to_receive'].includes(o.orderStatus)
+      const canReceive = canReceiveRole && ['approved', 'report_generated', 'partial_received', 'to_receive'].includes(o.orderStatus)
       return {
         ...o,
         statusText: statusInfo.text,

@@ -278,7 +278,8 @@ exports.main = async (event = {}) => {
 
     // ===== 报表1: 门店下单报表 =====
     const storeVer = await getNextVersion('store_order_report', storeId, actualDate)
-    let csv1 = csvField('商品名称') + ',' + csvField('分类') + ',' + csvField('单位') + ',' + csvField('下单数量') + ',' + csvField('备注') + '\n'
+    const csv1Info = [csvField('采购单号'), csvField(orderNo), csvField('门店'), csvField(storeName), csvField('下单日期'), csvField(actualDate), csvField('期望到货'), csvField(actualDeliveryDate), csvField('经办人'), csvField(createdByName || '')].join(',') + '\n'
+    let csv1 = csv1Info + [csvField('商品名称'), csvField('分类'), csvField('单位'), csvField('下单数量'), csvField('备注')].join(',') + '\n'
     items.forEach(item => {
       csv1 += [csvField(item.productName), csvField(item.category), csvField(item.unit), csvField(item.orderQty), csvField(item.remark || '')].join(',') + '\n'
     })
@@ -310,7 +311,10 @@ exports.main = async (event = {}) => {
       const idChunk = orderSupplierIds.slice(i, i + 20)
       const supRes = await db.collection('supplier').where({ supplier_id: _.in(idChunk) }).limit(100).get()
       supRes.data.forEach(s => {
-        if (supplierMap[s.supplier_id]) supplierMap[s.supplier_id].name = s.supplier_name
+        if (supplierMap[s.supplier_id]) {
+          supplierMap[s.supplier_id].name = s.supplier_name
+          supplierMap[s.supplier_id].contact = [s.contact_name, s.contact_phone].filter(Boolean).join(' ')
+        }
       })
     }
 
@@ -320,7 +324,8 @@ exports.main = async (event = {}) => {
       const supName = supplierMap[sid].name || sid
       const supVer = await getNextVersion('supplier_order_report', sid, actualDate)
 
-      let csvSup = [csvField('门店'), csvField('商品名称'), csvField('订货数量'), csvField('单位'), csvField('备注')].join(',') + '\n'
+      let csvSup = [csvField('采购单号'), csvField(orderNo), csvField('供应商'), csvField(supName), csvField('联系人'), csvField(supplierMap[sid].contact || ''), csvField('下单日期'), csvField(actualDate), csvField('期望到货'), csvField(actualDeliveryDate)].join(',') + '\n'
+      csvSup += [csvField('门店'), csvField('商品名称'), csvField('订货数量'), csvField('单位'), csvField('备注')].join(',') + '\n'
       supItems.forEach(item => {
         csvSup += [csvField(storeName), csvField(item.productName), csvField(item.orderQty), csvField(item.unit), csvField(item.remark || '')].join(',') + '\n'
       })
