@@ -72,11 +72,15 @@ Page({
       util.showToast('请填写处理结果')
       return
     }
+    // 付款裁决：少货/异常行处理后是否按实收转回可付款（补结算时纳入）
+    const payConfirmed = await util.showConfirm('该异常行是否按实收数量转回可付款？（补结算时纳入账单）\n「取消」则维持不可付款')
+    const paymentDecision = payConfirmed ? 'pay_received' : 'reject'
     const app = getApp()
     const result = await cloud.callFunction('dataService', {
       action: 'resolveAbnormal',
       id: e.currentTarget.dataset.id,
-      resolution
+      resolution,
+      paymentDecision
     })
     if (!result || result.code !== 0) {
       util.showToast((result && result.msg) || '异常解决状态更新失败')

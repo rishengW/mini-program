@@ -285,8 +285,11 @@ exports.main = async (event = {}) => {
       item.priceSnapshot = priceSnapshot
       // Never present a zero-priced line as payable. A missing current price
       // requires price setup before it can enter the payable total.
-      // 异常商品不得进入付款结算，即使客户端传入了可付款标记。
-      item.payableFlag = getItemAbnormalTypes(item).length === 0 && item.payableFlag !== false && priceSnapshot > 0
+      // 付款裁决（B4）：少货行按实收数量付款（账单本身以 received_qty 计价，
+      // 未到货部分自然不出现在账单中），故纯少货不剔除；质量/错货行不得进入付款结算。
+      const abnormalTypes = getItemAbnormalTypes(item)
+      const hardAbnormal = abnormalTypes.some(t => t !== 'shortage')
+      item.payableFlag = !hardAbnormal && item.payableFlag !== false && priceSnapshot > 0
     }
 
     // B3 分批收货：判断本批收完后是否所有订单行都已收齐（累计实收 = 下单量）
@@ -418,13 +421,23 @@ exports.main = async (event = {}) => {
     const deliveryDateStr = order.delivery_date || ''
     const infoHead = [csvField('采购单号'), csvField(purchaseOrderId), csvField('门店'), csvField(storeName), csvField('收货日期'), csvField(receiptDate), csvField('下单日期'), csvField(orderDateStr), csvField('期望到货'), csvField(deliveryDateStr), csvField('验收人'), csvField(receivedBy || ''), csvField('批次'), csvField(`第${batchNo}批${isFinalBatch ? '（收齐）' : ''}`)].join(',') + '\n'
 
+    // 批量查供应商名称（明细行供应商字段供各报表使用）
+    const supplierNameMap = {}
+    const allSupplierIds = [...new Set(items.map(item => item.supplierId).filter(Boolean))]
+    for (let i = 0; i < allSupplierIds.length; i += 20) {
+      const idChunk = allSupplierIds.slice(i, i + 20)
+      const supRes = await db.collection('supplier').where({ supplier_id: _.in(idChunk) }).limit(100).get()
+      supRes.data.forEach(s => { supplierNameMap[s.supplier_id] = s.supplier_name })
+    }
+    items.forEach(item => { item.supplierName = supplierNameMap[item.supplierId] || item.supplierId || '' })
+
     try {
       // ===== 报表1: 门店收货报表 =====
       const v1 = await getNextVersion('store_receipt_report', storeId, receiptDate)
-      let csv1 = infoHead + [csvField('商品名称'), csvField('下单数量'), csvField('实收数量'), csvField('单位'), csvField('验收状态'), csvField('异常类型'), csvField('备注'), csvField('是否可付款')].join(',') + '\n'
+      let csv1 = infoHead + [csvField('商品名称'), csvField('供应商'), csvField('下单数量'), csvField('实收数量'), csvField('单位'), csvField('验收状态'), csvField('异常类型'), csvField('备注'), csvField('是否可付款')].join(',') + '\n'
       items.forEach(item => {
         const abnormalNames = getItemAbnormalNames(item)
-        csv1 += [csvField(item.productName), csvField(item.orderQty), csvField(item.receivedQty), csvField(item.unit), csvField(abnormalNames.length ? '收货异常' : '正常'), csvField(abnormalNames.join('、')), csvField(item.remark || ''), csvField(item.payableFlag !== false ? '是' : '否')].join(',') + '\n'
+        csv1 += [csvField(item.productName), csvField(item.supplierName || item.supplierId || ''), csvField(item.orderQty), csvField(item.receivedQty), csvField(item.unit), csvField(abnormalNames.length ? '收货异常' : '正常'), csvField(abnormalNames.join('、')), csvField(item.remark || ''), csvField(item.payableFlag !== false ? '是' : '否')].join(',') + '\n'
       })
       const f1 = `reports/store/${receiptDate}/store-receipt-${safePathPart(storeName)}-${receiptDate}-${receiptId}-v${v1}.csv`
       const u1 = await cloud.uploadFile({ cloudPath: f1, fileContent: Buffer.from(String.fromCharCode(0xFEFF) + csv1, 'utf-8') })
@@ -448,16 +461,16 @@ exports.main = async (event = {}) => {
       const payableItems = items.filter(item => item.payableFlag)
       if (payableItems.length > 0) {
         const v2 = await getNextVersion('store_receipt_price_report', storeId, receiptDate)
-        let csv2 = infoHead + [csvField('商品名称'), csvField('实收数量'), csvField('单位'), csvField('单价'), csvField('小计'), csvField('是否可付款')].join(',') + '\n'
+        let csv2 = infoHead + [csvField('商品名称'), csvField('供应商'), csvField('实收数量'), csvField('单位'), csvField('单价'), csvField('小计'), csvField('是否可付款')].join(',') + '\n'
         let totalAmount = 0
         payableItems.forEach(item => {
           const price = item.priceSnapshot || 0
           // 逐行先舍入到分再累加，保证"各行小计之和"与"合计"一致
           const subtotal = Math.round(item.receivedQty * price * 100) / 100
           totalAmount = Math.round((totalAmount + subtotal) * 100) / 100
-          csv2 += [csvField(item.productName), csvField(item.receivedQty), csvField(item.unit), csvField(price), csvField(subtotal.toFixed(2)), csvField('是')].join(',') + '\n'
+          csv2 += [csvField(item.productName), csvField(item.supplierName || item.supplierId || ''), csvField(item.receivedQty), csvField(item.unit), csvField(price), csvField(subtotal.toFixed(2)), csvField('是')].join(',') + '\n'
         })
-        csv2 += [csvField('合计'), csvField(''), csvField(''), csvField(''), csvField(totalAmount.toFixed(2)), csvField('')].join(',') + '\n'
+        csv2 += [csvField('合计'), csvField(''), csvField(''), csvField(''), csvField(''), csvField(totalAmount.toFixed(2)), csvField('')].join(',') + '\n'
         const f2 = `reports/store/${receiptDate}/store-receipt-price-${safePathPart(storeName)}-${receiptDate}-${receiptId}-v${v2}.csv`
         const u2 = await cloud.uploadFile({ cloudPath: f2, fileContent: Buffer.from(String.fromCharCode(0xFEFF) + csv2, 'utf-8') })
         await db.collection('report_file').add({
@@ -501,10 +514,10 @@ exports.main = async (event = {}) => {
       const supplierAbnormalSummary = [...new Set(supItems.reduce((all, item) => all.concat(getItemAbnormalNames(item)), []))].join('、')
       const v3 = await getNextVersion('supplier_receipt_report', sid, receiptDate)
 
-      let csv3 = infoHead + [csvField('商品名称'), csvField('门店'), csvField('到货数量'), csvField('下单数量'), csvField('单位'), csvField('验收状态'), csvField('异常类型'), csvField('备注')].join(',') + '\n'
+      let csv3 = infoHead + [csvField('商品名称'), csvField('供应商'), csvField('门店'), csvField('到货数量'), csvField('下单数量'), csvField('单位'), csvField('验收状态'), csvField('异常类型'), csvField('备注')].join(',') + '\n'
       supItems.forEach(item => {
         const abnormalNames = getItemAbnormalNames(item)
-        csv3 += [csvField(item.productName), csvField(storeName), csvField(item.receivedQty), csvField(item.orderQty), csvField(item.unit), csvField(abnormalNames.length ? '收货异常' : '正常'), csvField(abnormalNames.join('、')), csvField(item.remark || '')].join(',') + '\n'
+        csv3 += [csvField(item.productName), csvField(item.supplierName || item.supplierId || ''), csvField(storeName), csvField(item.receivedQty), csvField(item.orderQty), csvField(item.unit), csvField(abnormalNames.length ? '收货异常' : '正常'), csvField(abnormalNames.join('、')), csvField(item.remark || '')].join(',') + '\n'
       })
 
       const f3 = `reports/supplier/${receiptDate}/supplier-receipt-${safePathPart(supName)}-${receiptDate}-${receiptId}-v${v3}.csv`
@@ -530,16 +543,16 @@ exports.main = async (event = {}) => {
       const supName = supplierMap[sid].name || sid
       const v4 = await getNextVersion('supplier_receipt_price_report', sid, receiptDate)
 
-      let csv4 = infoHead + [csvField('商品名称'), csvField('门店'), csvField('到货数量'), csvField('单位'), csvField('单价'), csvField('小计'), csvField('可付款')].join(',') + '\n'
+      let csv4 = infoHead + [csvField('商品名称'), csvField('供应商'), csvField('门店'), csvField('到货数量'), csvField('单位'), csvField('单价'), csvField('小计'), csvField('可付款')].join(',') + '\n'
       let sTotal = 0
       supPayableItems.forEach(item => {
         const price = item.priceSnapshot || 0
         // 逐行先舍入到分再累加，保证"各行小计之和"与"合计"一致
         const sub = Math.round(item.receivedQty * price * 100) / 100
         sTotal = Math.round((sTotal + sub) * 100) / 100
-        csv4 += [csvField(item.productName), csvField(storeName), csvField(item.receivedQty), csvField(item.unit), csvField(price), csvField(sub.toFixed(2)), csvField('是')].join(',') + '\n'
+        csv4 += [csvField(item.productName), csvField(item.supplierName || item.supplierId || ''), csvField(storeName), csvField(item.receivedQty), csvField(item.unit), csvField(price), csvField(sub.toFixed(2)), csvField('是')].join(',') + '\n'
       })
-      csv4 += [csvField('合计'), csvField(''), csvField(''), csvField(''), csvField(''), csvField(sTotal.toFixed(2)), csvField('')].join(',') + '\n'
+      csv4 += [csvField('合计'), csvField(''), csvField(''), csvField(''), csvField(''), csvField(''), csvField(sTotal.toFixed(2)), csvField('')].join(',') + '\n'
 
       const f4 = `reports/supplier/${receiptDate}/supplier-receipt-price-${safePathPart(supName)}-${receiptDate}-${receiptId}-v${v4}.csv`
       const u4 = await cloud.uploadFile({ cloudPath: f4, fileContent: Buffer.from(String.fromCharCode(0xFEFF) + csv4, 'utf-8') })

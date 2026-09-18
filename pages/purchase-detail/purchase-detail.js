@@ -39,13 +39,40 @@ Page({
     const canCopy = order.orderStatus === 'rejected'
     // B8：已提交待审核的订单，采购员/管理员可作废
     const canCancel = order.orderStatus === 'submitted' && ['purchaser', 'super_admin'].includes(currentUser.role)
+    // B8：审批后未收货的订单，非厨师可申请取消（管理员确认后作废）；管理员可直接作废
+    const cancelEligible = ['approved', 'report_generated', 'partial_received', 'to_receive'].includes(order.orderStatus)
+    const canRequestCancel = cancelEligible && currentUser.role !== 'chef' && !order.cancelRequested
+    const canForceCancel = cancelEligible && currentUser.role === 'super_admin'
     this.setData({
       detail: { ...order, statusText: statusInfo.text, statusType: statusInfo.type },
       canReceive,
       canEdit,
       canCopy,
-      canCancel
+      canCancel,
+      canRequestCancel,
+      canForceCancel
     })
+  },
+
+  // B8：审批后订单申请取消（采购员/店长发起，管理员确认后作废）
+  async requestCancel() {
+    const d = this.data.detail
+    if (!d.purchaseOrderId) return
+    const confirmed = await util.showConfirm('确认申请取消该采购单？申请将通知管理员确认处理。')
+    if (!confirmed) return
+    util.showLoading('提交申请中...')
+    const result = await cloud.callFunction('dataService', {
+      action: 'requestCancel',
+      orderId: d.purchaseOrderId,
+      reason: '采购员申请取消（详情页操作）'
+    })
+    util.hideLoading()
+    if (result && result.code === 0) {
+      util.showSuccess('已提交取消申请')
+      this.loadData()
+    } else {
+      util.showToast((result && result.msg) || '申请取消失败')
+    }
   },
 
   // B8：作废已提交订单（仅审批前），需线下通知供应商

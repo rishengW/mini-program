@@ -58,6 +58,7 @@ Page({
       storeName: receipt.storeName || receipt.store_name || '',
       receivedBy: receipt.receivedBy || receipt.received_by || '',
       receiptStatus: receipt.receiptStatus || receipt.receipt_status || '',
+      hasAbnormal: (receipt.receiptStatus || receipt.receipt_status) === 'abnormal',
       statusText: (receipt.receiptStatus || receipt.receipt_status) === 'abnormal' ? '收货异常' : '已收货',
       statusType: (receipt.receiptStatus || receipt.receipt_status) === 'abnormal' ? 'danger' : 'success',
       items: receipt.items || []
@@ -72,5 +73,24 @@ Page({
 
   goVerify(e) {
     wx.navigateTo({ url: '/pages/receive-verify/receive-verify?orderId=' + e.currentTarget.dataset.id })
+  },
+
+  // B5 异常处理完成后的补结算入口（仅管理员/采购员后端校验）
+  async settleReceipt(e) {
+    const receiptId = e.currentTarget.dataset.id
+    if (!receiptId) return
+    const confirmed = await util.showConfirm('确认对该收货单执行补结算？将按当前可付款明细生成补充账单。')
+    if (!confirmed) return
+    util.showLoading('补结算中...')
+    const result = await cloud.callFunction('dataService', {
+      action: 'settleReceipt',
+      receiptId
+    })
+    wx.hideLoading()
+    if (!result || result.code !== 0) {
+      util.showToast((result && result.msg) || '补结算失败')
+      return
+    }
+    util.showSuccess('补结算完成，已生成补充账单')
   }
 })

@@ -69,6 +69,11 @@
     <button class="btn btn-danger btn-block" bindtap="cancelOrder">作废</button>
   </view>
 
+  <view wx:if="{{canRequestCancel || canForceCancel}}" class="bottom-actions">
+    <button wx:if="{{canRequestCancel}}" class="btn btn-outline btn-block" bindtap="requestCancel">申请取消</button>
+    <button wx:if="{{canForceCancel}}" class="btn btn-danger btn-block" bindtap="cancelOrder">管理员作废</button>
+  </view>
+
   <view wx:if="{{canReceive}}" class="bottom-actions">
     <button class="btn btn-success btn-block" bindtap="goReceive">📦 去收货</button>
   </view>

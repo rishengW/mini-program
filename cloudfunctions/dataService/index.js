@@ -527,10 +527,14 @@ async function resolveAbnormal(event) {
   }
   if (record.status !== 'processing') return { code: -1, msg: '只有处理中异常才能标记为已解决' }
 
+  // 付款裁决：pay_received = 异常行转回可付款（补结算时纳入）；reject = 维持不可付款
+  const paymentDecision = ['pay_received', 'reject'].includes(event.paymentDecision) ? event.paymentDecision : ''
+
   await db.collection('abnormal_record').doc(event.id).update({
     data: {
       status: 'resolved',
       resolution,
+      payment_decision: paymentDecision,
       resolved_by: auth.user.name,
       resolved_at: db.serverDate(),
       updated_at: db.serverDate()
@@ -539,7 +543,9 @@ async function resolveAbnormal(event) {
   await createMessage({
     type: 'abnormal',
     title: '异常已解决',
-    content: `${record.abnormal_id || event.id} 已记录处理结果`,
+    content: paymentDecision === 'pay_received'
+      ? `${record.abnormal_id || event.id} 已记录处理结果，异常行将转回可付款`
+      : `${record.abnormal_id || event.id} 已记录处理结果`,
     bizId: record.abnormal_id || event.id,
     storeId: record.store_id
   })
@@ -634,6 +640,28 @@ async function settleReceipt(event) {
     return { code: -1, msg: '该收货单已补结算，请勿重复操作' }
   }
 
+  // 已解决且裁决为"按实收付款"的异常行，随补结算一并转回可付款
+  const payReceivedRecords = abnormalRes.data.filter(item => item.status !== 'closed' && item.payment_decision === 'pay_received')
+  const payReceivedKeys = new Set(payReceivedRecords.map(r => r.abnormal_id))
+  if (payReceivedKeys.size > 0) {
+    const itemResForPay = await db.collection('receipt_item')
+      .where({ receipt_id: receiptId })
+      .limit(1000)
+      .get()
+    for (const rec of payReceivedRecords) {
+      // abnormal_id 格式：{receiptId}_{行序号}_{type}，按行序号定位 receipt_item_id
+      const parts = String(rec.abnormal_id || '').split('_')
+      if (parts.length < 3 || parts[0] !== receiptId) continue
+      const itemItemId = receiptId + '_' + parts[1]
+      const target = itemResForPay.data.find(it => it.receipt_item_id === itemItemId)
+      if (target && Number(target.price_snapshot) > 0) {
+        await db.collection('receipt_item').doc(target._id).update({
+          data: { payable_flag: true, updated_at: db.serverDate() }
+        })
+      }
+    }
+  }
+
   const itemRes = await db.collection('receipt_item')
     .where({ receipt_id: receiptId })
     .limit(1000)
@@ -699,7 +727,10 @@ async function settleReceipt(event) {
 }
 
 // ===== B8 提交后作废 =====
-// 仅审批前（submitted）可由采购员/管理员作废；报表标记 superseded，线下通知供应商。
+// 两阶段：
+// 1) 审批前（submitted）：采购员/管理员直接作废；
+// 2) 审批后：仅管理员可作废，且要求该订单无任何收货记录（已有收货走异常流程，不能作废）。
+// 报表标记 superseded，线下通知供应商。
 async function cancelOrder(event) {
   const auth = await requireUser(event, GLOBAL_ROLES)
   if (auth.error) return auth.error
@@ -713,8 +744,13 @@ async function cancelOrder(event) {
     .get()
   const order = orderResult.data[0]
   if (!order) return { code: -1, msg: '采购订单不存在' }
-  if (order.order_status !== 'submitted') {
-    return { code: -1, msg: '仅已提交待审核的订单可作废' }
+
+  // 已有收货记录的订单不能作废（货已到，走异常处理流程）
+  if (['partial_received', 'to_receive', 'received', 'receipt_abnormal'].includes(order.order_status)) {
+    return { code: -1, msg: '该订单已有收货记录，不能作废，请走异常处理流程' }
+  }
+  if (!['submitted', 'approved', 'report_generated'].includes(order.order_status)) {
+    return { code: -1, msg: '当前状态的订单不可作废' }
   }
 
   await db.runTransaction(async transaction => {
@@ -743,6 +779,44 @@ async function cancelOrder(event) {
   return { code: 0 }
 }
 
+// ===== B8 采购员申请取消（审批后单据，需管理员确认后执行 cancelOrder）=====
+async function requestCancel(event) {
+  const auth = await requireUser(event)
+  if (auth.error) return auth.error
+  const reason = String(event.reason || '').trim()
+  if (!reason) return { code: -1, msg: '申请取消必须填写原因' }
+  if (!event.orderId) return { code: -1, msg: '缺少订单号' }
+
+  const orderResult = await db.collection('purchase_order')
+    .where({ purchase_order_id: event.orderId })
+    .limit(1)
+    .get()
+  const order = orderResult.data[0]
+  if (!order) return { code: -1, msg: '采购订单不存在' }
+  if (!['submitted', 'approved', 'report_generated', 'partial_received', 'to_receive'].includes(order.order_status)) {
+    return { code: -1, msg: '当前状态的订单无法申请取消' }
+  }
+
+  await db.collection('purchase_order').doc(order._id).update({
+    data: {
+      cancel_requested: true,
+      cancel_requested_by: auth.user.name,
+      cancel_request_reason: reason,
+      cancel_requested_at: db.serverDate(),
+      updated_at: db.serverDate()
+    }
+  })
+
+  await createMessage({
+    type: 'cancel',
+    title: '收到取消申请',
+    content: `采购单 ${order.order_no || event.orderId} 收到取消申请，原因：${reason}，请管理员确认处理`,
+    bizId: event.orderId,
+    storeId: order.store_id
+  })
+  return { code: 0 }
+}
+
 exports.main = async (event = {}) => {
   try {
     switch (event.action) {
@@ -762,6 +836,7 @@ exports.main = async (event = {}) => {
       case 'getOrderStats': return await getOrderStats(event)
       case 'settleReceipt': return await settleReceipt(event)
       case 'cancelOrder': return await cancelOrder(event)
+      case 'requestCancel': return await requestCancel(event)
       default: return { code: -1, msg: '不支持的数据操作' }
     }
   } catch (err) {
