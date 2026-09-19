@@ -25,7 +25,9 @@ const reportTypeMap = {
   store_receipt_price_report: { label: '门店带价格收货报表', icon: '💰', color: '#FAAD14' },
   supplier_order_report: { label: '供应商订货汇总', icon: '🏭', color: '#722ED1' },
   supplier_receipt_report: { label: '供应商到货汇总', icon: '🚛', color: '#13C2C2' },
-  supplier_receipt_price_report: { label: '供应商带价格账单', icon: '📊', color: '#EB2F96' }
+  supplier_receipt_price_report: { label: '供应商带价格账单', icon: '📊', color: '#EB2F96' },
+  store_daily_summary_report: { label: '门店日汇总', icon: '📅', color: '#5B8FF9' },
+  store_monthly_summary_report: { label: '门店月汇总', icon: '🗓️', color: '#5AD8A6' }
 }
 
 function getStatusInfo(status) {

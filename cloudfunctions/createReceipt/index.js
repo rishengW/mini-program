@@ -480,7 +480,7 @@ exports.main = async (event = {}) => {
         data: {
           report_id: 'RPT_SR_' + receiptId, report_type: 'store_receipt_report',
           report_scope: 'store', scope_id: storeId, scope_name: storeName,
-          related_date: receiptDate, source_order_id: purchaseOrderId,
+          related_date: receiptDate, source_order_id: purchaseOrderId, basis_date_type: 'receipt_date',
           file_name: f1, file_url: u1.fileID, file_version: v1,
           generated_at: db.serverDate(), generated_by_system: true, status: 'generated',
           has_abnormal: hasAbnormal, abnormal_summary: abnormalTypeNames.join('、')
@@ -512,7 +512,7 @@ exports.main = async (event = {}) => {
           data: {
             report_id: 'RPT_SRP_' + receiptId, report_type: 'store_receipt_price_report',
             report_scope: 'store', scope_id: storeId, scope_name: storeName,
-            related_date: receiptDate, source_order_id: purchaseOrderId,
+            related_date: receiptDate, source_order_id: purchaseOrderId, basis_date_type: 'receipt_date',
             file_name: f2, file_url: u2.fileID, file_version: v2,
             generated_at: db.serverDate(), generated_by_system: true, status: 'generated',
             has_abnormal: hasAbnormal, abnormal_summary: abnormalTypeNames.join('、'),
@@ -561,7 +561,7 @@ exports.main = async (event = {}) => {
         data: {
           report_id: 'RPT_SUR_' + sid + '_' + receiptId, report_type: 'supplier_receipt_report',
           report_scope: 'supplier', scope_id: sid, scope_name: supName,
-          related_date: receiptDate, source_order_id: purchaseOrderId,
+          related_date: receiptDate, source_order_id: purchaseOrderId, basis_date_type: 'receipt_date',
           file_name: f3, file_url: u3.fileID, file_version: v3,
           generated_at: db.serverDate(), generated_by_system: true, status: 'generated',
           has_abnormal: supplierHasAbnormal, abnormal_summary: supplierAbnormalSummary
@@ -595,7 +595,7 @@ exports.main = async (event = {}) => {
         data: {
           report_id: 'RPT_SURP_' + sid + '_' + receiptId, report_type: 'supplier_receipt_price_report',
           report_scope: 'supplier', scope_id: sid, scope_name: supName,
-          related_date: receiptDate, source_order_id: purchaseOrderId,
+          related_date: receiptDate, source_order_id: purchaseOrderId, basis_date_type: 'receipt_date',
           file_name: f4, file_url: u4.fileID, file_version: v4,
           generated_at: db.serverDate(), generated_by_system: true, status: 'generated',
           excluded_rows: supplierMap[sid].items.length - supPayableItems.length

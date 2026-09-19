@@ -213,6 +213,7 @@ exports.main = async (event = {}) => {
         scope_id: storeId,
         scope_name: storeName,
         related_date: relatedDate,
+        basis_date_type: 'summary_date',
         file_name: fileName,
         file_url: uploadRes.fileID,
         file_version: version,

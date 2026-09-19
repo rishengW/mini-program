@@ -73,6 +73,7 @@ Page({
       { label: '全部', value: 'all', count: counts.all || 0 },
       { label: '草稿', value: 'draft', count: counts.draft || 0 },
       { label: '已提交', value: 'submitted', count: counts.submitted || 0 },
+      { label: '部分收货', value: 'partial_received', count: counts.partialReceived || 0 },
       { label: '已收货', value: 'received', count: counts.received || 0 },
       { label: '收货异常', value: 'receipt_abnormal', count: counts.receiptAbnormal || 0 },
       { label: '已作废', value: 'cancelled', count: counts.cancelled || 0 }

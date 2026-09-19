@@ -253,7 +253,7 @@ async function regenerateApprovedOrderReports(order, orderItems, qtyMap) {
     data: {
       report_id: 'RPT_SO_' + orderNo + '_A', report_type: 'store_order_report',
       report_scope: 'store', scope_id: storeId, scope_name: storeName,
-      related_date: orderDate, source_order_id: orderNo,
+      related_date: orderDate, source_order_id: orderNo, basis_date_type: 'order_date',
       file_name: f1, file_url: u1.fileID, file_version: storeVer,
       generated_at: db.serverDate(), generated_by_system: true, status: 'generated'
     }
@@ -292,7 +292,7 @@ async function regenerateApprovedOrderReports(order, orderItems, qtyMap) {
       data: {
         report_id: 'RPT_SUO_' + sid + '_' + orderNo + '_A', report_type: 'supplier_order_report',
         report_scope: 'supplier', scope_id: sid, scope_name: supName,
-        related_date: orderDate, source_order_id: orderNo,
+        related_date: orderDate, source_order_id: orderNo, basis_date_type: 'order_date',
         file_name: fSup, file_url: uSup.fileID, file_version: supVer,
         generated_at: db.serverDate(), generated_by_system: true, status: 'generated'
       }
@@ -739,7 +739,7 @@ async function settleReceipt(event) {
       data: {
         report_id: 'RPT_SURP_' + sid + '_' + receiptId + '_S', report_type: 'supplier_receipt_price_report',
         report_scope: 'supplier', scope_id: sid, scope_name: supName,
-        related_date: receiptDate, source_order_id: purchaseOrderId,
+        related_date: receiptDate, source_order_id: purchaseOrderId, basis_date_type: 'receipt_date',
         file_name: filePath, file_url: uploadRes.fileID, file_version: ver,
         generated_at: db.serverDate(), generated_by_system: true, status: 'generated',
         settle_for_receipt: receiptId
@@ -855,7 +855,7 @@ async function regenerateReceiptReports(event) {
       data: {
         report_id: 'RPT_SR_' + receiptId + '_RG', report_type: 'store_receipt_report',
         report_scope: 'store', scope_id: storeId, scope_name: storeName,
-        related_date: receiptDate, source_order_id: purchaseOrderId,
+        related_date: receiptDate, source_order_id: purchaseOrderId, basis_date_type: 'receipt_date',
         file_name: f3, file_url: u3.fileID, file_version: v3,
         generated_at: db.serverDate(), generated_by_system: true, status: 'generated',
         has_abnormal: hasAbnormal, regenerated: true
@@ -882,7 +882,7 @@ async function regenerateReceiptReports(event) {
         data: {
           report_id: 'RPT_SRP_' + receiptId + '_RG', report_type: 'store_receipt_price_report',
           report_scope: 'store', scope_id: storeId, scope_name: storeName,
-          related_date: receiptDate, source_order_id: purchaseOrderId,
+          related_date: receiptDate, source_order_id: purchaseOrderId, basis_date_type: 'receipt_date',
           file_name: f4, file_url: u4.fileID, file_version: v4,
           generated_at: db.serverDate(), generated_by_system: true, status: 'generated',
           excluded_rows: items.length - payableItems.length, regenerated: true
@@ -915,7 +915,7 @@ async function regenerateReceiptReports(event) {
         data: {
           report_id: 'RPT_SUR_' + sid + '_' + receiptId + '_RG', report_type: 'supplier_receipt_report',
           report_scope: 'supplier', scope_id: sid, scope_name: sup.name,
-          related_date: receiptDate, source_order_id: purchaseOrderId,
+          related_date: receiptDate, source_order_id: purchaseOrderId, basis_date_type: 'receipt_date',
           file_name: f5, file_url: u5.fileID, file_version: v5,
           generated_at: db.serverDate(), generated_by_system: true, status: 'generated',
           has_abnormal: sup.items.some(item => itemAbnormalTypes(item).length > 0), regenerated: true
@@ -942,7 +942,7 @@ async function regenerateReceiptReports(event) {
           data: {
             report_id: 'RPT_SURP_' + sid + '_' + receiptId + '_RG', report_type: 'supplier_receipt_price_report',
             report_scope: 'supplier', scope_id: sid, scope_name: sup.name,
-            related_date: receiptDate, source_order_id: purchaseOrderId,
+            related_date: receiptDate, source_order_id: purchaseOrderId, basis_date_type: 'receipt_date',
             file_name: f6, file_url: u6.fileID, file_version: v6,
             generated_at: db.serverDate(), generated_by_system: true, status: 'generated',
             excluded_rows: sup.items.length - supPayable.length, regenerated: true

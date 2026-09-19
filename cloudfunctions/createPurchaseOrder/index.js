@@ -289,7 +289,7 @@ exports.main = async (event = {}) => {
       data: {
         report_id: 'RPT_SO_' + orderNo, report_type: 'store_order_report',
         report_scope: 'store', scope_id: storeId, scope_name: storeName,
-        related_date: actualDate, source_order_id: orderNo,
+        related_date: actualDate, source_order_id: orderNo, basis_date_type: 'order_date',
         file_name: f1, file_url: u1.fileID, file_version: storeVer,
         generated_at: db.serverDate(), generated_by_system: true, status: 'generated'
       }
@@ -336,7 +336,7 @@ exports.main = async (event = {}) => {
         data: {
           report_id: 'RPT_SUO_' + sid + '_' + orderNo, report_type: 'supplier_order_report',
           report_scope: 'supplier', scope_id: sid, scope_name: supName,
-          related_date: actualDate, source_order_id: orderNo,
+          related_date: actualDate, source_order_id: orderNo, basis_date_type: 'order_date',
           file_name: fSup, file_url: uSup.fileID, file_version: supVer,
           generated_at: db.serverDate(), generated_by_system: true, status: 'generated'
         }
