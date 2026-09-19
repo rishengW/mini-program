@@ -368,6 +368,74 @@ async function auditOrder(event) {
   return { code: 0, data: { reportWarning } }
 }
 
+// 撤回（#8 拍板 2026-09-13）：仅未审核（submitted）可撤，撤回后回到草稿，
+// 可重新编辑再提交——不引入 cancelled 新状态，草稿 tab / statusCounts 天然兼容。
+// 撤回权限与 #18 草稿口径一致：创建者本人可撤，全局角色可代撤，店长不代撤他人订单。
+async function withdrawOrder(event) {
+  const auth = await requireUser(event)
+  if (auth.error) return auth.error
+  const user = auth.user
+  if (!event.orderId) return { code: -1, msg: '订单信息缺失' }
+
+  const orderResult = await db.collection('purchase_order')
+    .where({ purchase_order_id: event.orderId })
+    .limit(1)
+    .get()
+  const order = orderResult.data[0]
+  if (!order) return { code: -1, msg: '采购订单不存在' }
+  if (order.order_status !== 'submitted') {
+    return { code: -1, msg: '只有未审核的订单可以撤回' }
+  }
+  const isGlobal = GLOBAL_ROLES.includes(user.role)
+  if (!isGlobal) {
+    if (!user.default_store_id || order.store_id !== user.default_store_id) {
+      return { code: -403, msg: '无权撤回其他门店的订单' }
+    }
+    const identities = [user.user_id, user._id, user.name].filter(Boolean)
+    if (!identities.includes(order.created_by)) {
+      return { code: -403, msg: '只有创建者本人可以撤回该订单' }
+    }
+  }
+
+  // 事务内复查状态：并发审核通过后再撤回，会把 approved 单拉回草稿
+  await db.runTransaction(async transaction => {
+    const latestRes = await transaction.collection('purchase_order').doc(order._id).get()
+    if (!latestRes.data || latestRes.data.order_status !== 'submitted') {
+      const raceError = new Error('ORDER_NOT_WITHDRAWABLE')
+      raceError.code = 'ORDER_NOT_WITHDRAWABLE'
+      throw raceError
+    }
+    await transaction.collection('purchase_order').doc(order._id).update({
+      data: { order_status: 'draft', updated_at: db.serverDate() }
+    })
+  })
+
+  try {
+    await createMessage({
+      type: 'order',
+      title: '采购申请已撤回',
+      content: `${order.order_date || ''} ${order.store_name || ''}采购申请已撤回，回到草稿可重新编辑提交。若订货单已发给供应商，请同步线下通知`,
+      bizId: event.orderId,
+      storeId: order.store_id
+    })
+  } catch (err) {
+    console.error('[dataService] 撤回消息写入失败:', err)
+  }
+
+  // 提交时生成的 ① ② 订货报表全部作废；重新提交会按版本号递增生成新报表。
+  // 尽力而为（同 auditOrder 改量模式）：撤回已提交，作废失败只记日志并返回警告。
+  let reportWarning = ''
+  try {
+    await db.collection('report_file')
+      .where({ source_order_id: event.orderId, report_type: _.in(['store_order_report', 'supplier_order_report']) })
+      .update({ data: { status: 'superseded', updated_at: db.serverDate() } })
+  } catch (err) {
+    console.error('[dataService] 撤回后报表作废失败:', err)
+    reportWarning = '订单已撤回，但关联订货报表作废失败，请联系管理员处理。'
+  }
+  return { code: 0, data: { reportWarning } }
+}
+
 function publicMessage(message) {
   return {
     id: message._id,
@@ -703,6 +771,7 @@ exports.main = async (event = {}) => {
       case 'saveSupplier': return await saveSupplier(event)
       case 'toggleSupplier': return await toggleSupplier(event)
       case 'auditOrder': return await auditOrder(event)
+      case 'withdrawOrder': return await withdrawOrder(event)
       case 'getMessages': return await getMessages(event)
       case 'markMessageRead': return await markMessageRead(event)
       case 'markAllMessagesRead': return await markAllMessagesRead(event)

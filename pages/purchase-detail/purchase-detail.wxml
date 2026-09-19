@@ -61,6 +61,10 @@
     <button class="btn btn-primary flex-1" bindtap="submitRequest">提交审核</button>
   </view>
 
+  <view wx:if="{{canWithdraw}}" class="bottom-actions">
+    <button class="btn btn-outline btn-block" bindtap="withdrawRequest">↩️ 撤回订单</button>
+  </view>
+
   <view wx:if="{{canReceive}}" class="bottom-actions">
     <button class="btn btn-success btn-block" bindtap="goReceive">📦 去收货</button>
   </view>

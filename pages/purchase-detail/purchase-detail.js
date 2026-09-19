@@ -4,7 +4,7 @@ const util = require('../../utils/util')
 const cloud = require('../../utils/cloud')
 
 Page({
-  data: { detail: { items: [] }, canReceive: false, canEdit: false },
+    data: { detail: { items: [] }, canReceive: false, canEdit: false, canWithdraw: false },
 
   onLoad(options = {}) {
     this.orderId = options.id || options.orderId || ''
@@ -35,10 +35,16 @@ Page({
       ['super_admin', 'purchaser'].includes(currentUser.role) ||
       order.createdById === (currentUser.userId || currentUser.id)
     )
+    // 撤回（#8）：仅未审核（submitted）可撤；创建者本人或全局角色，店长不代撤他人订单
+    const canWithdraw = order.orderStatus === 'submitted' && (
+      ['super_admin', 'purchaser'].includes(currentUser.role) ||
+      order.createdById === (currentUser.userId || currentUser.id)
+    )
     this.setData({
       detail: { ...order, statusText: statusInfo.text, statusType: statusInfo.type },
       canReceive,
-      canEdit
+      canEdit,
+      canWithdraw
     })
   },
 
@@ -89,5 +95,32 @@ Page({
     wx.navigateTo({
       url: '/pages/receive-verify/receive-verify?orderId=' + d.purchaseOrderId + '&storeId=' + d.storeId
     })
+  },
+
+  async withdrawRequest() {
+    if (this._submitting) return
+    this._submitting = true
+    try {
+      // 系统作废 ≠ 供应商撤单：CSV 可能已线下发出，确认文案强制提醒
+      const confirmed = await util.showConfirm('确认撤回该采购申请？撤回后回到草稿，可重新编辑再提交。若订货单已发给供应商，请同步线下通知作废。')
+      if (!confirmed) return
+
+      util.showLoading('撤回中...')
+      const result = await cloud.callFunction('dataService', {
+        action: 'withdrawOrder',
+        orderId: this.orderId
+      })
+      util.hideLoading()
+
+      if (result.code === 0) {
+        const warning = result.data && result.data.reportWarning
+        util.showToast(warning || '已撤回，订单回到草稿')
+        this.loadData()
+      } else {
+        util.showToast(result.msg || '撤回失败')
+      }
+    } finally {
+      this._submitting = false
+    }
   }
 })
