@@ -75,6 +75,21 @@ async function getStoreManagerId(storeId) {
   }
 }
 
+// 查询超级管理员 user_id（全局唯一账号）。报表补生成仅 purchaser/super_admin
+// 可执行（清单 #7），失败通知定向给能行动的人；store_id 保留供店长兜底查看。
+async function getSuperAdminId() {
+  try {
+    const res = await db.collection('app_user')
+      .where({ role: 'super_admin', status: 1 })
+      .limit(1)
+      .get()
+    return (res.data[0] && (res.data[0].user_id || res.data[0]._id)) || ''
+  } catch (err) {
+    console.warn('[createReceipt] 查询超级管理员失败，消息回退门店广播:', err)
+    return ''
+  }
+}
+
 // This is intentionally best-effort on the duplicate path: an existing
 // receipt must remain reportable even if the message collection is unavailable.
 async function ensureReceiptMessage(receipt, fallbackStoreId, fallbackStoreName) {
@@ -602,7 +617,8 @@ exports.main = async (event = {}) => {
         await db.collection('receipt').where({ receipt_id: receiptId }).update({
           data: { missing_reports: true }
         })
-        const reportFailRecipient = await getStoreManagerId(storeId)
+        // 补生成仅 purchaser/super_admin 可执行（清单 #7），通知定向给能行动的人
+        const reportFailRecipient = await getSuperAdminId()
         await db.collection('message').add({
           data: {
             message_id: `MSG_REPORT_MISSING_${receiptId}`,

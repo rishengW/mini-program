@@ -355,6 +355,34 @@ exports.main = async (event = {}) => {
     // duplicate order or incorrectly report that the save failed.
     if (persistedOrderNo) {
       console.error('[createPurchaseOrder] 订单已保存，但报表生成失败:', err)
+      // 清单 #7：缺口从"静默缺失"变为"有标记、有提示"，管理员可经
+      // dataService.regenerateOrderReports 补生成 ① ② 报表。
+      try {
+        await db.collection('purchase_order')
+          .where({ purchase_order_id: persistedOrderNo })
+          .update({ data: { missing_reports: true, updated_at: db.serverDate() } })
+        const adminRes = await db.collection('app_user')
+          .where({ role: 'super_admin', status: 1 })
+          .limit(1)
+          .get()
+        const adminId = (adminRes.data[0] && (adminRes.data[0].user_id || adminRes.data[0]._id)) || ''
+        await db.collection('message').add({
+          data: {
+            message_id: `MSG_ORDER_REPORT_MISSING_${persistedOrderNo}`,
+            type: 'abnormal',
+            title: '订货报表生成失败',
+            content: `采购单 ${persistedOrderNo} 已保存，但订货报表生成失败，请管理员补生成。`,
+            biz_id: persistedOrderNo,
+            recipient_user_id: adminId,
+            store_id: orderData && orderData.store_id || '',
+            read: false,
+            read_by: [],
+            created_at: db.serverDate()
+          }
+        })
+      } catch (markErr) {
+        console.error('[createPurchaseOrder] 缺报表标记/通知写入失败:', markErr)
+      }
       return {
         code: 0,
         data: { orderId: persistedOrderNo, reportGenerated: false, reportsGenerated: 0, reportWarning: '订单已保存，但报表生成失败，请联系管理员处理。' }

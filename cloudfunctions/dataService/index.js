@@ -177,9 +177,24 @@ async function createMessage(data) {
       recipient_user_id: data.recipientUserId || '',
       store_id: data.storeId || '',
       read: false,
+      read_by: [],
       created_at: db.serverDate()
     }
   })
+}
+
+// 查询门店店长 user_id（清单 #5 消息定向口径）。查不到返回 ''（回退门店广播）。
+async function getStoreManagerId(storeId) {
+  try {
+    const res = await db.collection('app_user')
+      .where({ role: 'store_manager', default_store_id: storeId, status: 1 })
+      .limit(1)
+      .get()
+    return (res.data[0] && (res.data[0].user_id || res.data[0]._id)) || ''
+  } catch (err) {
+    console.warn('[dataService] 查询门店店长失败，消息回退门店广播:', err)
+    return ''
+  }
 }
 
 // ===== 报表重算（审核改量后调用） =====
@@ -425,11 +440,14 @@ async function markMessageRead(event) {
   const belongsToUser = !message.recipient_user_id || message.recipient_user_id === (auth.user.user_id || auth.user._id)
   const belongsToStore = isGlobal || !message.store_id || message.store_id === auth.user.default_store_id
   if (!belongsToUser || !belongsToStore) return { code: -403, msg: '无权操作该消息' }
-  // 按用户记录已读：同一门店的其他成员的未读状态不受影响
+  // 按用户记录已读：同一门店的其他成员的未读状态不受影响；read_by 去重
   const userId = auth.user.user_id || auth.user._id
-  await db.collection('message').doc(event.id).update({
-    data: { read_by: _.push(userId), read_at: db.serverDate() }
-  })
+  const readBy = Array.isArray(message.read_by) ? message.read_by : []
+  if (!readBy.includes(userId)) {
+    await db.collection('message').doc(event.id).update({
+      data: { read_by: _.push(userId), read_at: db.serverDate() }
+    })
+  }
   return { code: 0 }
 }
 
@@ -439,7 +457,11 @@ async function markAllMessagesRead(event) {
   const userId = auth.user.user_id || auth.user._id
   const result = await getMessages(event)
   if (result.code !== 0) return result
+  // 需要拿原始 read_by 判断去重，逐条读原文（getMessages 返回已合并 read 布尔）
   for (const message of result.data.filter(item => !item.read)) {
+    const rawRes = await db.collection('message').doc(message.id).get()
+    const readBy = Array.isArray(rawRes.data && rawRes.data.read_by) ? rawRes.data.read_by : []
+    if (readBy.includes(userId)) continue
     await db.collection('message').doc(message.id).update({
       data: { read_by: _.push(userId), read_at: db.serverDate() }
     })
@@ -547,6 +569,8 @@ async function resolveAbnormal(event) {
       ? `${record.abnormal_id || event.id} 已记录处理结果，异常行将转回可付款`
       : `${record.abnormal_id || event.id} 已记录处理结果`,
     bizId: record.abnormal_id || event.id,
+    // 清单 #5 口径：异常类消息定向店长（处理责任人），与 createReceipt 一致
+    recipientUserId: await getStoreManagerId(record.store_id),
     storeId: record.store_id
   })
   return { code: 0 }
@@ -724,6 +748,47 @@ async function settleReceipt(event) {
     generatedSuppliers.push(sid)
   }
   return { code: 0, data: { generatedSuppliers, count: generatedSuppliers.length } }
+}
+
+// ===== 清单 #7：下单报表失败后补生成 ① ② 报表 =====
+// createPurchaseOrder 报表生成失败时在订单上打 missing_reports 标记，
+// 本入口按订单重读 purchase_order_item，重走 ① 门店下单 / ② 供应商订货汇总。
+// 复用 regenerateApprovedOrderReports 的生成逻辑（内部已含 superseded 标记）。
+async function regenerateOrderReports(event) {
+  const auth = await requireUser(event, GLOBAL_ROLES)
+  if (auth.error) return auth.error
+  const orderId = String(event.orderId || '').trim()
+  if (!orderId) return { code: -1, msg: '缺少订单号' }
+
+  const orderRes = await db.collection('purchase_order')
+    .where({ purchase_order_id: orderId })
+    .limit(1)
+    .get()
+  const order = orderRes.data[0]
+  if (!order) return { code: -1, msg: '采购订单不存在' }
+
+  const itemRes = await db.collection('purchase_order_item')
+    .where({ purchase_order_id: orderId })
+    .limit(1000)
+    .get()
+  const orderItems = itemRes.data || []
+  if (orderItems.length === 0) return { code: -1, msg: '订单明细不存在，无法补生成' }
+
+  // qtyMap 用数据库中的当前下单量（未发生审核改量时与快照一致）
+  const qtyMap = {}
+  orderItems.forEach(item => {
+    const key = item.item_id || item._id
+    if (key) qtyMap[key] = Number(item.order_qty) || 0
+  })
+
+  await regenerateApprovedOrderReports(order, orderItems, qtyMap)
+
+  // 补生成成功后清除缺报表标记
+  await db.collection('purchase_order')
+    .where({ purchase_order_id: orderId, missing_reports: true })
+    .update({ data: { missing_reports: false, updated_at: db.serverDate() } })
+
+  return { code: 0, data: { orderId, regenerated: true } }
 }
 
 // ===== 清单 #7 报表失败补偿：管理员手动补生成收货报表 =====
@@ -1010,6 +1075,7 @@ exports.main = async (event = {}) => {
       case 'getOrderStats': return await getOrderStats(event)
       case 'settleReceipt': return await settleReceipt(event)
       case 'regenerateReceiptReports': return await regenerateReceiptReports(event)
+      case 'regenerateOrderReports': return await regenerateOrderReports(event)
       case 'cancelOrder': return await cancelOrder(event)
       case 'requestCancel': return await requestCancel(event)
       default: return { code: -1, msg: '不支持的数据操作' }
