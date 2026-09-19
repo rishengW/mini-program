@@ -45,6 +45,14 @@ Page({
   },
 
   async onLoad(options = {}) {
+    // 角色前置校验：厨师无权验收，直接拦截（与 createReceipt 后端白名单一致）
+    const app = getApp()
+    const currentUser = (app && app.globalData && app.globalData.userInfo) || {}
+    if (currentUser.role === 'chef') {
+      util.showToast('当前账号无权提交收货验收')
+      setTimeout(() => wx.navigateBack(), 1200)
+      return
+    }
     const id = options.orderId || options.id
     if (!id) {
       util.showToast('未获取到采购订单，请返回后重试')
@@ -52,7 +60,6 @@ Page({
     }
 
     util.showLoading('加载中...')
-    const app = getApp()
     const result = await cloud.callFunction('getPurchaseOrderDetail', {
       orderId: id,
     })

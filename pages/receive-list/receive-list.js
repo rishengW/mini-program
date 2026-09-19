@@ -61,9 +61,11 @@ Page({
       hasAbnormal: (receipt.receiptStatus || receipt.receipt_status) === 'abnormal',
       statusText: (receipt.receiptStatus || receipt.receipt_status) === 'abnormal' ? '收货异常' : '已收货',
       statusType: (receipt.receiptStatus || receipt.receipt_status) === 'abnormal' ? 'danger' : 'success',
+      // 清单 #7：报表生成失败的收货单带缺报表标记
+      missingReports: !!receipt.missing_reports,
       items: receipt.items || []
     }))
-    this.setData({ orders, receipts })
+    this.setData({ orders, receipts, canRegenerate: ['purchaser', 'super_admin'].includes(user.role) })
   },
 
   async onPullDownRefresh() {
@@ -92,5 +94,25 @@ Page({
       return
     }
     util.showSuccess('补结算完成，已生成补充账单')
+  },
+
+  // 清单 #7：报表生成失败后，管理员手动补生成（后端仅 purchaser/super_admin）
+  async regenerateReports(e) {
+    const receiptId = e.currentTarget.dataset.id
+    if (!receiptId) return
+    const confirmed = await util.showConfirm('确认补生成该收货单的全部报表？将按收货明细重新生成四类报表。')
+    if (!confirmed) return
+    util.showLoading('补生成中...')
+    const result = await cloud.callFunction('dataService', {
+      action: 'regenerateReceiptReports',
+      receiptId
+    })
+    wx.hideLoading()
+    if (!result || result.code !== 0) {
+      util.showToast((result && result.msg) || '补生成失败')
+      return
+    }
+    util.showSuccess('补生成完成')
+    await this.onShow()
   }
 })

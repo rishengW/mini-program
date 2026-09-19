@@ -60,6 +60,21 @@ async function getNextVersion(reportType, scopeId, relatedDate) {
 }
 
 // Backfill the notification for receipts created by an older deployment.
+// 门店内消息可见口径（清单 #5）：异常类消息定向给店长（处理责任人），
+// 正常类消息保留门店广播。查询门店店长的 user_id，查不到则回退广播（''）。
+async function getStoreManagerId(storeId) {
+  try {
+    const res = await db.collection('app_user')
+      .where({ role: 'store_manager', default_store_id: storeId, status: 1 })
+      .limit(1)
+      .get()
+    return (res.data[0] && (res.data[0].user_id || res.data[0]._id)) || ''
+  } catch (err) {
+    console.warn('[createReceipt] 查询门店店长失败，消息回退门店广播:', err)
+    return ''
+  }
+}
+
 // This is intentionally best-effort on the duplicate path: an existing
 // receipt must remain reportable even if the message collection is unavailable.
 async function ensureReceiptMessage(receipt, fallbackStoreId, fallbackStoreName) {
@@ -75,6 +90,8 @@ async function ensureReceiptMessage(receipt, fallbackStoreId, fallbackStoreName)
     const storeId = receipt.store_id || fallbackStoreId || ''
     const storeName = receipt.store_name || fallbackStoreName || ''
     const isAbnormal = receipt.receipt_status === 'abnormal'
+    // 清单 #5：异常消息定向给店长，正常消息门店广播（与主流程写入口径一致）
+    const recipient = isAbnormal ? await getStoreManagerId(storeId) : ''
     await db.collection('message').add({
       data: {
         message_id: `MSG_RECEIVE_${receiptId}`,
@@ -84,7 +101,7 @@ async function ensureReceiptMessage(receipt, fallbackStoreId, fallbackStoreName)
           ? `${receiptDate} ${storeName}收货存在异常，请及时处理`
           : `${receiptDate} ${storeName}采购单已完成收货验收`,
         biz_id: receiptId,
-        recipient_user_id: '',
+        recipient_user_id: recipient,
         store_id: storeId,
         read: false,
         created_at: db.serverDate()
@@ -397,6 +414,9 @@ exports.main = async (event = {}) => {
       // committed receipt always appears in the message center.  A stable id
       // also makes the record easy to identify if the client retries after a
       // lost response.
+      // 清单 #5 门店内消息可见口径：异常消息定向给店长（处理责任人），
+      // 正常收货完成消息保留门店广播（厨师等全员可见）。
+      const abnormalRecipient = hasAbnormal ? await getStoreManagerId(storeId) : ''
       await transaction.collection('message').add({
         data: {
           message_id: `MSG_RECEIVE_${receiptId}`,
@@ -406,7 +426,7 @@ exports.main = async (event = {}) => {
             ? `${receiptDate} ${storeName}收货存在${abnormalTypeNames.join('、')}，请及时处理`
             : `${receiptDate} ${storeName}采购单已完成收货验收`,
           biz_id: receiptId,
-          recipient_user_id: '',
+          recipient_user_id: abnormalRecipient,
           store_id: storeId,
           read: false,
           created_at: db.serverDate()
@@ -571,6 +591,34 @@ exports.main = async (event = {}) => {
     } catch (reportErr) {
       console.error('[createReceipt] 收货已保存，但报表生成失败:', reportErr)
       reportWarning = '报表生成失败，请联系管理员处理。'
+      // 清单 #7 报表失败补偿：缺口从"静默缺失"变为"有标记、有提示"。
+      // 订单打 missing_reports 标记（报表/订单详情页据此展示"缺报表"），
+      // 并定向通知管理员补生成（dataService.regenerateReceiptReports）。
+      try {
+        await db.collection('purchase_order').doc(order._id).update({
+          data: { missing_reports: true, updated_at: db.serverDate() }
+        })
+        // 收货单本身也打标记，getReceipts 列表随记录带出，前端据此展示"缺报表"
+        await db.collection('receipt').where({ receipt_id: receiptId }).update({
+          data: { missing_reports: true }
+        })
+        const reportFailRecipient = await getStoreManagerId(storeId)
+        await db.collection('message').add({
+          data: {
+            message_id: `MSG_REPORT_MISSING_${receiptId}`,
+            type: 'abnormal',
+            title: '收货报表生成失败',
+            content: `采购单 ${purchaseOrderId} 收货已保存，但报表生成失败，请管理员在收货记录中补生成。`,
+            biz_id: receiptId,
+            recipient_user_id: reportFailRecipient,
+            store_id: storeId,
+            read: false,
+            created_at: db.serverDate()
+          }
+        })
+      } catch (markErr) {
+        console.error('[createReceipt] 缺报表标记/通知写入失败:', markErr)
+      }
     }
 
     return {
