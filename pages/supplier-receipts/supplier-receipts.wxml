@@ -17,6 +17,9 @@
       <text class="text-bold">金额 {{item.amountText}}</text>
     </view>
     <view wx:if="{{item.remark}}" class="text-sm text-tertiary" style="margin-top:10rpx;">备注: {{item.remark}}</view>
+    <block wx:if="{{item.abnormals.length}}">
+      <view wx:for="{{item.abnormals}}" wx:for-item="rec" wx:key="index" class="text-sm {{rec.done ? 'text-tertiary' : 'text-danger'}}" style="margin-top:6rpx;">⚠ {{rec.text}}</view>
+    </block>
   </view>
 
   <view wx:if="{{items.length === 0 && !loading}}" class="empty-state">

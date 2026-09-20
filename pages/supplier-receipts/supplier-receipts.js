@@ -48,13 +48,26 @@ Page({
       const orderQty = Number(item.order_qty_snapshot) || 0
       // 实收与订货不一致或未计价（应付标记关闭）视为异常，红色提示
       const abnormal = receivedQty !== orderQty || item.payable_flag === false
+      // S7 拍板：展示异常处理进度与裁决结果，供供货商对账（只读）
+      const abnormals = (item.abnormals || []).map(rec => {
+        const typeText = { shortage: '短收', quality: '质量问题', wrong_item: '错货' }[rec.type] || rec.type || '异常'
+        const statusText = { pending: '待处理', processing: '处理中', resolved: '已解决', closed: '已关闭' }[rec.status] || rec.status || ''
+        const decisionText = rec.payment_decision === 'pay_received'
+          ? '裁决：按实收补款'
+          : rec.payment_decision === 'reject' ? '裁决：维持不付款' : ''
+        return {
+          text: `${typeText}（${statusText}）${rec.resolution || ''}${decisionText ? ' ' + decisionText : ''}`,
+          done: rec.status === 'resolved' || rec.status === 'closed'
+        }
+      })
       return {
         ...item,
         receivedQty,
         orderQty,
         priceText: '¥' + (Number(item.price_snapshot) || 0).toFixed(2),
         amountText: '¥' + (Number(item.amount) || 0).toFixed(2),
-        abnormal
+        abnormal,
+        abnormals
       }
     })
     this.setData({

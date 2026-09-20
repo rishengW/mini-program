@@ -239,6 +239,8 @@ async function getNextVersion(reportType, scopeId, relatedDate) {
 
 // 审核改量后，按批准数量重新生成下单类报表：旧版本标记 superseded（保留审计痕迹），
 // 新版本按审核后数量生成。尽力而为：审核事务已提交，报表失败只记日志并返回警告。
+// S2 拍板：数量已变，旧确认口径作废——清除该单所有供货商的确认状态（打回待确认），
+// 并发内部消息提醒采购经办人线下通知供应商重新确认。
 async function regenerateApprovedOrderReports(order, orderItems, qtyMap) {
   const items = orderItems.map(item => ({
     productName: item.product_name_snapshot,
@@ -252,6 +254,21 @@ async function regenerateApprovedOrderReports(order, orderItems, qtyMap) {
   const storeName = order.store_name
   const orderDate = order.order_date
   const orderNo = order.purchase_order_id
+
+  // 重置供货商确认状态（有确认记录才清，避免无谓写操作）
+  if (order.supplier_confirmations && Object.keys(order.supplier_confirmations).length) {
+    const confirmedSuppliers = Object.keys(order.supplier_confirmations)
+    await db.collection('purchase_order').doc(order._id).update({
+      data: { supplier_confirmations: _.set({}), updated_at: db.serverDate() }
+    })
+    await createMessage({
+      title: '订单改量，供货商需重新确认',
+      content: `采购单 ${orderNo}（${storeName}）审核改量后已重发订货单，原供货商确认已重置，请线下通知供应商（${confirmedSuppliers.join('、')}）按新数量重新确认接单。`,
+      type: 'order',
+      storeId,
+      recipientUserId: order.created_by || ''
+    })
+  }
 
   await db.collection('report_file')
     .where({ source_order_id: orderNo, report_type: _.in(['store_order_report', 'supplier_order_report']) })
@@ -1028,7 +1045,8 @@ async function cancelOrder(event) {
   await createMessage({
     type: 'cancel',
     title: '采购单已作废',
-    content: `采购单 ${order.order_no || event.orderId} 已作废，原因：${reason}`,
+    // S3 拍板：供应商触达走线下，消息只提醒内部经办人去通知供应商
+    content: `采购单 ${order.order_no || event.orderId} 已作废，原因：${reason}。请采购经办人线下告知供应商，避免其继续备货/发货。`,
     bizId: event.orderId,
     storeId: order.store_id
   })

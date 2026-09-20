@@ -9,8 +9,9 @@ const _ = db.command
 
 // 对供货商不可见的订单状态
 const HIDDEN_ORDER_STATUS = ['draft', 'rejected']
-// 已进入收货/完成阶段，供货商无需再操作的订单状态
-const DONE_ORDER_STATUS = ['received', 'partial_received', 'receipt_abnormal', 'completed']
+// 已完结（含收货中异常），供货商视角统一视为"已完成"；
+// partial_received 按 S8 拍板不算完成——分批收货中剩余批次可能未到，保留供货商已有确认状态
+const DONE_ORDER_STATUS = ['received', 'receipt_abnormal', 'completed']
 
 function hashToken(token) {
   return crypto.createHash('sha256').update(String(token || '')).digest('hex')

@@ -6,8 +6,10 @@ const crypto = require('crypto')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
-// 供货商可操作的订单状态：已提交待审核 / 已审核待收货
-const ACTIONABLE_ORDER_STATUS = ['submitted', 'approved']
+// 动作级状态白名单（S1 拍板）：确认接单仍限审批前；标记发货放宽到审批后（report_generated/to_receive），
+// 因为按 B2"先审批后收货"，发货天然发生在内部审批之后。
+const CONFIRMABLE_ORDER_STATUS = ['submitted', 'approved']
+const SHIPPABLE_ORDER_STATUS = ['submitted', 'approved', 'report_generated', 'to_receive']
 const ACTION_STATUS = { confirm: 'confirmed', ship: 'shipped' }
 
 function hashToken(token) {
@@ -54,6 +56,7 @@ exports.main = async (event = {}) => {
     const status = ACTION_STATUS[action]
     if (!orderId) return { code: -1, msg: '订单信息缺失' }
     if (!status) return { code: -1, msg: '不支持的操作类型' }
+    const allowedStatus = action === 'ship' ? SHIPPABLE_ORDER_STATUS : CONFIRMABLE_ORDER_STATUS
 
     const orderRes = await db.collection('purchase_order')
       .where({ purchase_order_id: orderId })
@@ -61,7 +64,7 @@ exports.main = async (event = {}) => {
       .get()
     const order = orderRes.data[0]
     if (!order) return { code: -1, msg: '订单不存在' }
-    if (!ACTIONABLE_ORDER_STATUS.includes(order.order_status)) {
+    if (!allowedStatus.includes(order.order_status)) {
       return { code: -1, msg: '订单当前状态不可操作（可能已收货或已作废）' }
     }
 

@@ -74,6 +74,27 @@ exports.main = async (event = {}) => {
       receiptsRes.data.forEach(receipt => { receiptMap[receipt.receipt_id] = receipt })
     }
 
+    // S7 拍板：join 该供货商的异常记录，把处理状态与裁决结果带回，供供货商对账
+    const receiptIdsAll = [...new Set(items.map(item => item.receipt_id).filter(Boolean))]
+    const abnormalMap = {}
+    for (let i = 0; i < receiptIdsAll.length; i += 20) {
+      const idChunk = receiptIdsAll.slice(i, i + 20)
+      const abnRes = await db.collection('abnormal_record')
+        .where({ receipt_id: _.in(idChunk), supplier_id: supplierId })
+        .limit(1000)
+        .get()
+      abnRes.data.forEach(rec => {
+        const key = `${rec.receipt_id}_${rec.product_id}`
+        if (!abnormalMap[key]) abnormalMap[key] = []
+        abnormalMap[key].push({
+          type: rec.type || '',
+          status: rec.status || '',
+          resolution: rec.resolution || '',
+          payment_decision: rec.payment_decision || ''
+        })
+      })
+    }
+
     const data = items.map(item => {
       const receipt = receiptMap[item.receipt_id] || {}
       const receivedQty = Number(item.received_qty) || 0
@@ -84,7 +105,8 @@ exports.main = async (event = {}) => {
         store_id: receipt.store_id || '',
         store_name: receipt.store_name || '',
         purchase_order_id: receipt.purchase_order_id || '',
-        amount: Math.round(receivedQty * price * 100) / 100
+        amount: Math.round(receivedQty * price * 100) / 100,
+        abnormals: abnormalMap[`${item.receipt_id}_${item.product_id}`] || []
       }
     })
 
