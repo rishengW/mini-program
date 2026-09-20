@@ -61,6 +61,7 @@ Page({
     app.globalData.authToken = ''
     wx.removeStorageSync('userInfo')
     wx.removeStorageSync('currentStore')
+    wx.removeStorageSync('supplierInfo')
     wx.removeStorageSync('authToken')
     wx.removeStorageSync('sessionExpiresAt')
     util.showSuccess('密码已更新，请重新登录')

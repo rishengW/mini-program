@@ -11,7 +11,7 @@ Page({
       { key: 'chef', label: '下单人员', icon: '🍳', defaultUser: 'chef' },
       { key: 'store_manager', label: '店长', icon: '👨‍💼', defaultUser: 'manager' },
       { key: 'purchaser', label: '管理员', icon: '📊', defaultUser: 'admin_user' },
-      { key: 'supplier', label: '供货商', icon: '🚚', defaultUser: 'supplier1' }
+      { key: 'supplier', label: '供货商', icon: '🚚', defaultUser: 'supplier_test' }
     ],
     selectedRole: 'chef'
   },

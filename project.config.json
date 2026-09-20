@@ -8,6 +8,18 @@
         "type": "folder"
       },
       {
+        "value": "_tmp_test",
+        "type": "folder"
+      },
+      {
+        "value": "seed-data",
+        "type": "folder"
+      },
+      {
+        "value": ".claude",
+        "type": "folder"
+      },
+      {
         "value": "采购流程图.png",
         "type": "file"
       }
