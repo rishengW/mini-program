@@ -12,13 +12,30 @@ function hashToken(token) {
 
 async function getSessionUser(authToken) {
   if (!authToken) return null
+  const tokenHash = hashToken(authToken)
+  // B12 多设备会话：先查 sessions 数组（每设备一条），兼容旧单会话字段
   const result = await db.collection('app_user')
-    .where({ session_token_hash: hashToken(authToken), status: 1 })
-    .limit(1).get()
-  const user = result.data[0]
-  if (!user || !user.session_expires_at) return null
-  const expiresAt = new Date(user.session_expires_at).getTime()
-  return Number.isFinite(expiresAt) && expiresAt > Date.now() ? user : null
+    .where({ status: 1, sessions: { token_hash: tokenHash } })
+    .limit(1)
+    .get()
+  let user = result.data[0]
+  if (!user) {
+    const legacy = await db.collection('app_user')
+      .where({ session_token_hash: tokenHash, status: 1 })
+      .limit(1)
+      .get()
+    user = legacy.data[0]
+  }
+  if (!user) return null
+  if (Array.isArray(user.sessions) && user.sessions.length) {
+    const session = user.sessions.find(s => s && s.token_hash === tokenHash)
+    if (!session || !session.expires_at) return null
+    const expiresAt = new Date(session.expires_at).getTime()
+    return Number.isFinite(expiresAt) && expiresAt > Date.now() ? user : null
+  }
+  if (!user.session_expires_at) return null
+  const legacyExpires = new Date(user.session_expires_at).getTime()
+  return Number.isFinite(legacyExpires) && legacyExpires > Date.now() ? user : null
 }
 
 function csvField(val) {

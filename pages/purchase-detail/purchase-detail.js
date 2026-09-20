@@ -54,17 +54,21 @@ Page({
     })
   },
 
-  // B8：审批后订单申请取消（采购员/店长发起，管理员确认后作废）
+  // B8：审批后订单申请取消（采购员/店长发起，管理员确认后作废），需填写原因
   async requestCancel() {
     const d = this.data.detail
     if (!d.purchaseOrderId) return
-    const confirmed = await util.showConfirm('确认申请取消该采购单？申请将通知管理员确认处理。')
-    if (!confirmed) return
+    const reason = await util.showPrompt('确认申请取消该采购单？申请将通知管理员确认处理。', '请填写取消原因（必填）', '申请取消')
+    if (reason === null) return
+    if (!reason.trim()) {
+      util.showToast('申请取消必须填写原因')
+      return
+    }
     util.showLoading('提交申请中...')
     const result = await cloud.callFunction('dataService', {
       action: 'requestCancel',
       orderId: d.purchaseOrderId,
-      reason: '采购员申请取消（详情页操作）'
+      reason: reason.trim()
     })
     util.hideLoading()
     if (result && result.code === 0) {
@@ -75,17 +79,21 @@ Page({
     }
   },
 
-  // B8：作废已提交订单（仅审批前），需线下通知供应商
+  // B8：作废已提交订单（仅审批前），需填写原因并线下通知供应商
   async cancelOrder() {
     const d = this.data.detail
     if (!d.purchaseOrderId) return
-    const confirmed = await util.showConfirm('确认作废该采购单？请先线下通知供应商停止备货。')
-    if (!confirmed) return
+    const reason = await util.showPrompt('确认作废该采购单？请先线下通知供应商停止备货。', '请填写作废原因（必填）', '管理员作废')
+    if (reason === null) return
+    if (!reason.trim()) {
+      util.showToast('作废必须填写原因')
+      return
+    }
     util.showLoading('作废中...')
     const result = await cloud.callFunction('dataService', {
       action: 'cancelOrder',
       orderId: d.purchaseOrderId,
-      reason: '管理员作废（详情页操作）'
+      reason: reason.trim()
     })
     util.hideLoading()
     if (result && result.code === 0) {

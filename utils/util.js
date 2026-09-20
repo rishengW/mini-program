@@ -95,6 +95,26 @@ function showConfirm(content, title = '提示') {
     })
 }
 
+/**
+ * 可输入的确认对话框（返回输入内容，取消返回 null）
+ */
+function showPrompt(content, placeholder = '', title = '提示') {
+    return new Promise((resolve) => {
+        wx.showModal({
+            title,
+            content,
+            editable: true,
+            placeholderText: placeholder,
+            success(res) {
+                resolve(res.confirm ? (res.content || '') : null)
+            },
+            fail() {
+                resolve(null)
+            }
+        })
+    })
+}
+
 module.exports = {
     formatDate,
     getRelativeTime,
@@ -102,5 +122,6 @@ module.exports = {
     showSuccess,
     showLoading,
     hideLoading,
-    showConfirm
+    showConfirm,
+    showPrompt
 }

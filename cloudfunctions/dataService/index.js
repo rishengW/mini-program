@@ -14,13 +14,30 @@ function hashToken(token) {
 
 async function getSessionUser(authToken) {
   if (!authToken) return null
+  const tokenHash = hashToken(authToken)
+  // B12 多设备会话：先查 sessions 数组（每设备一条），兼容旧单会话字段
   const result = await db.collection('app_user')
-    .where({ session_token_hash: hashToken(authToken), status: 1 })
+    .where({ status: 1, sessions: { token_hash: tokenHash } })
     .limit(1)
     .get()
-  const user = result.data[0]
-  if (!user || !user.session_expires_at) return null
-  return new Date(user.session_expires_at).getTime() > Date.now() ? user : null
+  let user = result.data[0]
+  if (!user) {
+    const legacy = await db.collection('app_user')
+      .where({ session_token_hash: tokenHash, status: 1 })
+      .limit(1)
+      .get()
+    user = legacy.data[0]
+  }
+  if (!user) return null
+  if (Array.isArray(user.sessions) && user.sessions.length) {
+    const session = user.sessions.find(s => s && s.token_hash === tokenHash)
+    if (!session || !session.expires_at) return null
+    const expiresAt = new Date(session.expires_at).getTime()
+    return Number.isFinite(expiresAt) && expiresAt > Date.now() ? user : null
+  }
+  if (!user.session_expires_at) return null
+  const legacyExpires = new Date(user.session_expires_at).getTime()
+  return Number.isFinite(legacyExpires) && legacyExpires > Date.now() ? user : null
 }
 
 async function requireUser(event, roles) {
@@ -1034,6 +1051,10 @@ async function requestCancel(event) {
   if (!order) return { code: -1, msg: '采购订单不存在' }
   if (!['submitted', 'approved', 'report_generated', 'partial_received', 'to_receive'].includes(order.order_status)) {
     return { code: -1, msg: '当前状态的订单无法申请取消' }
+  }
+  // 门店归属校验：全局角色可跨门店，门店角色仅可对本门店订单提交取消申请
+  if (!GLOBAL_ROLES.includes(auth.user.role) && order.store_id !== (auth.user.default_store_id || '')) {
+    return { code: -403, msg: '当前账号无权对该门店订单申请取消' }
   }
 
   await db.collection('purchase_order').doc(order._id).update({
