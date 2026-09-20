@@ -41,6 +41,15 @@ exports.main = async (event = {}) => {
     const user = await getSessionUser(event.authToken)
     if (!user) return { code: -401, msg: '登录已过期，请重新登录' }
     const { status, keyword, includeInactive } = event
+    // 供货商角色只能看到自己的档案，不能遍历其他供货商的联系方式
+    if (user.role === 'supplier') {
+      if (!user.default_supplier_id) return { code: -403, msg: '账号未关联供货商，请联系管理员' }
+      const mineRes = await db.collection('supplier')
+        .where({ supplier_id: user.default_supplier_id })
+        .limit(1)
+        .get()
+      return { code: 0, data: mineRes.data.map(item => ({ ...item, product_count: 0 })) }
+    }
     const isManager = ['super_admin', 'purchaser'].includes(user.role)
     if (includeInactive && !isManager) return { code: -403, msg: '当前账号无权查看停用供应商' }
     const _ = db.command

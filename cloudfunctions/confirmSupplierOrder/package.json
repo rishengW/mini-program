@@ -1,0 +1,9 @@
+{
+  "name": "confirmSupplierOrder",
+  "version": "1.0.0",
+  "description": "供货商确认接单 / 标记发货",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

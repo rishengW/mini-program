@@ -63,9 +63,27 @@ Page({
       statusType: (receipt.receiptStatus || receipt.receipt_status) === 'abnormal' ? 'danger' : 'success',
       // 清单 #7：报表生成失败的收货单带缺报表标记
       missingReports: !!receipt.missing_reports,
+      photoCount: (receipt.photo_file_ids || []).length,
       items: receipt.items || []
     }))
     this.setData({ orders, receipts, canRegenerate: ['purchaser', 'super_admin'].includes(user.role) })
+  },
+
+  // 照片回显：按 fileID 换临时链接后全屏预览（临时链接约 2 小时有效，每次现取不缓存）
+  async previewReceiptPhotos(e) {
+    const index = e.currentTarget.dataset.index
+    const receipt = this.data.receipts[index]
+    if (!receipt) return
+    const fileIds = receipt.photo_file_ids || []
+    if (!fileIds.length) return
+    util.showLoading('加载照片...')
+    const urls = await cloud.getFileUrls(fileIds)
+    wx.hideLoading()
+    if (!urls.length) {
+      util.showToast('照片加载失败，请稍后重试')
+      return
+    }
+    wx.previewImage({ current: urls[0], urls })
   },
 
   async onPullDownRefresh() {

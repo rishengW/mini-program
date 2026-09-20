@@ -19,7 +19,11 @@
     "pages/supplier-manage/supplier-manage",
     "pages/price-manage/price-manage",
     "pages/report-history/report-history",
-    "pages/user-manage/user-manage"
+    "pages/user-manage/user-manage",
+    "pages/supplier-home/supplier-home",
+    "pages/supplier-orders/supplier-orders",
+    "pages/supplier-receipts/supplier-receipts",
+    "pages/supplier-prices/supplier-prices"
   ],
   "window": {
     "navigationBarBackgroundColor": "#1890FF",
@@ -63,5 +67,11 @@
   "style": "v2",
   "sitemapLocation": "sitemap.json",
   "cloud": true,
-  "lazyCodeLoading": "requiredComponents"
+  "lazyCodeLoading": "requiredComponents",
+  "__usePrivacyCheck__": true,
+  "permission": {
+    "scope.camera": {
+      "desc": "用于收货验货时拍照上传凭证"
+    }
+  }
 }

@@ -19,6 +19,15 @@ const statusMap = {
   generated: { text: '已生成', type: 'success' }
 }
 
+// 供货商对订单的确认状态（写在 purchase_order.supplier_confirmations 上）
+const supplierConfirmMap = {
+  pending: { text: '待确认', type: 'warning' },
+  confirmed: { text: '已确认', type: 'success' },
+  shipped: { text: '已发货', type: 'primary' },
+  done: { text: '已收货', type: 'success' },
+  cancelled: { text: '已作废', type: 'grey' }
+}
+
 const reportTypeMap = {
   store_order_report: { label: '门店下单报表', icon: '📋', color: '#1890FF' },
   store_receipt_report: { label: '门店收货报表', icon: '📦', color: '#52C41A' },
@@ -38,4 +47,8 @@ function getReportTypeInfo(type) {
   return reportTypeMap[type] || { label: type || '未知报表', icon: '📄', color: '#999999' }
 }
 
-module.exports = { statusMap, reportTypeMap, getStatusInfo, getReportTypeInfo }
+function getSupplierConfirmInfo(status) {
+  return supplierConfirmMap[status] || { text: status || '未知', type: 'grey' }
+}
+
+module.exports = { statusMap, reportTypeMap, supplierConfirmMap, getStatusInfo, getReportTypeInfo, getSupplierConfirmInfo }

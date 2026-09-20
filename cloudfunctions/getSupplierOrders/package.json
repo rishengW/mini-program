@@ -1,0 +1,9 @@
+{
+  "name": "getSupplierOrders",
+  "version": "1.0.0",
+  "description": "供货商视角的采购订单列表（只含自己供货的明细）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

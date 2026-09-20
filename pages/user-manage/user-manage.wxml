@@ -18,7 +18,7 @@
           </view>
           <view class="item-meta">账　号：{{item.username}}</view>
           <view class="item-meta">状　态：{{item.status === 1 ? '正常' : '停用'}}</view>
-          <view class="item-sub">关联门店：{{item.displayStoreName}}</view>
+          <view class="item-sub">{{item.role === 'supplier' ? '关联供货商' : '关联门店'}}：{{item.displayStoreName}}</view>
         </view>
         <view class="item-actions">
           <view class="action-btn" bindtap="showEditForm" data-item="{{item}}">✏️ 编辑</view>
@@ -95,6 +95,16 @@
             {{form.storeName || '请选择所属门店'}} ▾
           </view>
         </picker>
+      </view>
+
+      <view class="form-group" wx:if="{{form.role === 'supplier'}}">
+        <view class="form-label">关联供货商 *</view>
+        <picker mode="selector" value="{{form.supplierIndex || 0}}" range="{{suppliers}}" range-key="supplierName" bindchange="onSupplierChange">
+          <view class="form-input picker-display">
+            {{form.supplierName || '请选择所属供货商'}} ▾
+          </view>
+        </picker>
+        <view wx:if="{{suppliers.length === 0}}" class="text-sm text-tertiary" style="margin-top:8rpx;">暂无启用中的供货商，请先在供应商管理中创建</view>
       </view>
 
       <view class="btn-group" style="margin-top:40rpx;">

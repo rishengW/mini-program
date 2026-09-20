@@ -24,6 +24,11 @@ Page({
     }
 
     const user = app.globalData.userInfo
+    // 供货商有独立门户，误入门店首页时直接转走
+    if (user && user.role === 'supplier') {
+      wx.reLaunch({ url: '/pages/supplier-home/supplier-home' })
+      return
+    }
     const store = app.globalData.currentStore || {}
 
     const storeId = store.storeId || store.id || ''

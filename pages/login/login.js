@@ -10,7 +10,8 @@ Page({
     roles: [
       { key: 'chef', label: '下单人员', icon: '🍳', defaultUser: 'chef' },
       { key: 'store_manager', label: '店长', icon: '👨‍💼', defaultUser: 'manager' },
-      { key: 'purchaser', label: '管理员', icon: '📊', defaultUser: 'admin_user' }
+      { key: 'purchaser', label: '管理员', icon: '📊', defaultUser: 'admin_user' },
+      { key: 'supplier', label: '供货商', icon: '🚚', defaultUser: 'supplier1' }
     ],
     selectedRole: 'chef'
   },
@@ -74,21 +75,32 @@ Page({
   },
 
   handleLoginSuccess(data) {
-    const { user, store, sessionToken, sessionExpiresAt } = data
+    const { user, store, supplier, sessionToken, sessionExpiresAt } = data
 
     const app = getApp()
     app.globalData.isLoggedIn = true
     app.globalData.userInfo = user
     app.globalData.currentStore = store
+    app.globalData.supplierInfo = supplier || null
     app.globalData.authToken = sessionToken
 
     wx.setStorageSync('userInfo', user)
-    wx.setStorageSync('currentStore', store)
     wx.setStorageSync('authToken', sessionToken)
     wx.setStorageSync('sessionExpiresAt', sessionExpiresAt)
     wx.removeStorageSync('account_history')
 
     util.showSuccess('登录成功')
+    // 供货商没有门店概念，进入独立的供货商门户首页
+    if (user.role === 'supplier') {
+      wx.setStorageSync('supplierInfo', supplier || null)
+      wx.removeStorageSync('currentStore')
+      setTimeout(() => {
+        wx.reLaunch({ url: '/pages/supplier-home/supplier-home' })
+      }, 1000)
+      return
+    }
+    wx.setStorageSync('currentStore', store)
+    wx.removeStorageSync('supplierInfo')
     setTimeout(() => {
       wx.switchTab({ url: '/pages/index/index' })
     }, 1000)

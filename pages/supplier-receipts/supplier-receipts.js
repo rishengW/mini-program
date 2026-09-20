@@ -1,0 +1,66 @@
+// pages/supplier-receipts/supplier-receipts.js
+const util = require('../../utils/util')
+const cloud = require('../../utils/cloud')
+
+Page({
+  data: {
+    items: [],
+    page: 1,
+    pageSize: 20,
+    total: 0,
+    loading: false
+  },
+
+  onShow() {
+    const app = getApp()
+    const user = app.globalData.userInfo || {}
+    if (!app.globalData.isLoggedIn) {
+      wx.redirectTo({ url: '/pages/login/login' })
+      return
+    }
+    if (user.role !== 'supplier') {
+      wx.reLaunch({ url: '/pages/index/index' })
+      return
+    }
+    this.loadReceipts(1, false)
+  },
+
+  onReachBottom() {
+    const { items, total, loading } = this.data
+    if (loading || items.length >= total) return
+    this.loadReceipts(this.data.page + 1, true)
+  },
+
+  async loadReceipts(page, append) {
+    if (this.data.loading) return
+    this.setData({ loading: true })
+    const res = await cloud.callFunction('getSupplierReceipts', {
+      page,
+      pageSize: this.data.pageSize
+    })
+    this.setData({ loading: false })
+    if (!res || res.code !== 0) {
+      util.showToast((res && res.msg) || '收货记录加载失败，请稍后重试')
+      return
+    }
+    const items = (res.data || []).map(item => {
+      const receivedQty = Number(item.received_qty) || 0
+      const orderQty = Number(item.order_qty_snapshot) || 0
+      // 实收与订货不一致或未计价（应付标记关闭）视为异常，红色提示
+      const abnormal = receivedQty !== orderQty || item.payable_flag === false
+      return {
+        ...item,
+        receivedQty,
+        orderQty,
+        priceText: '¥' + (Number(item.price_snapshot) || 0).toFixed(2),
+        amountText: '¥' + (Number(item.amount) || 0).toFixed(2),
+        abnormal
+      }
+    })
+    this.setData({
+      items: append ? this.data.items.concat(items) : items,
+      page,
+      total: res.total || 0
+    })
+  }
+})

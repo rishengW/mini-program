@@ -29,6 +29,14 @@ Page({
 
     const order = cloud.normalizePurchaseOrder(result.data)
     const statusInfo = meta.getStatusInfo(order.orderStatus)
+    // 供货商确认状态：按明细行的 supplierId 挂上确认标签，门店端可见供货进度
+    const confirmations = result.data.supplier_confirmations || {}
+    order.items = (order.items || []).map(item => {
+      const conf = item.supplierId ? confirmations[item.supplierId] : null
+      if (!conf || !conf.status) return item
+      const info = meta.getSupplierConfirmInfo(conf.status)
+      return { ...item, supplierConfirmText: info.text, supplierConfirmType: info.type }
+    })
     const currentUser = app.globalData.userInfo || {}
     const canReceive = currentUser.role !== 'chef' && ['approved', 'report_generated', 'partial_received', 'to_receive'].includes(order.orderStatus)
     const canEdit = order.orderStatus === 'draft' && (

@@ -1,0 +1,49 @@
+<!-- pages/supplier-orders/supplier-orders.wxml -->
+<view class="container">
+  <!-- 状态筛选 tabs -->
+  <scroll-view scroll-x class="tabs-scroll" enhanced show-scrollbar="{{false}}">
+    <view class="tabs">
+      <view wx:for="{{tabs}}" wx:key="key"
+        class="tab-item {{activeTab === item.key ? 'tab-item-active' : ''}}"
+        bindtap="switchTab" data-key="{{item.key}}">
+        {{item.label}}
+        <text wx:if="{{statusCounts[item.key] !== undefined && item.key !== 'all'}}" class="tab-count">{{statusCounts[item.key]}}</text>
+        <text wx:if="{{item.key === 'all' && statusCounts.all !== undefined}}" class="tab-count">{{statusCounts.all}}</text>
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- 订单卡片：只含本供货商的商品明细 -->
+  <view wx:for="{{orders}}" wx:key="purchaseOrderId" class="list-item">
+    <view class="order-header">
+      <view class="order-store">{{item.storeName}}</view>
+      <view class="tag tag-{{item.confirmType}}">{{item.confirmText}}</view>
+    </view>
+    <view class="order-no text-sm text-tertiary">单号: {{item.orderNo}}</view>
+    <view class="order-meta text-sm text-tertiary">
+      下单 {{item.orderDate}} · 期望到货 {{item.deliveryDate}} · 订单状态: {{item.statusText}}
+    </view>
+    <view class="divider"></view>
+    <view wx:for="{{item.items}}" wx:for-item="product" wx:key="itemId" class="order-product">
+      <view class="flex-between">
+        <text>{{product.productNameSnapshot}}</text>
+        <text>×{{product.orderQty}} {{product.unitSnapshot}}</text>
+      </view>
+      <view wx:if="{{product.remark}}" class="text-sm text-tertiary" style="margin-top:4rpx;">备注: {{product.remark}}</view>
+    </view>
+    <view wx:if="{{item.remark}}" class="text-sm text-tertiary" style="margin-top:12rpx;">订单备注: {{item.remark}}</view>
+
+    <!-- 操作区 -->
+    <view wx:if="{{item.canConfirm || item.canShip}}" class="order-actions">
+      <button wx:if="{{item.canConfirm}}" class="btn btn-primary btn-sm" catchtap="confirmOrder" data-id="{{item.purchaseOrderId}}">确认接单</button>
+      <button wx:if="{{item.canShip}}" class="btn btn-success btn-sm" catchtap="shipOrder" data-id="{{item.purchaseOrderId}}">标记已发货</button>
+    </view>
+  </view>
+
+  <view wx:if="{{orders.length === 0 && !loading}}" class="empty-state">
+    <view class="empty-state-icon">📋</view>
+    <view class="empty-state-text">暂无相关订单</view>
+  </view>
+
+  <view wx:if="{{orders.length > 0 && orders.length >= total}}" class="list-footer text-sm text-tertiary">已加载全部 {{total}} 条</view>
+</view>

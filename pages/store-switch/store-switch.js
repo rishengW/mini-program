@@ -7,6 +7,12 @@ Page({
 
   async onLoad() {
     const app = getApp()
+    // 供货商账号没有门店概念，误入时送回供货商门户
+    const user = app.globalData.userInfo || {}
+    if (user.role === 'supplier') {
+      wx.reLaunch({ url: '/pages/supplier-home/supplier-home' })
+      return
+    }
     const currentStore = app.globalData.currentStore
     const result = await cloud.callFunction('authService', {
       action: 'getStores',

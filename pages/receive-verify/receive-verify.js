@@ -118,6 +118,12 @@ Page({
       success: (res) => {
         const newPhotos = res.tempFiles.map(f => f.tempFilePath)
         this.setData({ photos: [...this.data.photos, ...newPhotos] })
+      },
+      fail: (err) => {
+        // 用户拒绝隐私授权或取消选择，仅非主动取消时提示
+        if (err && err.errMsg && !/cancel/i.test(err.errMsg)) {
+          util.showToast('未获得相册/相机权限，无法选择照片')
+        }
       }
     })
   },

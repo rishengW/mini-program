@@ -10,14 +10,16 @@ Page({
     showReset: false,
     resetItem: null,
     resetForm: { newPassword: '', confirmPassword: '' },
-    form: { username: '', name: '', password: '', role: 'chef', roleLabel: '门店下单人员', defaultStoreId: '', storeName: '' },
+    form: { username: '', name: '', password: '', role: 'chef', roleLabel: '门店下单人员', defaultStoreId: '', storeName: '', defaultSupplierId: '', supplierName: '' },
     roles: [
       { key: 'chef', label: '门店下单人员' },
       { key: 'store_manager', label: '店长' },
       { key: 'purchaser', label: '管理员' },
-      { key: 'super_admin', label: '超级管理员' }  
+      { key: 'super_admin', label: '超级管理员' },
+      { key: 'supplier', label: '供货商' }
     ],
-    stores: []
+    stores: [],
+    suppliers: []
   },
 
   onShow() {
@@ -27,17 +29,23 @@ Page({
   async loadData() {
     util.showLoading()
     const app = getApp()
-    const [usersResult, storesResult] = await Promise.all([
+    const [usersResult, storesResult, suppliersResult] = await Promise.all([
       cloud.callFunction('authService', { action: 'listUsers' }),
-      cloud.callFunction('authService', { action: 'getStores' })
+      cloud.callFunction('authService', { action: 'getStores' }),
+      cloud.callFunction('getSuppliers', {})
     ])
     if (usersResult.code === 0 && storesResult.code === 0) {
       const stores = storesResult.data || []
+      const suppliers = (suppliersResult.code === 0 ? suppliersResult.data : []).map(cloud.normalizeSupplier)
       const usersData = usersResult.data.map(u => {
         const store = stores.find(s => s.storeId === u.defaultStoreId)
-        return { ...u, displayStoreName: store ? store.storeName : '全部/无' }
+        const supplier = suppliers.find(s => s.supplierId === u.defaultSupplierId)
+        const displayStoreName = u.role === 'supplier'
+          ? (supplier ? supplier.supplierName : (u.defaultSupplierId || '未关联'))
+          : (store ? store.storeName : '全部/无')
+        return { ...u, displayStoreName }
       })
-      this.setData({ users: usersData, stores })
+      this.setData({ users: usersData, stores, suppliers })
     } else {
       util.showToast(usersResult.msg || storesResult.msg || '账号数据加载失败')
     }
@@ -47,30 +55,35 @@ Page({
   showAddForm() {
     this.setData({
       showAdd: true, editItem: null,
-      form: { username: '', name: '', password: '', role: 'chef', roleLabel: '门店下单人员', defaultStoreId: '', storeName: '' }
+      form: { username: '', name: '', password: '', role: 'chef', roleLabel: '门店下单人员', defaultStoreId: '', storeName: '', defaultSupplierId: '', supplierName: '' }
     })
   },
 
   showEditForm(e) {
     const item = e.currentTarget.dataset.item
     const store = this.data.stores.find(s => s.storeId === item.defaultStoreId)
-    
+    const supplier = this.data.suppliers.find(s => s.supplierId === item.defaultSupplierId)
+
     // Find pre-selected indices for pickers
     const rIdx = this.data.roles.findIndex(r => r.key === item.role)
     const sIdx = this.data.stores.findIndex(s => s.storeId === item.defaultStoreId)
+    const supIdx = this.data.suppliers.findIndex(s => s.supplierId === item.defaultSupplierId)
 
     this.setData({
       showAdd: true, editItem: item,
-      form: { 
-        username: item.username || '', 
-        name: item.name || '', 
+      form: {
+        username: item.username || '',
+        name: item.name || '',
         password: '',
-        role: item.role || 'chef', 
+        role: item.role || 'chef',
         roleLabel: item.roleLabel || '门店下单人员',
         roleIndex: rIdx > -1 ? rIdx : 0,
         defaultStoreId: item.defaultStoreId || '',
         storeName: store ? store.storeName : '',
-        storeIndex: sIdx > -1 ? sIdx : 0
+        storeIndex: sIdx > -1 ? sIdx : 0,
+        defaultSupplierId: item.defaultSupplierId || '',
+        supplierName: supplier ? supplier.supplierName : '',
+        supplierIndex: supIdx > -1 ? supIdx : 0
       }
     })
   },
@@ -144,10 +157,19 @@ Page({
 
   onStoreChange(e) {
     const store = this.data.stores[e.detail.value]
-    this.setData({ 
+    this.setData({
       'form.defaultStoreId': store.storeId,
       'form.storeName': store.storeName,
       'form.storeIndex': e.detail.value
+    })
+  },
+
+  onSupplierChange(e) {
+    const supplier = this.data.suppliers[e.detail.value]
+    this.setData({
+      'form.defaultSupplierId': supplier.supplierId,
+      'form.supplierName': supplier.supplierName,
+      'form.supplierIndex': e.detail.value
     })
   },
 
@@ -164,6 +186,9 @@ Page({
     if (['chef', 'store_manager'].includes(form.role) && !form.defaultStoreId) {
       return util.showToast('请选择所属门店')
     }
+    if (form.role === 'supplier' && !form.defaultSupplierId) {
+      return util.showToast('请选择所属供货商')
+    }
 
     util.showLoading()
     const roleObj = this.data.roles.find(r => r.key === form.role)
@@ -173,7 +198,8 @@ Page({
       password: form.password.trim(),
       role: form.role,
       roleLabel: roleObj ? roleObj.label : form.role,
-      defaultStoreId: ['super_admin', 'purchaser'].includes(form.role) ? null : form.defaultStoreId
+      defaultStoreId: ['chef', 'store_manager'].includes(form.role) ? form.defaultStoreId : null,
+      defaultSupplierId: form.role === 'supplier' ? form.defaultSupplierId : null
     }
 
     const app = getApp()

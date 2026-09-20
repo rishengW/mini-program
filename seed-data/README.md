@@ -26,6 +26,9 @@
 | 下单人员 | `chef` | `Chef@2026` |
 | 店长 | `manager` | `Manager@2026` |
 | 管理员 | `admin_user` | `Purchaser@2026` |
+| 供货商 | `supplier1` | `Supplier@2026` |
+
+> 供货商账号需关联供货商档案（`default_supplier_id`，如 `supplier1` 关联 `SUP001` 绿源蔬菜批发），登录后只能看到自己供货的订单、收货记录与协议价格。
 
 建议在云数据库中建立以下索引，避免重复账号并提升登录查询性能：
 

@@ -222,6 +222,22 @@ async function getFileUrl(fileID) {
   }
 }
 
+// 批量把 fileID 换成临时链接（getTempFileURL 单次最多 50 个，这里按 50 分批）
+async function getFileUrls(fileIDs = []) {
+  const ids = (fileIDs || []).filter(Boolean)
+  if (!wx.cloud || ids.length === 0) return []
+  const urls = []
+  for (let i = 0; i < ids.length; i += 50) {
+    try {
+      const res = await wx.cloud.getTempFileURL({ fileList: ids.slice(i, i + 50) })
+      res.fileList.forEach(f => { if (f && f.tempFileURL) urls.push(f.tempFileURL) })
+    } catch (err) {
+      console.warn('[cloud] 批量获取文件链接失败:', err)
+    }
+  }
+  return urls
+}
+
 module.exports = {
   callFunction,
   formatDateTime,
@@ -232,5 +248,6 @@ module.exports = {
   normalizePrice,
   normalizeReport,
   uploadReceiptPhotos,
-  getFileUrl
+  getFileUrl,
+  getFileUrls
 }
