@@ -42,7 +42,29 @@
 
   <view class="card">
     <view class="card-title">商品清单 ({{detail.items.length}})</view>
-    <view wx:for="{{detail.items}}" wx:key="itemId" class="goods-row {{item.isManual ? 'manual-goods-row' : ''}}">
+    <!-- 非 chef：按供货商分组，组头展示确认状态（S6） -->
+    <block wx:if="{{supplierGroups}}">
+      <block wx:for="{{supplierGroups}}" wx:for-item="group" wx:key="supplierId">
+        <view class="supplier-group-header">
+          <text class="supplier-group-name">🏭 {{group.supplierName}}</text>
+          <text wx:if="{{group.confirmText}}" class="tag tag-{{group.confirmType}}">{{group.confirmText}}</text>
+        </view>
+        <view wx:for="{{group.items}}" wx:key="itemId" class="goods-row {{item.isManual ? 'manual-goods-row' : ''}}">
+          <view class="goods-info">
+            <view class="goods-name">
+              {{item.productNameSnapshot}}
+              <text wx:if="{{item.isManual}}" class="manual-badge">手动</text>
+            </view>
+            <view class="goods-spec text-sm text-tertiary">{{item.categorySnapshot}} · {{item.unitSnapshot}}</view>
+          </view>
+          <view class="goods-qty">
+            <view class="qty-main">×{{item.orderQty}} {{item.unitSnapshot}}</view>
+          </view>
+        </view>
+      </block>
+    </block>
+    <!-- chef：不见供应商身份，平铺 + 逐行标签 -->
+    <view wx:else wx:for="{{detail.items}}" wx:key="itemId" class="goods-row {{item.isManual ? 'manual-goods-row' : ''}}">
       <view class="goods-info">
         <view class="goods-name">
           {{item.productNameSnapshot}}

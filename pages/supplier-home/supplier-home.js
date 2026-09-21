@@ -2,12 +2,17 @@
 const cloud = require('../../utils/cloud')
 const util = require('../../utils/util')
 
+// 微信订阅消息模板 ID：小程序后台申请通过后填入；为空时不拉起授权弹窗
+const NEW_ORDER_TEMPLATE_ID = ''
+
 Page({
   data: {
     supplierName: '',
     contactName: '',
     contactPhone: '',
     userName: '',
+    unreadCount: 0,
+    latestMessage: null,
     stats: [
       { key: 'pending', label: '待确认', icon: '⏰', color: '#FAAD14', value: 0 },
       { key: 'confirmed', label: '已确认', icon: '✅', color: '#52C41A', value: 0 },
@@ -35,6 +40,36 @@ Page({
       userName: user.name || ''
     })
     this.loadStats()
+    this.loadNotice()
+    this.requestNewOrderSubscribe()
+  },
+
+  // 首页通知条：拉取站内消息（新订单下推通知等），显示未读数与最新一条
+  async loadNotice() {
+    const res = await cloud.callFunction('dataService', { action: 'getMessages' })
+    if (!res || res.code !== 0) return
+    const messages = res.data || []
+    const unreadCount = messages.filter(m => !m.read).length
+    const latest = messages[0] || null
+    this.setData({
+      unreadCount,
+      latestMessage: latest ? { title: latest.title, content: latest.content } : null
+    })
+  },
+
+  goMessages() {
+    // 消息中心是 tabBar 页面，navigateTo 无法打开
+    wx.switchTab({ url: '/pages/message/message' })
+  },
+
+  // 新订单微信服务通知：一次性订阅（授权一次可推一条），进门户时静默拉起；
+  // 模板 ID 未配置或用户拒绝都不影响页面功能
+  requestNewOrderSubscribe() {
+    if (!NEW_ORDER_TEMPLATE_ID || !wx.requestSubscribeMessage) return
+    wx.requestSubscribeMessage({
+      tmplIds: [NEW_ORDER_TEMPLATE_ID],
+      complete: () => {} // 拒绝/成功均静默，不打扰操作
+    })
   },
 
   async loadStats() {

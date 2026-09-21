@@ -3,6 +3,7 @@ const cloud = require('wx-server-sdk')
 const crypto = require('crypto')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
+const _ = db.command
 
 function hashToken(token) {
   return crypto.createHash('sha256').update(String(token || '')).digest('hex')
@@ -79,6 +80,22 @@ exports.main = async (event = {}) => {
       .limit(1000)
       .get()
 
+    // S6：明细补充供货商名称，供详情页按供货商分组展示确认状态。
+    // chef 不下发（与下方报表过滤同一信息边界：chef 不见供应商身份）
+    let items = itemsRes.data
+    if (user.role !== 'chef' && items.length) {
+      const supplierIds = [...new Set(items.map(item => item.supplier_id).filter(Boolean))]
+      const supplierNames = {}
+      for (let i = 0; i < supplierIds.length; i += 20) {
+        const supRes = await db.collection('supplier')
+          .where({ supplier_id: _.in(supplierIds.slice(i, i + 20)) })
+          .limit(100)
+          .get()
+        supRes.data.forEach(s => { supplierNames[s.supplier_id] = s.supplier_name })
+      }
+      items = items.map(item => ({ ...item, supplier_name: supplierNames[item.supplier_id] || '' }))
+    }
+
     // 查关联收货记录
     const receiptRes = await db.collection('receipt')
       .where({ purchase_order_id: orderId })
@@ -100,7 +117,7 @@ exports.main = async (event = {}) => {
       data: {
         ...order,
         created_by_name: createdByName,
-        items: itemsRes.data,
+        items,
         receipts: receiptRes.data,
         reports
       }

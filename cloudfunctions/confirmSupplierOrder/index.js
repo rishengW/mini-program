@@ -8,8 +8,9 @@ const db = cloud.database()
 
 // 动作级状态白名单（S1 拍板）：确认接单仍限审批前；标记发货放宽到审批后（report_generated/to_receive），
 // 因为按 B2"先审批后收货"，发货天然发生在内部审批之后。
+// S8 追加：partial_received（部分收货中）也允许补标发货，剩余批次未到前供货商可维持发货标记。
 const CONFIRMABLE_ORDER_STATUS = ['submitted', 'approved']
-const SHIPPABLE_ORDER_STATUS = ['submitted', 'approved', 'report_generated', 'to_receive']
+const SHIPPABLE_ORDER_STATUS = ['submitted', 'approved', 'report_generated', 'to_receive', 'partial_received']
 const ACTION_STATUS = { confirm: 'confirmed', ship: 'shipped' }
 
 function hashToken(token) {

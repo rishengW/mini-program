@@ -10,6 +10,19 @@
     </view>
   </view>
 
+  <!-- 通知条：未读消息（新订单下推等） -->
+  <view wx:if="{{unreadCount > 0 || latestMessage}}" class="notice-bar" bindtap="goMessages">
+    <view class="notice-icon">🔔</view>
+    <view class="notice-content">
+      <view class="notice-title">
+        <text>{{latestMessage ? latestMessage.title : '暂无新消息'}}</text>
+        <view wx:if="{{unreadCount > 0}}" class="notice-badge">{{unreadCount > 99 ? '99+' : unreadCount}}</view>
+      </view>
+      <view wx:if="{{latestMessage}}" class="notice-text text-sm text-tertiary">{{latestMessage.content}}</view>
+    </view>
+    <view class="entry-arrow">▸</view>
+  </view>
+
   <!-- 订单状态统计 -->
   <view class="stats-row">
     <view wx:for="{{stats}}" wx:key="key" class="stat-card" bindtap="goStatPage" data-status="{{item.key}}">

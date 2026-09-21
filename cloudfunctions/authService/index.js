@@ -205,18 +205,20 @@ async function login(event) {
     .filter(s => s && new Date(s.expires_at).getTime() > Date.now())
   sessions.push({ token_hash: hashToken(sessionToken), expires_at: sessionExpiresAt })
   while (sessions.length > 5) sessions.shift()
-  await db.collection(USER_COLLECTION).doc(user._id).update({
-    data: {
-      // session_token_hash 兼容保留（指向最新会话），旧版云函数未重部署时仍可用
-      session_token_hash: hashToken(sessionToken),
-      session_expires_at: sessionExpiresAt,
-      sessions,
-      login_fail_count: 0,
-      login_locked_until: null,
-      last_login_at: db.serverDate(),
-      updated_at: db.serverDate()
-    }
-  })
+  // 记录当前设备 openid（微信订阅消息推送的 touser 需要）；同一微信号多账号登录时以后登录者为准
+  const wxContext = cloud.getWXContext()
+  const loginUpdate = {
+    // session_token_hash 兼容保留（指向最新会话），旧版云函数未重部署时仍可用
+    session_token_hash: hashToken(sessionToken),
+    session_expires_at: sessionExpiresAt,
+    sessions,
+    login_fail_count: 0,
+    login_locked_until: null,
+    last_login_at: db.serverDate(),
+    updated_at: db.serverDate()
+  }
+  if (wxContext && wxContext.OPENID) loginUpdate.openid = wxContext.OPENID
+  await db.collection(USER_COLLECTION).doc(user._id).update({ data: loginUpdate })
 
   return {
     code: 0,

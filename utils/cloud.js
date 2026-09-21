@@ -108,6 +108,7 @@ function normalizePurchaseItem(item = {}) {
     categorySnapshot: item.categorySnapshot || item.category_snapshot || '',
     unitSnapshot: item.unitSnapshot || item.unit_snapshot || item.unit || '',
     supplierId: item.supplierId !== undefined ? item.supplierId : (item.supplier_id || ''),
+    supplierName: item.supplierName || item.supplier_name || '',
     orderQty: item.orderQty !== undefined ? item.orderQty : item.order_qty,
     isManual: item.isManual !== undefined ? item.isManual : !!item.is_manual,
     remark: item.remark || ''

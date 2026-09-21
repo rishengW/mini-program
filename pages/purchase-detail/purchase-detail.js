@@ -29,15 +29,43 @@ Page({
 
     const order = cloud.normalizePurchaseOrder(result.data)
     const statusInfo = meta.getStatusInfo(order.orderStatus)
-    // 供货商确认状态：按明细行的 supplierId 挂上确认标签，门店端可见供货进度
-    const confirmations = result.data.supplier_confirmations || {}
-    order.items = (order.items || []).map(item => {
-      const conf = item.supplierId ? confirmations[item.supplierId] : null
-      if (!conf || !conf.status) return item
-      const info = meta.getSupplierConfirmInfo(conf.status)
-      return { ...item, supplierConfirmText: info.text, supplierConfirmType: info.type }
-    })
     const currentUser = app.globalData.userInfo || {}
+    // S6：供货商确认状态按供货商分组头展示（待确认/已确认/已发货）。
+    // 草稿/驳回/作废单供货商不可见或事已结，不打标签；已完结单与供货商端口径一致记 done。
+    const confirmations = result.data.supplier_confirmations || {}
+    const showConfirm = !['draft', 'rejected', 'cancelled'].includes(order.orderStatus)
+    const isDone = ['received', 'receipt_abnormal', 'completed'].includes(order.orderStatus)
+    const confirmTagOf = supplierId => {
+      if (!showConfirm || !supplierId) return null
+      const status = isDone ? 'done' : ((confirmations[supplierId] || {}).status || 'pending')
+      return meta.getSupplierConfirmInfo(status)
+    }
+    let supplierGroups = null
+    if (currentUser.role === 'chef') {
+      // chef 不见供应商身份（后端不下发供货商名称）：维持平铺，逐行标签
+      order.items = (order.items || []).map(item => {
+        const tag = confirmTagOf(item.supplierId)
+        if (!tag) return item
+        return { ...item, supplierConfirmText: tag.text, supplierConfirmType: tag.type }
+      })
+    } else {
+      const groups = {}
+      ;(order.items || []).forEach(item => {
+        const sid = item.supplierId || ''
+        if (!groups[sid]) {
+          const tag = confirmTagOf(sid)
+          groups[sid] = {
+            supplierId: sid,
+            supplierName: item.supplierName || (sid ? sid : '未指定供应商'),
+            confirmText: tag ? tag.text : '',
+            confirmType: tag ? tag.type : '',
+            items: []
+          }
+        }
+        groups[sid].items.push(item)
+      })
+      supplierGroups = Object.values(groups)
+    }
     const canReceive = currentUser.role !== 'chef' && ['approved', 'report_generated', 'partial_received', 'to_receive'].includes(order.orderStatus)
     const canEdit = order.orderStatus === 'draft' && (
       ['super_admin', 'purchaser'].includes(currentUser.role) ||
@@ -53,6 +81,7 @@ Page({
     const canForceCancel = cancelEligible && currentUser.role === 'super_admin'
     this.setData({
       detail: { ...order, statusText: statusInfo.text, statusType: statusInfo.type },
+      supplierGroups,
       canReceive,
       canEdit,
       canCopy,

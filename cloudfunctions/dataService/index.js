@@ -193,6 +193,9 @@ async function createMessage(data) {
       biz_id: data.bizId || '',
       recipient_user_id: data.recipientUserId || '',
       store_id: data.storeId || '',
+      // 供货商定向消息（S3 补充口径）：scope_type=supplier + scope_id=供应商档案ID
+      scope_type: data.scopeType || '',
+      scope_id: data.scopeId || '',
       read: false,
       read_by: [],
       created_at: db.serverDate()
@@ -211,6 +214,111 @@ async function getStoreManagerId(storeId) {
   } catch (err) {
     console.warn('[dataService] 查询门店店长失败，消息回退门店广播:', err)
     return ''
+  }
+}
+
+// ===== 审核通过 → 通知供货商（新订单下推） =====
+// 订阅消息模板配置：小程序后台申请通过后填入 TEMPLATE_ID 即可真实下发；
+// TEMPLATE_ID 为空时只记日志、不发送（站内通知不受影响，作为兜底触达）。
+const SUBSCRIBE_TEMPLATE_ID = ''
+// 模板字段（一次订阅一条）：按申请到的模板 keywords 配置，值从 payload 取
+const SUBSCRIBE_TEMPLATE_FIELDS = [
+  { key: 'orderNo', index: 1 },
+  { key: 'storeName', index: 2 },
+  { key: 'items', index: 3 },
+  { key: 'amount', index: 4 }
+]
+
+// 查询某供货商所有启用账号（含 openid），用于订阅消息推送
+async function getSupplierUsers(supplierId) {
+  if (!supplierId) return []
+  try {
+    const res = await db.collection('app_user')
+      .where({ role: 'supplier', default_supplier_id: supplierId, status: 1 })
+      .limit(20)
+      .get()
+    return res.data.filter(u => u.openid)
+  } catch (err) {
+    console.warn('[dataService] 查询供货商账号失败，跳过微信推送:', err)
+    return []
+  }
+}
+
+// 发送微信订阅消息（尽力而为：无模板/无授权/发送失败都只记日志，不阻断主流程）
+async function sendSubscribeMessage(user, payload) {
+  if (!SUBSCRIBE_TEMPLATE_ID) {
+    console.log('[dataService] 订阅消息模板未配置，跳过推送（站内通知已写）', payload.orderNo)
+    return
+  }
+  const dataValue = value => ({ value: String(value || '') })
+  const data = {}
+  SUBSCRIBE_TEMPLATE_FIELDS.forEach(f => { data['thing' + f.index] = dataValue(payload[f.key]) })
+  try {
+    await cloud.openapi.subscribeMessage.send({
+      touser: user.openid,
+      templateId: SUBSCRIBE_TEMPLATE_ID,
+      page: 'pages/supplier-orders/supplier-orders',
+      data,
+      miniprogramState: 'formal'
+    })
+  } catch (err) {
+    // 43101 = 用户未订阅/订阅次数用尽，属预期情况，降级为 debug 日志
+    if (err && err.errCode === 43101) {
+      console.log('[dataService] 用户未订阅订阅消息，跳过推送:', user.username)
+    } else {
+      console.error('[dataService] 订阅消息推送失败:', user.username, err)
+    }
+  }
+}
+
+// 审核通过后按供货商分组下推通知：站内消息（scope_type=supplier）+ 微信订阅消息
+async function notifySuppliersNewOrder(order, orderItems) {
+  const supplierMap = {}
+  orderItems.forEach(item => {
+    const sid = item.supplier_id || ''
+    if (!sid) return
+    // 下单明细无价格字段（价格快照在收货时才生成），摘要只报项数不报金额
+    supplierMap[sid] = (supplierMap[sid] || 0) + 1
+  })
+  const supplierIds = Object.keys(supplierMap)
+  if (!supplierIds.length) return
+
+  // 补齐供应商名称（消息里展示）
+  const nameRes = await db.collection('supplier')
+    .where({ supplier_id: _.in(supplierIds) })
+    .limit(100)
+    .get()
+  const nameById = {}
+  nameRes.data.forEach(s => { nameById[s.supplier_id] = s.supplier_name })
+
+  for (const supplierId of supplierIds) {
+    const itemCount = supplierMap[supplierId]
+    const supplierName = nameById[supplierId] || supplierId
+    const title = '您有新的采购订单'
+    const content = `${order.store_name || ''}的采购单 ${order.order_no || order.purchase_order_id} 已审核通过，共 ${itemCount} 项商品，请确认接单。`
+    // 站内通知：供货商门户消息中心可见（兜底触达，必写）
+    try {
+      await createMessage({
+        type: 'order',
+        title,
+        content,
+        bizId: order.purchase_order_id,
+        scopeType: 'supplier',
+        scopeId: supplierId
+      })
+    } catch (err) {
+      console.error('[dataService] 供货商站内通知写入失败:', supplierId, err)
+    }
+    // 微信服务通知：订阅授权次数内推送
+    const users = await getSupplierUsers(supplierId)
+    for (const user of users) {
+      await sendSubscribeMessage(user, {
+        orderNo: order.order_no || order.purchase_order_id,
+        storeName: order.store_name || '',
+        items: `${itemCount} 项商品`,
+        amount: ''
+      })
+    }
   }
 }
 
@@ -241,7 +349,8 @@ async function getNextVersion(reportType, scopeId, relatedDate) {
 // 新版本按审核后数量生成。尽力而为：审核事务已提交，报表失败只记日志并返回警告。
 // S2 拍板：数量已变，旧确认口径作废——清除该单所有供货商的确认状态（打回待确认），
 // 并发内部消息提醒采购经办人线下通知供应商重新确认。
-async function regenerateApprovedOrderReports(order, orderItems, qtyMap) {
+// qtyChanged=false（缺报表补生成）时跳过确认重置，避免误发"改量"消息。
+async function regenerateApprovedOrderReports(order, orderItems, qtyMap, qtyChanged = true) {
   const items = orderItems.map(item => ({
     productName: item.product_name_snapshot,
     category: item.category_snapshot || '',
@@ -255,8 +364,8 @@ async function regenerateApprovedOrderReports(order, orderItems, qtyMap) {
   const orderDate = order.order_date
   const orderNo = order.purchase_order_id
 
-  // 重置供货商确认状态（有确认记录才清，避免无谓写操作）
-  if (order.supplier_confirmations && Object.keys(order.supplier_confirmations).length) {
+  // 重置供货商确认状态（仅改量时；有确认记录才清，避免无谓写操作）
+  if (qtyChanged && order.supplier_confirmations && Object.keys(order.supplier_confirmations).length) {
     const confirmedSuppliers = Object.keys(order.supplier_confirmations)
     await db.collection('purchase_order').doc(order._id).update({
       data: { supplier_confirmations: _.set({}), updated_at: db.serverDate() }
@@ -419,6 +528,14 @@ async function auditOrder(event) {
       reportWarning = '审核已通过，但下单报表重算失败，请联系管理员处理。'
     }
   }
+  // 审核通过 → 下推供货商通知（站内必写 + 微信订阅消息尽力推送，失败不阻断）
+  if (event.status === 'approved') {
+    try {
+      await notifySuppliersNewOrder(order, itemResult.data)
+    } catch (err) {
+      console.error('[dataService] 供货商新订单通知失败:', err)
+    }
+  }
   return { code: 0, data: { reportWarning } }
 }
 
@@ -446,7 +563,10 @@ async function getMessages(event) {
     { recipient_user_id: _.exists(false) }
   ])
   let query = recipientCondition
-  if (!GLOBAL_ROLES.includes(auth.user.role)) {
+  if (auth.user.role === 'supplier') {
+    // 供货商消息按供货商档案定向（不绑门店）：只收 scope_type=supplier 且 scope_id 匹配的消息
+    query = _.and([recipientCondition, { scope_type: 'supplier', scope_id: auth.user.default_supplier_id || '' }])
+  } else if (!GLOBAL_ROLES.includes(auth.user.role)) {
     const storeCondition = _.or([
       { store_id: '' },
       { store_id: auth.user.default_store_id || '' },
@@ -815,7 +935,7 @@ async function regenerateOrderReports(event) {
     if (key) qtyMap[key] = Number(item.order_qty) || 0
   })
 
-  await regenerateApprovedOrderReports(order, orderItems, qtyMap)
+  await regenerateApprovedOrderReports(order, orderItems, qtyMap, false)
 
   // 补生成成功后清除缺报表标记
   await db.collection('purchase_order')
