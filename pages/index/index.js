@@ -13,7 +13,8 @@ Page({
     recentOrders: [],
     recentReports: [],
     isSuperAdmin: false,
-    isManager: false
+    isManager: false,
+    unreadMsg: 0
   },
 
   async onShow() {
@@ -96,11 +97,17 @@ Page({
       roleLabel: user.roleLabel || user.role,
       isSuperAdmin: user.role === 'super_admin',
       isManager: ['super_admin', 'purchaser'].includes(user.role),
+      unreadMsg,
       stats, recentOrders, recentReports
     })
   },
 
   goStore() { wx.navigateTo({ url: '/pages/store-switch/store-switch' }) },
+
+  // 顶部铃铛入口：进消息中心（tabBar 页面需用 switchTab）
+  goMessages() {
+    wx.switchTab({ url: '/pages/message/message' })
+  },
 
   goAccount() { wx.navigateTo({ url: '/pages/account/account' }) },
 

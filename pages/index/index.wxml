@@ -10,6 +10,10 @@
       </view>
     </view>
     <view class="store-actions">
+      <view class="bell-entry" bindtap="goMessages">
+        <image class="bell-icon" src="/assets/icons/{{unreadMsg > 0 ? 'bell-active' : 'bell'}}.png" mode="aspectFit" />
+        <view wx:if="{{unreadMsg > 0}}" class="bell-badge">{{unreadMsg > 99 ? '99+' : unreadMsg}}</view>
+      </view>
       <view class="store-action" bindtap="goAccount">
         <text>🔒 密码设置</text>
       </view>

@@ -91,6 +91,35 @@ exports.main = async (event = {}) => {
     }
     await db.collection('purchase_order').doc(order._id).update({ data: updateData })
 
+    // 发货时向订单所属门店写站内消息（biz_id 关联采购单号，消息中心可跳单据详情）
+    if (action === 'ship') {
+      try {
+        const supRes = await db.collection('supplier')
+          .where({ supplier_id: supplierId })
+          .limit(1)
+          .get()
+        const supplierName = (supRes.data[0] && supRes.data[0].supplier_name) || supplierId
+        await db.collection('message').add({
+          data: {
+            message_id: 'MSG' + Date.now() + Math.floor(Math.random() * 1000),
+            type: 'order',
+            title: '供货商已发货',
+            content: `${supplierName}已对采购单 ${order.order_no || orderId} 标记发货，请留意收货。`,
+            biz_id: orderId,
+            recipient_user_id: '',
+            store_id: order.store_id || '',
+            scope_type: '',
+            scope_id: '',
+            read: false,
+            read_by: [],
+            created_at: db.serverDate()
+          }
+        })
+      } catch (err) {
+        console.error('[confirmSupplierOrder] 发货通知写入失败:', err)
+      }
+    }
+
     return { code: 0, data: { orderId, supplierId, status } }
   } catch (err) {
     console.error('[confirmSupplierOrder] 供货商确认操作失败:', err)

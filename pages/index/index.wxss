@@ -27,6 +27,29 @@
 }
 .store-action + .store-action { margin-top: 12rpx; }
 
+/* 未读消息铃铛入口 */
+.bell-entry {
+  position: relative;
+  margin-bottom: 12rpx;
+  align-self: flex-end;
+}
+.bell-icon { width: 48rpx; height: 48rpx; display: block; }
+.bell-badge {
+  position: absolute;
+  top: -10rpx;
+  right: -14rpx;
+  min-width: 30rpx;
+  height: 30rpx;
+  padding: 0 8rpx;
+  border-radius: 15rpx;
+  background: #FF4D4F;
+  color: #ffffff;
+  font-size: 20rpx;
+  line-height: 30rpx;
+  text-align: center;
+  box-sizing: border-box;
+}
+
 /* 数据概览 */
 .stats-row {
   display: flex;
