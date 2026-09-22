@@ -4,7 +4,7 @@ const util = require('../../utils/util')
 const cloud = require('../../utils/cloud')
 
 Page({
-  data: { detail: { items: [] }, canReceive: false, canEdit: false, canCancel: false },
+  data: { detail: { items: [] }, canReceive: false, canEdit: false, canCancel: false, voucherImages: [] },
 
   onLoad(options = {}) {
     this.orderId = options.id || options.orderId || ''
@@ -84,11 +84,18 @@ Page({
     const isManualOrder = !!order.isManual
     const verifyStatus = order.verifyStatus || ''
     const canSubmitVoucher = isManualOrder &&
+      ['store_manager', 'purchaser', 'super_admin'].includes(currentUser.role) &&
       ['received', 'receipt_abnormal', 'partial_received'].includes(order.orderStatus) &&
       ['none', 'rejected'].includes(verifyStatus)
     const canVerify = isManualOrder && verifyStatus === 'pending' &&
       ['purchaser', 'super_admin'].includes(currentUser.role)
+    // 凭证图片转临时链接，核销人核对凭证时可见
+    let voucherImages = []
+    if (order.verifyVoucherFileIds && order.verifyVoucherFileIds.length) {
+      voucherImages = await cloud.getFileUrls(order.verifyVoucherFileIds)
+    }
     this.setData({
+      voucherImages,
       detail: { ...order, statusText: statusInfo.text, statusType: statusInfo.type },
       supplierGroups,
       canReceive,
@@ -140,6 +147,15 @@ Page({
       util.hideLoading()
       util.showToast('凭证上传失败，请重试')
     }
+  },
+
+  // S9：点击放大查看凭证图片
+  previewVoucher(e) {
+    const idx = e.currentTarget.dataset.index
+    wx.previewImage({
+      urls: this.data.voucherImages,
+      current: this.data.voucherImages[idx]
+    })
   },
 
   // S9：管理员核销——通过回填实付金额 / 驳回重传

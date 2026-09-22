@@ -31,6 +31,7 @@ Page({
 
   async onLoad(options = {}) {
     this.editingOrderId = options.orderId || options.id || ''
+    this.manualOrderId = '' // 拆单时已建的手动商品专用单号，重试/再保存时沿用避免重复建单
     const now = new Date()
     const today = util.formatDate(now)
     const tmr = new Date(now.getTime() + 86400000)
@@ -350,21 +351,33 @@ Page({
         util.showToast((catalogResult && catalogResult.msg) || '采购单提交失败')
         return
       }
-      result = await cloud.callFunction('createPurchaseOrder', buildPayload(toPayloadItems(this.data.manualItems)))
-      if (!result || result.code !== 0) {
-        // 档案单已成功、手动单失败：提示用户手动单可重试，避免重复提交档案单
+      // 档案单已落库：消费掉草稿单号并清空档案商品数量，
+      // 此后本页任何重试都只提交手动商品单，不会重复创建档案单
+      const catalogOrderNo = (catalogResult.data && catalogResult.data.orderId) || this.editingOrderId || ''
+      this.editingOrderId = ''
+      this._qtyMap = {}
+      this.filterProducts()
+      const manualResult = await cloud.callFunction('createPurchaseOrder', buildPayload(toPayloadItems(this.data.manualItems), this.manualOrderId || undefined))
+      if (!manualResult || manualResult.code !== 0) {
         util.hideLoading()
         this.setData({ isSubmitting: false })
+        const reason = (manualResult && manualResult.msg) || '未知错误'
         wx.showModal({
           title: '部分提交成功',
-          content: '商品采购单已提交，但手动商品单提交失败（' + ((result && result.msg) || '未知错误') + '）。请重新进入本页单独提交手动商品，勿重复提交商品单。',
+          content: orderStatus === 'draft'
+            ? `商品草稿已保存（${catalogOrderNo}），但手动商品草稿保存失败（${reason}）。手动商品仍保留在本页，直接再次点击「存草稿」即可，不会重复创建商品草稿。`
+            : `商品采购单已提交（${catalogOrderNo}），但手动商品单提交失败（${reason}）。手动商品仍保留在本页，直接再次点击「提交」即可，不会重复创建商品采购单。`,
           showCancel: false
         })
         return
       }
-      result = { code: 0, data: { ...(catalogResult.data || {}), splitOrder: true } }
+      this.manualOrderId = (manualResult.data && manualResult.data.orderId) || ''
+      const warnings = [catalogResult.data && catalogResult.data.reportWarning, manualResult.data && manualResult.data.reportWarning].filter(Boolean)
+      result = { code: 0, data: { ...(catalogResult.data || {}), splitOrder: true, reportWarning: warnings.join('；') || undefined } }
     } else {
-      result = await cloud.callFunction('createPurchaseOrder', buildPayload(toPayloadItems(allItems), this.editingOrderId || undefined))
+      // 拆单部分失败后的重试 / 纯手动单再次保存：沿用已建手动单号，避免重复建单
+      const reuseId = this.editingOrderId || this.manualOrderId || undefined
+      result = await cloud.callFunction('createPurchaseOrder', buildPayload(toPayloadItems(allItems), reuseId))
     }
 
     util.hideLoading()

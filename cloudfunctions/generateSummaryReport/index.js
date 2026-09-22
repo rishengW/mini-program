@@ -177,6 +177,8 @@ exports.main = async (event = {}) => {
     // 按供应商+商品聚合（同一商品多供应商时分行体现）
     const productMap = {}
     items.forEach(item => {
+      // S9：手动行无协议价（金额走凭证核销），不计入汇总金额口径
+      if (item.is_manual) return
       const pid = item.product_id || 'unknown'
       const sid = item.supplier_id || ''
       const key = sid + '|' + pid

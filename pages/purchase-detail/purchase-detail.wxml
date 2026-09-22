@@ -91,8 +91,12 @@
       <text wx:elif="{{verifyStatus === 'rejected'}}" class="tag tag-danger">凭证被驳回，请重新提交</text>
       <text wx:else class="tag tag-info">待提交凭证</text>
     </view>
+    <view wx:if="{{voucherImages.length}}" class="voucher-list">
+      <image wx:for="{{voucherImages}}" wx:key="*this" src="{{item}}" mode="aspectFill" class="voucher-img" bindtap="previewVoucher" data-index="{{index}}" />
+    </view>
     <view wx:if="{{detail.verifyAmount}}" class="text-sm" style="margin-top:8rpx;">实付金额：¥{{detail.verifyAmount}}</view>
     <view wx:if="{{detail.verifyNote}}" class="text-sm text-tertiary" style="margin-top:8rpx;">备注：{{detail.verifyNote}}</view>
+    <view wx:if="{{verifyStatus === 'rejected' && detail.verifyRejectNote}}" class="text-sm" style="margin-top:8rpx;color:#FF4D4F;">驳回原因：{{detail.verifyRejectNote}}</view>
   </view>
 
   <view wx:if="{{canEdit}}" class="bottom-actions">

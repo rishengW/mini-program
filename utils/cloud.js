@@ -136,6 +136,8 @@ function normalizePurchaseOrder(order = {}) {
     verifyStatus: order.verifyStatus || order.verify_status || '',
     verifyAmount: order.verifyAmount || order.verify_amount || '',
     verifyNote: order.verifyNote || order.verify_note || '',
+    verifyRejectNote: order.verifyRejectNote || order.verify_reject_note || '',
+    verifyVoucherFileIds: order.verifyVoucherFileIds || order.verify_voucher_file_ids || [],
     cancelRequested: !!(order.cancelRequested || order.cancel_requested),
     createdAt: formatDateTime(order.createdAt || order.created_at),
     submittedAt: formatDateTime(order.submittedAt || order.submitted_at || order.createdAt || order.created_at),

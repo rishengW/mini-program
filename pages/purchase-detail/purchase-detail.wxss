@@ -129,6 +129,21 @@
   padding-left: 16rpx;
 }
 
+/* S9：凭证图片 */
+.voucher-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  margin-top: 16rpx;
+}
+
+.voucher-img {
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: 8rpx;
+  border: 1rpx solid #F0F0F0;
+}
+
 /* 底部操作 */
 .bottom-actions {
   display: flex;

@@ -7,6 +7,8 @@ const _ = db.command
 
 const GLOBAL_ROLES = ['super_admin', 'purchaser']
 const MANAGEMENT_ROLES = ['super_admin', 'purchaser']
+// S9 凭证提交：店长是线下持凭证的人，可提交；核销裁决仍限管理员/采购员
+const VOUCHER_SUBMIT_ROLES = ['super_admin', 'purchaser', 'store_manager']
 
 function hashToken(token) {
   return crypto.createHash('sha256').update(String(token || '')).digest('hex')
@@ -385,7 +387,9 @@ async function regenerateApprovedOrderReports(order, orderItems, qtyMap, qtyChan
 
   // 门店下单报表（审核后数量）
   const storeVer = await getNextVersion('store_order_report', storeId, orderDate)
-  const csv1Info = [csvField('采购单号'), csvField(orderNo), csvField('门店'), csvField(storeName), csvField('下单日期'), csvField(orderDate), csvField('期望到货'), csvField(order.delivery_date || ''), csvField('经办人'), csvField(order.created_by_name || ''), csvField('备注'), csvField('审核后重发')].join(',') + '\n'
+  // S9：手动单重发的报表同样打标，与提交时生成的口径一致
+  const manualTag = order.is_manual ? [csvField('单据类型'), csvField('手动商品专用单（线下采购，凭证核销）')].join(',') + '\n' : ''
+  const csv1Info = manualTag + [csvField('采购单号'), csvField(orderNo), csvField('门店'), csvField(storeName), csvField('下单日期'), csvField(orderDate), csvField('期望到货'), csvField(order.delivery_date || ''), csvField('经办人'), csvField(order.created_by_name || ''), csvField('备注'), csvField('审核后重发')].join(',') + '\n'
   let csv1 = csv1Info + [csvField('商品名称'), csvField('分类'), csvField('单位'), csvField('下单数量'), csvField('备注')].join(',') + '\n'
   items.forEach(item => {
     csv1 += [csvField(item.productName), csvField(item.category), csvField(item.unit), csvField(item.orderQty), csvField(item.remark)].join(',') + '\n'
@@ -1220,10 +1224,11 @@ async function requestCancel(event) {
 // 付款凭证并回填实付金额（verify_amount）后核销通过，单据闭环。金额唯一可信来源
 // 是凭证，不查协议价表（手动商品无档案、无供应商归属）。
 async function verifyManualOrder(event) {
-  const auth = await requireUser(event, GLOBAL_ROLES)
+  const action = String(event.verifyAction || '') // submit | approve | reject
+  // 权限分两段：提交凭证店长/采购员/管理员；核销裁决仅采购员/管理员
+  const auth = await requireUser(event, action === 'submit' ? VOUCHER_SUBMIT_ROLES : GLOBAL_ROLES)
   if (auth.error) return auth.error
   const orderId = String(event.orderId || '').trim()
-  const action = String(event.verifyAction || '') // submit | approve | reject
   const amount = Number(event.amount)
   const voucherFileIds = Array.isArray(event.voucherFileIds) ? event.voucherFileIds.filter(Boolean) : []
   const note = String(event.note || '').trim()
@@ -1232,6 +1237,10 @@ async function verifyManualOrder(event) {
   const order = orderRes.data[0]
   if (!order) return { code: -1, msg: '采购订单不存在' }
   if (!order.is_manual) return { code: -1, msg: '仅手动商品专用单需要凭证核销' }
+  // 店长只能操作本门店的单
+  if (auth.user.role === 'store_manager' && order.store_id !== auth.user.default_store_id) {
+    return { code: -403, msg: '无权操作其他门店的采购订单' }
+  }
 
   // 提交凭证：店长/采购员/管理员均可；订单须已收货（received/receipt_abnormal/partial_received）
   if (action === 'submit') {
@@ -1240,39 +1249,66 @@ async function verifyManualOrder(event) {
     }
     if (order.verify_status === 'approved') return { code: -1, msg: '该单已核销通过，无需重复提交' }
     if (voucherFileIds.length === 0) return { code: -1, msg: '请上传付款证明或发票' }
-    await db.collection('purchase_order').doc(order._id).update({
-      data: {
-        verify_status: 'pending',
-        verify_voucher_file_ids: voucherFileIds,
-        verify_note: note,
-        verify_submitted_by: auth.user.user_id || auth.user._id,
-        verify_submitted_at: db.serverDate(),
-        updated_at: db.serverDate()
+    // 条件更新兜底并发：已核销的单不允许被重传盖回待核销
+    const submitRes = await db.collection('purchase_order')
+      .where({ _id: order._id, verify_status: _.neq('approved') })
+      .update({
+        data: {
+          verify_status: 'pending',
+          verify_voucher_file_ids: voucherFileIds,
+          verify_note: note,
+          verify_submitted_by: auth.user.user_id || auth.user._id,
+          verify_submitted_at: db.serverDate(),
+          updated_at: db.serverDate()
+        }
+      })
+    if (!submitRes.stats || submitRes.stats.updated === 0) {
+      return { code: -1, msg: '该单已核销通过，无需重复提交' }
+    }
+    // 被替换掉的旧凭证图从云存储清掉，避免驳回重传堆积孤儿文件
+    const oldFileIds = Array.isArray(order.verify_voucher_file_ids) ? order.verify_voucher_file_ids : []
+    const staleFileIds = oldFileIds.filter(id => id && !voucherFileIds.includes(id))
+    if (staleFileIds.length) {
+      try {
+        await cloud.deleteFile({ fileList: staleFileIds })
+      } catch (err) {
+        console.error('[verifyManualOrder] 清理旧凭证文件失败:', err)
       }
-    })
+    }
     return { code: 0, data: { message: '凭证已提交，等待管理员核销' } }
   }
 
-  // 核销裁决：仅管理员
+  // 核销裁决：仅管理员/采购员；条件更新保证只有 pending 状态可被裁决，防止并发重复核销
   if (!['approve', 'reject'].includes(action)) return { code: -1, msg: '无效的核销动作' }
   if (order.verify_status !== 'pending') return { code: -1, msg: '该单没有待核销的凭证' }
   if (action === 'reject') {
-    await db.collection('purchase_order').doc(order._id).update({
-      data: { verify_status: 'rejected', verify_note: note, updated_at: db.serverDate() }
-    })
+    const rejectRes = await db.collection('purchase_order')
+      .where({ _id: order._id, verify_status: 'pending' })
+      .update({
+        // 驳回原因单独存 verify_reject_note，重传的备注不覆盖核销人写的驳回原因
+        data: { verify_status: 'rejected', verify_reject_note: note, updated_at: db.serverDate() }
+      })
+    if (!rejectRes.stats || rejectRes.stats.updated === 0) {
+      return { code: -1, msg: '该单核销状态已变化，请刷新后重试' }
+    }
     return { code: 0, data: { message: '已驳回，请门店重新提交凭证' } }
   }
   if (!Number.isFinite(amount) || amount <= 0) return { code: -1, msg: '请填写大于0的实付金额' }
-  await db.collection('purchase_order').doc(order._id).update({
-    data: {
-      verify_status: 'approved',
-      verify_amount: amount,
-      verify_note: note,
-      verified_by: auth.user.user_id || auth.user._id,
-      verified_at: db.serverDate(),
-      updated_at: db.serverDate()
-    }
-  })
+  const approveRes = await db.collection('purchase_order')
+    .where({ _id: order._id, verify_status: 'pending' })
+    .update({
+      data: {
+        verify_status: 'approved',
+        verify_amount: amount,
+        verify_note: note,
+        verified_by: auth.user.user_id || auth.user._id,
+        verified_at: db.serverDate(),
+        updated_at: db.serverDate()
+      }
+    })
+  if (!approveRes.stats || approveRes.stats.updated === 0) {
+    return { code: -1, msg: '该单核销状态已变化，请刷新后重试' }
+  }
   return { code: 0, data: { message: '核销完成，实付金额已回填' } }
 }
 
