@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>酒店门店采购全流程</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #fff; color: #333; padding: 32px 40px;
+  }
+  h1 { text-align: center; font-size: 26px; margin-bottom: 8px; }
+  .subtitle { text-align: center; font-size: 12px; color: #999; margin-bottom: 28px; }
+
+  .lanes { display: flex; gap: 12px; align-items: stretch; }
+  .lane { flex: 1; border-radius: 10px; padding: 16px 14px 20px; min-width: 0; }
+  .lane-title { text-align: center; font-size: 15px; font-weight: 700; padding-bottom: 10px; margin-bottom: 14px; border-bottom: 2px solid; }
+  .lane-store  { background: #F3F9FF; } .lane-store  .lane-title { color: #1677FF; border-color: #1677FF; }
+  .lane-admin  { background: #F6FCF3; } .lane-admin  .lane-title { color: #52C41A; border-color: #52C41A; }
+  .lane-supplier { background: #FBF3FF; } .lane-supplier .lane-title { color: #722ED1; border-color: #722ED1; }
+  .lane-system { background: #FFF9EF; } .lane-system .lane-title { color: #FA8C16; border-color: #FA8C16; }
+
+  .node {
+    background: #fff; border: 1px solid #E5E5E5; border-radius: 8px;
+    padding: 10px 12px; margin-bottom: 22px; position: relative; font-size: 12px;
+  }
+  .node-title { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+  .node ul { padding-left: 16px; color: #666; line-height: 1.6; }
+  .node .hl { color: #FA541C; font-weight: 600; }
+  .node.manual { border-color: #FA8C16; background: #FFFDF7; }
+  .arrow { text-align: center; color: #BBB; font-size: 14px; margin: -12px 0 6px; }
+
+  .pill {
+    display: inline-block; font-size: 11px; padding: 1px 10px; border-radius: 10px;
+    margin: 4px 4px 0 0; border: 1px solid;
+  }
+  .pill-blue   { color: #1677FF; border-color: #91CAFF; background: #F0F7FF; }
+  .pill-green  { color: #52C41A; border-color: #B7EB8F; background: #F6FFED; }
+  .pill-red    { color: #FF4D4F; border-color: #FFA39E; background: #FFF1F0; }
+  .pill-orange { color: #FA8C16; border-color: #FFD591; background: #FFF7E6; }
+  .pill-purple { color: #722ED1; border-color: #D3ADF7; background: #F9F0FF; }
+  .pill-grey   { color: #888; border-color: #DDD; background: #FAFAFA; }
+
+  .legend {
+    margin-top: 20px; border-top: 1px solid #EEE; padding-top: 14px;
+    font-size: 12px; color: #666; line-height: 2;
+  }
+  .legend b { color: #333; margin-right: 8px; }
+</style>
+</head>
+<body>
+
+<h1>酒店门店采购全流程</h1>
+<div class="subtitle">角色泳道 · 订单状态流转 · 报表自动生成（小程序端 · 2026-09-22 · 含 S1–S9 全部拍板 · S9 手动商品专用单：强制拆单 + 凭证核销）</div>
+
+<div class="lanes">
+
+  <!-- 门店 -->
+  <div class="lane lane-store">
+    <div class="lane-title">门店（厨师 / 店长）</div>
+    <div class="node" style="background:#F5F5F5;border:none;text-align:center;">开始</div>
+    <div class="arrow">↓</div>
+    <div class="node">
+      <div class="node-title">创建采购单</div>
+      <ul>
+        <li>选商品、填数量与备注</li>
+        <li>可保存为草稿反复编辑</li>
+        <li>可手填手动商品（每单限 5 个）</li>
+        <li class="hl">S9：手动商品必须单独成单，不可与档案商品混单</li>
+      </ul>
+    </div>
+    <div class="pill pill-grey">状态：草稿 draft</div>
+    <div class="arrow">↓</div>
+    <div class="node">
+      <div class="node-title">提交采购申请</div>
+      <ul><li>厨师 / 店长提交，提交后不可再编辑</li></ul>
+    </div>
+    <div class="pill pill-blue">状态：已提交 submitted</div>
+    <div class="arrow">↓</div>
+    <div class="node">
+      <div class="node-title">跟踪供货进度</div>
+      <ul>
+        <li>订单详情按供货商分组展示</li>
+        <li>待确认 / 已确认 / 已发货（S6）</li>
+        <li>首页铃铛未读标，消息中心收「供货商已发货」通知</li>
+        <li>厨师不见供应商名称，仅状态标签</li>
+      </ul>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="node">
+      <div class="node-title">收货验货</div>
+      <ul>
+        <li>店长 / 采购员验收（厨师无资格），支持分批收货</li>
+        <li>可拍照上传凭证，标记异常行（少货 / 质量 / 逆错）</li>
+        <li class="hl">手动单收货：无价不标异常（S9，预期行为）</li>
+      </ul>
+    </div>
+    <div>
+      <span class="pill pill-orange">部分收货</span>
+      <span class="pill pill-green">已收货</span>
+      <span class="pill pill-red">收货异常</span>
+    </div>
+    <div class="arrow" style="margin-top:10px;">↓（仅手动单）</div>
+    <div class="node manual">
+      <div class="node-title">🧾 上传付款凭证（S9 新增）</div>
+      <ul>
+        <li>手动商品专用单收货后，店长/采购员上传付款证明或发票</li>
+        <li>提交后进入「待核销」，等待管理员核销</li>
+      </ul>
+      <span class="pill pill-orange">待提交凭证</span>
+      <span class="pill pill-blue">待核销 pending</span>
+    </div>
+  </div>
+
+  <!-- 管理员 -->
+  <div class="lane lane-admin">
+    <div class="lane-title">管理员 / 采购员</div>
+    <div class="node" style="background:#FAFAFA;border:none;text-align:center;">↘ 审批列表</div>
+    <div class="node" style="border-color:#FFD591;background:#FFF9EF;">
+      <div class="node-title">审核采购单</div>
+      <ul>
+        <li>可调整各商品批准数量</li>
+        <li>驳回必须填写原因</li>
+        <li>通知即下单推送告知供货商新订单</li>
+        <li class="hl">手动商品专用单走特殊审批：只审该不该买 / 数量，不核协议价（S9）</li>
+      </ul>
+    </div>
+    <div>
+      <span class="pill pill-green">已通过 approved</span>
+      <span class="pill pill-red">已驳回 rejected</span>
+    </div>
+    <div class="arrow">↓ 通过</div>
+    <div class="node">
+      <div class="node-title">改量重发（如审核改量 · S2）</div>
+      <ul>
+        <li>报表按批准数量重发，旧版 superseded</li>
+        <li>清空各供货商确认，打回待确认</li>
+        <li>提醒经办人线下通知供应商重新确认</li>
+      </ul>
+    </div>
+    <div class="node">
+      <div class="node-title">异常处理（如有）</div>
+      <ul>
+        <li>异常记录：处理中 → 转写结果</li>
+        <li>裁决：按实收补款 / 维持不付款</li>
+        <li>裁决结果同步供货商收货记录页（S7）</li>
+        <li>处理后可对收货单补结算</li>
+      </ul>
+    </div>
+    <div>
+      <span class="pill pill-orange">处理中</span>
+      <span class="pill pill-green">已解决</span>
+    </div>
+    <div class="node">
+      <div class="node-title">订单作废（可选 · B8）</div>
+      <ul>
+        <li>审批前：管理员直接作废</li>
+        <li>审批后：采购员申请取消，管理员确认</li>
+        <li>已收货不可作废</li>
+        <li>作废后提醒经办人线下告知供应商</li>
+      </ul>
+    </div>
+    <div class="pill pill-grey">状态：已作废 cancelled</div>
+    <div class="arrow" style="margin-top:10px;">↓（仅手动单）</div>
+    <div class="node manual">
+      <div class="node-title">✅ 凭证核销（S9 新增）</div>
+      <ul>
+        <li>核销通过：按凭证回填实付金额（verify_amount），单据闭环</li>
+        <li>驳回：填原因，门店重新提交凭证</li>
+        <li>待核销单留在管理员待办催办，不计入已完成统计</li>
+      </ul>
+      <span class="pill pill-green">已核销 approved</span>
+      <span class="pill pill-red">已驳回 rejected</span>
+    </div>
+  </div>
+
+  <!-- 供货商 -->
+  <div class="lane lane-supplier">
+    <div class="lane-title">供货商</div>
+    <div class="node" style="background:#FAFAFA;border:none;text-align:center;">↘ 门户消息中心</div>
+    <div class="node">
+      <div class="node-title">接收新订单通知</div>
+      <ul>
+        <li>审核通过后立即触达：站内消息 + 门户通知条 + 微信服务通知（待模板号开通）</li>
+        <li class="hl">手动商品专用单不推送、供货商不可见（S9）</li>
+      </ul>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="node">
+      <div class="node-title">查看采购订单</div>
+      <ul>
+        <li>仅见含自家商品的订单与自家明细</li>
+        <li>草稿 / 已驳回不可见</li>
+        <li>部分收货不归入已完成（S8）</li>
+      </ul>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="node">
+      <div class="node-title">确认接单</div>
+      <ul>
+        <li>一单多供应商各自确认，互不碍主状态</li>
+        <li>确认窗口：已提交 / 已通过（S1）</li>
+        <li>改量后确认被重置，需重新确认（S2）</li>
+      </ul>
+    </div>
+    <div class="pill pill-purple">确认：已确认 confirmed</div>
+    <div class="arrow">↓</div>
+    <div class="node">
+      <div class="node-title">备货发货</div>
+      <ul>
+        <li>发货窗口：已提交 / 已通过 / 已生成报表 / 部分收货（S1+S8）</li>
+        <li>发货即向门店/门店店长发消息（关联单号）</li>
+        <li>收货记录页对照：实收 × 协议价格，可见异常进度与裁决结果（S7）</li>
+      </ul>
+    </div>
+    <div class="pill pill-purple">确认：已发货 shipped</div>
+  </div>
+
+  <!-- 系统 -->
+  <div class="lane lane-system">
+    <div class="lane-title">系统（自动）</div>
+    <div class="node" style="background:#FAFAFA;border:none;font-size:11px;color:#888;">
+      提交 / 收货成功后自动生成 CSV 报表；失败自动打标待补生成，管理员可补生成（补生成不再清空供货商确认）
+    </div>
+    <div class="node">
+      <div class="node-title">① 提交时生成</div>
+      <ul>
+        <li>门店下单报表：手动商品专用单打标「线下采购，凭证核销」（S9）</li>
+        <li>供应商订货汇总（按供应商分组）</li>
+        <li>手动商品无归属供货商：不进订货汇总、不推送（S9 拍板维持）</li>
+      </ul>
+    </div>
+    <div class="node">
+      <div class="node-title">② 审核通过 / 改量时</div>
+      <ul>
+        <li>通过 → 推送消息 + 推送至其供货商</li>
+        <li>改量 → ② 旧版 superseded，按批准数量重发，并清空供货商确认</li>
+      </ul>
+    </div>
+    <div class="node">
+      <div class="node-title">③ 收货时生成</div>
+      <ul>
+        <li>门店收货报表（含异常明细）</li>
+        <li>门店带价格收货报表（仅可付款行）</li>
+      </ul>
+    </div>
+    <div class="node">
+      <div class="node-title">④ 收货时按供应商生成</div>
+      <ul>
+        <li>供应商到货汇总 / 供应商带价账单（仅可付款行，异常行不进此单）</li>
+        <li class="hl">手动商品行不计价（S9）：金额待凭证核销回填，不进带价报表</li>
+      </ul>
+    </div>
+    <div class="node">
+      <div class="node-title">⑤ 汇总报表（手动触发）</div>
+      <ul><li>门店日汇总 · 门店月汇总</li></ul>
+    </div>
+    <div class="node">
+      <div class="node-title">⑥ 异常补结算</div>
+      <ul><li>异常解决后按可付款行生成补充账单</li></ul>
+    </div>
+    <div class="node manual">
+      <div class="node-title">⑦ 手动单凭证核销（S9 新增）</div>
+      <ul>
+        <li>收货后：凭证上传云存储（vouchers/）</li>
+        <li>核销通过：实付金额回填订单 verify_amount，闭环</li>
+        <li>价格体系划界：协议价只服务档案商品</li>
+      </ul>
+    </div>
+  </div>
+
+</div>
+
+<div class="legend">
+  <b>状态流转：</b>
+  <span class="pill pill-grey">草稿</span>
+  <span class="pill pill-blue">已提交</span>
+  <span class="pill pill-green">已通过</span>
+  <span class="pill pill-orange">待处理 / 部分收货</span>
+  <span class="pill pill-red">驳回 / 异常</span>
+  <span class="pill pill-purple">供货商确认</span>
+  <span class="pill pill-orange">待核销（手动单 · S9）</span>
+  <span class="pill pill-green">已核销（手动单 · S9）</span>
+  <br>
+  驳回单可复制为新草稿再提 · 已收货订单不可作废 · 改量重发后供货商需重新确认 ·
+  <span class="hl" style="color:#FA541C;font-weight:600;">手动商品专用单（S9，9-22 拍板）：强制拆单、特殊审批、收货无价不标异常、凭证核销回填实付金额后闭环</span>
+</div>
+
+</body>
+</html>
