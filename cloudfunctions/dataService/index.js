@@ -1215,6 +1215,67 @@ async function requestCancel(event) {
   return { code: 0 }
 }
 
+// ===== S9 拍板（2026-09-22）：手动商品专用单凭证核销 =====
+// 手动单（is_manual）收货后进入待核销（verify_status='pending'），管理员上传/登记
+// 付款凭证并回填实付金额（verify_amount）后核销通过，单据闭环。金额唯一可信来源
+// 是凭证，不查协议价表（手动商品无档案、无供应商归属）。
+async function verifyManualOrder(event) {
+  const auth = await requireUser(event, GLOBAL_ROLES)
+  if (auth.error) return auth.error
+  const orderId = String(event.orderId || '').trim()
+  const action = String(event.verifyAction || '') // submit | approve | reject
+  const amount = Number(event.amount)
+  const voucherFileIds = Array.isArray(event.voucherFileIds) ? event.voucherFileIds.filter(Boolean) : []
+  const note = String(event.note || '').trim()
+
+  const orderRes = await db.collection('purchase_order').where({ purchase_order_id: orderId }).limit(1).get()
+  const order = orderRes.data[0]
+  if (!order) return { code: -1, msg: '采购订单不存在' }
+  if (!order.is_manual) return { code: -1, msg: '仅手动商品专用单需要凭证核销' }
+
+  // 提交凭证：店长/采购员/管理员均可；订单须已收货（received/receipt_abnormal/partial_received）
+  if (action === 'submit') {
+    if (!['received', 'receipt_abnormal', 'partial_received'].includes(order.order_status)) {
+      return { code: -1, msg: '订单尚未收货，无法提交付款凭证' }
+    }
+    if (order.verify_status === 'approved') return { code: -1, msg: '该单已核销通过，无需重复提交' }
+    if (voucherFileIds.length === 0) return { code: -1, msg: '请上传付款证明或发票' }
+    await db.collection('purchase_order').doc(order._id).update({
+      data: {
+        verify_status: 'pending',
+        verify_voucher_file_ids: voucherFileIds,
+        verify_note: note,
+        verify_submitted_by: auth.user.user_id || auth.user._id,
+        verify_submitted_at: db.serverDate(),
+        updated_at: db.serverDate()
+      }
+    })
+    return { code: 0, data: { message: '凭证已提交，等待管理员核销' } }
+  }
+
+  // 核销裁决：仅管理员
+  if (!['approve', 'reject'].includes(action)) return { code: -1, msg: '无效的核销动作' }
+  if (order.verify_status !== 'pending') return { code: -1, msg: '该单没有待核销的凭证' }
+  if (action === 'reject') {
+    await db.collection('purchase_order').doc(order._id).update({
+      data: { verify_status: 'rejected', verify_note: note, updated_at: db.serverDate() }
+    })
+    return { code: 0, data: { message: '已驳回，请门店重新提交凭证' } }
+  }
+  if (!Number.isFinite(amount) || amount <= 0) return { code: -1, msg: '请填写大于0的实付金额' }
+  await db.collection('purchase_order').doc(order._id).update({
+    data: {
+      verify_status: 'approved',
+      verify_amount: amount,
+      verify_note: note,
+      verified_by: auth.user.user_id || auth.user._id,
+      verified_at: db.serverDate(),
+      updated_at: db.serverDate()
+    }
+  })
+  return { code: 0, data: { message: '核销完成，实付金额已回填' } }
+}
+
 exports.main = async (event = {}) => {
   try {
     switch (event.action) {
@@ -1237,6 +1298,7 @@ exports.main = async (event = {}) => {
       case 'regenerateOrderReports': return await regenerateOrderReports(event)
       case 'cancelOrder': return await cancelOrder(event)
       case 'requestCancel': return await requestCancel(event)
+      case 'verifyManualOrder': return await verifyManualOrder(event)
       default: return { code: -1, msg: '不支持的数据操作' }
     }
   } catch (err) {

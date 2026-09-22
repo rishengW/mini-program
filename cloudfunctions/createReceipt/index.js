@@ -270,6 +270,7 @@ exports.main = async (event = {}) => {
         productId: orderItem.product_id,
         productName: orderItem.product_name_snapshot,
         supplierId: orderItem.supplier_id || '',
+        isManual: !!orderItem.is_manual,
         orderQty,
         unit: orderItem.unit_snapshot,
         receivedQty
@@ -319,7 +320,9 @@ exports.main = async (event = {}) => {
     // 批量取价：按 product_id 分块一次查回，再在内存中按 (供应商, 商品) 匹配，
     // 避免每条明细一次数据库请求。
     const priceMap = {}
-    const priceProductIds = [...new Set(items.filter(item => item.supplierId).map(item => item.productId))]
+    // S9 拍板（2026-09-22）：手动商品行跳过协议价查询——价格走凭证核销回填（verify_amount），
+    // 不查 supplier_product_price（手动商品无档案/无供应商，查不到是预期行为）。
+    const priceProductIds = [...new Set(items.filter(item => item.supplierId && !item.isManual).map(item => item.productId))]
     for (let i = 0; i < priceProductIds.length; i += 20) {
       const idChunk = priceProductIds.slice(i, i + 20)
       const priceRes = await db.collection('supplier_product_price')
@@ -338,7 +341,13 @@ exports.main = async (event = {}) => {
       // 未到货部分自然不出现在账单中），故纯少货不剔除；质量/错货行不得进入付款结算。
       const abnormalTypes = getItemAbnormalTypes(item)
       const hardAbnormal = abnormalTypes.some(t => t !== 'shortage')
-      item.payableFlag = !hardAbnormal && item.payableFlag !== false && priceSnapshot > 0
+      // S9 拍板（2026-09-22）：手动商品行无协议价为预期行为，0 价不视为异常；
+      // 金额在凭证核销时按实付回填（订单 verify_amount），不进带价报表结算。
+      if (item.isManual) {
+        item.payableFlag = false
+      } else {
+        item.payableFlag = !hardAbnormal && item.payableFlag !== false && priceSnapshot > 0
+      }
     }
 
     // B3 分批收货：判断本批收完后是否所有订单行都已收齐（累计实收 = 下单量）
@@ -393,6 +402,8 @@ exports.main = async (event = {}) => {
             unit_snapshot: item.unit,
             price_snapshot: item.priceSnapshot,
             payable_flag: item.payableFlag !== false,
+            // S9：手动商品行标记——金额待凭证核销回填，0 价为预期行为
+            is_manual: !!item.isManual,
             is_shortage: !!item.isShortage,
             is_quality_issue: !!item.isQualityIssue,
             is_wrong_item: !!item.isWrongItem,

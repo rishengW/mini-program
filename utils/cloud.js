@@ -131,6 +131,11 @@ function normalizePurchaseOrder(order = {}) {
     createdById: order.createdById || order.created_by_id || order.created_by || '',
     createdBy: order.createdByName || order.created_by_name || order.createdBy || order.created_by || '',
     orderStatus: order.orderStatus || order.order_status || '',
+    // S9：手动商品专用单与凭证核销状态
+    isManual: !!(order.isManual || order.is_manual),
+    verifyStatus: order.verifyStatus || order.verify_status || '',
+    verifyAmount: order.verifyAmount || order.verify_amount || '',
+    verifyNote: order.verifyNote || order.verify_note || '',
     cancelRequested: !!(order.cancelRequested || order.cancel_requested),
     createdAt: formatDateTime(order.createdAt || order.created_at),
     submittedAt: formatDateTime(order.submittedAt || order.submitted_at || order.createdAt || order.created_at),

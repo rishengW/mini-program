@@ -21,6 +21,7 @@
 - **B4/B6 行级异常隔离**：短收只标记异常行，正常行照常结算；异常处理完由管理员 `settleReceipt` 补结算。
 - **B8 作废/取消**：审批前可作废（`cancelOrder`）；店长/采购员可提交取消申请（`requestCancel`）；驳回单可复制为新草稿（B7）。
 - **供货商链路（S1–S8）**：动作级白名单（确认接单限审批前、标记发货放宽到审批后含 `partial_received`）；审核改量重置供货商确认；`partial_received` 不算已完成；详情页按供货商分组展示确认标签。
+- **S9 手动商品专用单（2026-09-22 拍板）**：手填手动商品**强制单独成单**（不可与档案商品混单，前端拦截 + `createPurchaseOrder` 后端兜底），走**特殊审批**（不核协议价）；收货无价为预期行为（跳过协议价查询、不标异常、不进带价报表与补结算）；收货后**上传付款凭证**（云存储 `vouchers/`），管理员**核销回填实付金额**（`dataService.verifyManualOrder`，状态 `none → pending → approved/rejected`）后单据闭环；待核销单留在管理员待办催办。供货商端全程不可见。协议价体系只服务档案商品（价格管理页支持首次定价）。
 
 完整决策留痕见 [业务模糊点确认清单.md](业务模糊点确认清单.md)。
 
@@ -65,7 +66,7 @@ seed-data/             初始数据与导入说明（见 seed-data/README.md）
 |---|---|
 | `authService` | 登录/登出/改密，多设备会话，登录时记录 openid |
 | `createPurchaseOrder` | 创建采购单，生成 ① 门店下单 ② 供应商订货 CSV |
-| `dataService` | 审核（`auditOrder`）、作废/取消、消息、报表补生成、补结算等聚合操作 |
+| `dataService` | 审核（`auditOrder`）、作废/取消、消息、报表补生成、补结算、手动单凭证核销（`verifyManualOrder`）等聚合操作 |
 | `confirmSupplierOrder` | 供货商确认接单/标记发货（token 校验 + 动作级状态白名单） |
 | `getSupplierOrders` / `getSupplierReceipts` | 供货商视角订单/收货（只含自己供货的明细） |
 | `getProductPrices` / `updateProductPrice` | 协议价查询/调整（仅当天生效日期） |
@@ -84,7 +85,8 @@ seed-data/             初始数据与导入说明（见 seed-data/README.md）
 
 ## 相关文档
 
-- [业务模糊点确认清单.md](业务模糊点确认清单.md)：业务口径拍板与实现留痕（通用 B1–B12 / 供货商 S1–S8）
+- [采购流程图.html](采购流程图.html)：全流程泳道图（含 S9 手动单凭证核销支线，浏览器打开查看）
+- [业务模糊点确认清单.md](业务模糊点确认清单.md)：业务口径拍板与实现留痕（通用 B1–B12 / 供货商 S1–S9）
 - [log.md](log.md)：开发日志
 - [review.md](review.md)：代码审查记录
 - [seed-data/README.md](seed-data/README.md)：初始数据导入说明

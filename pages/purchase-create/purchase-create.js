@@ -291,6 +291,12 @@ Page({
     const allItems = [...selectedProducts, ...this.data.manualItems]
     if (allItems.length === 0) { util.showToast('请至少填写一种商品的数量'); return }
 
+    // S9 拍板（2026-09-22）：强制拆单——手动商品与档案商品不可混单
+    if (selectedProducts.length > 0 && this.data.manualItems.length > 0) {
+      util.showToast('手动商品需单独下单：请先提交当前商品，再另建一张手动商品采购单')
+      return
+    }
+
     const app = getApp()
     const store = app.globalData.currentStore || {}
     const user = app.globalData.userInfo || {}

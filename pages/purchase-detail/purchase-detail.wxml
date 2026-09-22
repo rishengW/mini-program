@@ -81,6 +81,20 @@
     </block>
   </view>
 
+  <!-- S9：手动商品专用单——凭证核销状态与操作 -->
+  <view wx:if="{{isManualOrder}}" class="card">
+    <view class="card-title">付款核销</view>
+    <view class="verify-status-row">
+      <text>核销状态：</text>
+      <text wx:if="{{verifyStatus === 'approved'}}" class="tag tag-success">已核销</text>
+      <text wx:elif="{{verifyStatus === 'pending'}}" class="tag tag-warning">待核销（凭证已提交）</text>
+      <text wx:elif="{{verifyStatus === 'rejected'}}" class="tag tag-danger">凭证被驳回，请重新提交</text>
+      <text wx:else class="tag tag-info">待提交凭证</text>
+    </view>
+    <view wx:if="{{detail.verifyAmount}}" class="text-sm" style="margin-top:8rpx;">实付金额：¥{{detail.verifyAmount}}</view>
+    <view wx:if="{{detail.verifyNote}}" class="text-sm text-tertiary" style="margin-top:8rpx;">备注：{{detail.verifyNote}}</view>
+  </view>
+
   <view wx:if="{{canEdit}}" class="bottom-actions">
     <button class="btn btn-outline flex-1" bindtap="editRequest">编辑</button>
     <button class="btn btn-primary flex-1" bindtap="submitRequest">提交审核</button>
@@ -101,5 +115,14 @@
 
   <view wx:if="{{canReceive}}" class="bottom-actions">
     <button class="btn btn-success btn-block" bindtap="goReceive">📦 去收货</button>
+  </view>
+
+  <!-- S9：手动单凭证操作 -->
+  <view wx:if="{{canSubmitVoucher}}" class="bottom-actions">
+    <button class="btn btn-primary btn-block" bindtap="submitVoucher">🧾 上传付款凭证</button>
+  </view>
+  <view wx:if="{{canVerify}}" class="bottom-actions">
+    <button class="btn btn-outline flex-1" bindtap="verifyDecide" data-approve="false">驳回凭证</button>
+    <button class="btn btn-primary flex-1" bindtap="verifyDecide" data-approve="true">核销通过</button>
   </view>
 </view>

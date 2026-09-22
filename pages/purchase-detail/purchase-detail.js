@@ -79,6 +79,15 @@ Page({
     const cancelEligible = ['approved', 'report_generated', 'partial_received', 'to_receive'].includes(order.orderStatus)
     const canRequestCancel = cancelEligible && currentUser.role !== 'chef' && !order.cancelRequested
     const canForceCancel = cancelEligible && currentUser.role === 'super_admin'
+    // S9（2026-09-22）：手动商品专用单凭证核销
+    // 提交凭证：店长/采购员/管理员，收货后可提交；核销裁决：仅管理员
+    const isManualOrder = !!order.isManual
+    const verifyStatus = order.verifyStatus || ''
+    const canSubmitVoucher = isManualOrder &&
+      ['received', 'receipt_abnormal', 'partial_received'].includes(order.orderStatus) &&
+      ['none', 'rejected'].includes(verifyStatus)
+    const canVerify = isManualOrder && verifyStatus === 'pending' &&
+      ['purchaser', 'super_admin'].includes(currentUser.role)
     this.setData({
       detail: { ...order, statusText: statusInfo.text, statusType: statusInfo.type },
       supplierGroups,
@@ -87,8 +96,84 @@ Page({
       canCopy,
       canCancel,
       canRequestCancel,
-      canForceCancel
+      canForceCancel,
+      isManualOrder,
+      verifyStatus,
+      canSubmitVoucher,
+      canVerify
     })
+  },
+
+  // S9：提交付款凭证（店长/采购员/管理员），上传图片后登记
+  async submitVoucher() {
+    const that = this
+    const res = await new Promise(resolve => {
+      wx.chooseMedia({
+        count: 3, mediaType: ['image'], sourceType: ['album', 'camera'],
+        success: resolve, fail: () => resolve(null)
+      })
+    })
+    if (!res || !res.tempFiles || !res.tempFiles.length) return
+    util.showLoading('上传凭证中...')
+    try {
+      const fileIds = []
+      for (let i = 0; i < res.tempFiles.length; i++) {
+        const ext = (res.tempFiles[i].tempFilePath.match(/\.\w+$/) || ['jpg'])[0]
+        const cloudPath = `vouchers/${this.orderId}/${Date.now()}_${i}${ext}`
+        const up = await wx.cloud.uploadFile({ cloudPath, filePath: res.tempFiles[i].tempFilePath })
+        fileIds.push(up.fileID)
+      }
+      const result = await cloud.callFunction('dataService', {
+        action: 'verifyManualOrder',
+        orderId: this.orderId,
+        verifyAction: 'submit',
+        voucherFileIds: fileIds
+      })
+      util.hideLoading()
+      if (result && result.code === 0) {
+        util.showSuccess('凭证已提交')
+        that.loadData()
+      } else {
+        util.showToast((result && result.msg) || '凭证提交失败')
+      }
+    } catch (err) {
+      util.hideLoading()
+      util.showToast('凭证上传失败，请重试')
+    }
+  },
+
+  // S9：管理员核销——通过回填实付金额 / 驳回重传
+  async verifyDecide(e) {
+    const approve = e.currentTarget.dataset.approve === true || e.currentTarget.dataset.approve === 'true'
+    const d = this.data.detail
+    let amount = null
+    let note = ''
+    if (approve) {
+      const input = await util.showPrompt('核销通过将回填实付金额并闭环该单。', '请输入凭证上的实付金额（元）', '确认核销')
+      if (input === null) return
+      amount = parseFloat(input)
+      if (isNaN(amount) || amount <= 0) { util.showToast('请输入有效金额'); return }
+    } else {
+      const input = await util.showPrompt('确认驳回该凭证？门店需重新提交。', '请填写驳回原因（必填）', '驳回')
+      if (input === null) return
+      if (!input.trim()) { util.showToast('驳回必须填写原因'); return }
+      note = input.trim()
+    }
+    util.showLoading('处理中...')
+    const result = await cloud.callFunction('dataService', {
+      action: 'verifyManualOrder',
+      orderId: d.purchaseOrderId,
+      verifyAction: approve ? 'approve' : 'reject',
+      amount: amount || undefined,
+      note
+    })
+    util.hideLoading()
+    if (result && result.code === 0) {
+      util.showSuccess(approve ? '已核销' : '已驳回')
+      this.loadData()
+    } else {
+      util.showToast((result && result.msg) || '操作失败')
+    }
   },
 
   // B8：审批后订单申请取消（采购员/店长发起，管理员确认后作废），需填写原因

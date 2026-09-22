@@ -216,6 +216,10 @@ exports.main = async (event = {}) => {
     if (manualCount > 5) {
       return { code: -1, msg: '手动商品每单最多5个' }
     }
+    // S9 拍板（2026-09-22）：强制拆单——手动商品与档案商品不可混单（后端兜底，防绕过前端）
+    if (manualCount > 0 && manualCount < items.length) {
+      return { code: -1, msg: '手动商品需单独下单：手动商品与档案商品不能混在同一张采购单' }
+    }
 
     // 编辑草稿时沿用原订单号；新建时生成订单号。
     const dateStr = actualDate.replace(/-/g, '')
@@ -229,6 +233,12 @@ exports.main = async (event = {}) => {
       order_date: actualDate,
       delivery_date: actualDeliveryDate,
       order_status: orderStatus,
+      // S9 拍板（2026-09-22）：手动商品专用单标记（整单只有手动商品才有值，混单已在上方拦截）
+      is_manual: manualCount > 0,
+      // 凭证核销状态：手动单收货后进入待核销，管理员核销回填实付金额后闭环（B 方案）
+      verify_status: manualCount > 0 ? 'none' : '',
+      verify_amount: null,
+      verify_voucher_file_ids: [],
       remark: remark || '',
       updated_at: db.serverDate()
     }
@@ -295,7 +305,9 @@ exports.main = async (event = {}) => {
 
     // ===== 报表1: 门店下单报表 =====
     const storeVer = await getNextVersion('store_order_report', storeId, actualDate)
-    const csv1Info = [csvField('采购单号'), csvField(orderNo), csvField('门店'), csvField(storeName), csvField('下单日期'), csvField(actualDate), csvField('期望到货'), csvField(actualDeliveryDate), csvField('经办人'), csvField(createdByName || '')].join(',') + '\n'
+    // S9：手动商品专用单在报表头打标，区分口径（不推送供应商、金额走凭证核销）
+    const manualTag = manualCount > 0 ? [csvField('单据类型'), csvField('手动商品专用单（线下采购，凭证核销）')].join(',') + '\n' : ''
+    const csv1Info = manualTag + [csvField('采购单号'), csvField(orderNo), csvField('门店'), csvField(storeName), csvField('下单日期'), csvField(actualDate), csvField('期望到货'), csvField(actualDeliveryDate), csvField('经办人'), csvField(createdByName || '')].join(',') + '\n'
     let csv1 = csv1Info + [csvField('商品名称'), csvField('分类'), csvField('单位'), csvField('下单数量'), csvField('备注')].join(',') + '\n'
     items.forEach(item => {
       csv1 += [csvField(item.productName), csvField(item.category), csvField(item.unit), csvField(item.orderQty), csvField(item.remark || '')].join(',') + '\n'

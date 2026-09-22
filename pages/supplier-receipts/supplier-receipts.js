@@ -47,7 +47,8 @@ Page({
       const receivedQty = Number(item.received_qty) || 0
       const orderQty = Number(item.order_qty_snapshot) || 0
       // 实收与订货不一致或未计价（应付标记关闭）视为异常，红色提示
-      const abnormal = receivedQty !== orderQty || item.payable_flag === false
+      // S9：手动商品行（is_manual）0 价为预期行为（金额走凭证核销回填），不标异常
+      const abnormal = !item.is_manual && (receivedQty !== orderQty || item.payable_flag === false)
       // S7 拍板：展示异常处理进度与裁决结果，供供货商对账（只读）
       const abnormals = (item.abnormals || []).map(rec => {
         const typeText = { shortage: '短收', quality: '质量问题', wrong_item: '错货' }[rec.type] || rec.type || '异常'
