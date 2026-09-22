@@ -64,19 +64,21 @@
       </block>
     </block>
     <!-- chef：不见供应商身份，平铺 + 逐行标签 -->
-    <view wx:else wx:for="{{detail.items}}" wx:key="itemId" class="goods-row {{item.isManual ? 'manual-goods-row' : ''}}">
-      <view class="goods-info">
-        <view class="goods-name">
-          {{item.productNameSnapshot}}
-          <text wx:if="{{item.isManual}}" class="manual-badge">手动</text>
-          <text wx:if="{{item.supplierConfirmText}}" class="tag tag-{{item.supplierConfirmType}}" style="margin-left:12rpx;">{{item.supplierConfirmText}}</text>
+    <block wx:else>
+      <view wx:for="{{detail.items}}" wx:key="itemId" class="goods-row {{item.isManual ? 'manual-goods-row' : ''}}">
+        <view class="goods-info">
+          <view class="goods-name">
+            {{item.productNameSnapshot}}
+            <text wx:if="{{item.isManual}}" class="manual-badge">手动</text>
+            <text wx:if="{{item.supplierConfirmText}}" class="tag tag-{{item.supplierConfirmType}}" style="margin-left:12rpx;">{{item.supplierConfirmText}}</text>
+          </view>
+          <view class="goods-spec text-sm text-tertiary">{{item.categorySnapshot}} · {{item.unitSnapshot}}</view>
         </view>
-        <view class="goods-spec text-sm text-tertiary">{{item.categorySnapshot}} · {{item.unitSnapshot}}</view>
+        <view class="goods-qty">
+          <view class="qty-main">×{{item.orderQty}} {{item.unitSnapshot}}</view>
+        </view>
       </view>
-      <view class="goods-qty">
-        <view class="qty-main">×{{item.orderQty}} {{item.unitSnapshot}}</view>
-      </view>
-    </view>
+    </block>
   </view>
 
   <view wx:if="{{canEdit}}" class="bottom-actions">
