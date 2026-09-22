@@ -51,7 +51,7 @@
 <body>
 
 <h1>酒店门店采购全流程</h1>
-<div class="subtitle">角色泳道 · 订单状态流转 · 报表自动生成（小程序端 · 2026-09-22 · 含 S1–S9 全部拍板 · S9 手动商品专用单：强制拆单 + 凭证核销）</div>
+<div class="subtitle">角色泳道 · 订单状态流转 · 报表自动生成（小程序端 · 2026-09-22 · 含 S1–S9 全部拍板 · S9 手动商品专用单：自动拆单 + 凭证核销）</div>
 
 <div class="lanes">
 
@@ -66,14 +66,18 @@
         <li>选商品、填数量与备注</li>
         <li>可保存为草稿反复编辑</li>
         <li>可手填手动商品（每单限 5 个）</li>
-        <li class="hl">S9：手动商品必须单独成单，不可与档案商品混单</li>
+        <li class="hl">S9 升级：手动商品可与档案商品同单填写，提交时自动拆单</li>
       </ul>
     </div>
     <div class="pill pill-grey">状态：草稿 draft</div>
     <div class="arrow">↓</div>
     <div class="node">
       <div class="node-title">提交采购申请</div>
-      <ul><li>厨师 / 店长提交，提交后不可再编辑</li></ul>
+      <ul>
+        <li>厨师 / 店长提交，提交后不可再编辑</li>
+        <li class="hl">混单自动拆分为两单：先提档案商品单（编辑草稿时沿用其单号），再新建手动商品专用单</li>
+        <li>手动单失败单独提示重试，档案单不会重复提交</li>
+      </ul>
     </div>
     <div class="pill pill-blue">状态：已提交 submitted</div>
     <div class="arrow">↓</div>
@@ -225,6 +229,8 @@
     <div class="node">
       <div class="node-title">① 提交时生成</div>
       <ul>
+        <li class="hl">混单提交 → 客户端自动拆为两单，各自走审批与报表（S9）</li>
+        <li>服务端保留禁混单校验，作为防绕过兜底</li>
         <li>门店下单报表：手动商品专用单打标「线下采购，凭证核销」（S9）</li>
         <li>供应商订货汇总（按供应商分组）</li>
         <li>手动商品无归属供货商：不进订货汇总、不推送（S9 拍板维持）</li>
@@ -283,7 +289,7 @@
   <span class="pill pill-green">已核销（手动单 · S9）</span>
   <br>
   驳回单可复制为新草稿再提 · 已收货订单不可作废 · 改量重发后供货商需重新确认 ·
-  <span class="hl" style="color:#FA541C;font-weight:600;">手动商品专用单（S9，9-22 拍板）：强制拆单、特殊审批、收货无价不标异常、凭证核销回填实付金额后闭环</span>
+  <span class="hl" style="color:#FA541C;font-weight:600;">手动商品专用单（S9，9-22 拍板 + 升级）：混单提交自动拆为档案单 + 手动单（服务端禁混单兜底）、特殊审批、收货无价不标异常、凭证核销回填实付金额后闭环</span>
 </div>
 
 </body>
