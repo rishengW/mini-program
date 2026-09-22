@@ -13,8 +13,9 @@
   </view>
 
   <!-- 搜索 -->
-  <view class="search-bar">
+  <view class="search-bar search-row">
     <input class="search-input" placeholder="搜索商品名称" bindinput="onSearch" value="{{keyword}}" />
+    <button class="btn btn-primary add-btn" bindtap="showAddPrice">+ 新增价格</button>
   </view>
 
   <!-- 价格列表 -->
@@ -60,6 +61,41 @@
       <view class="btn-group" style="margin-top:32rpx;">
         <button class="btn btn-outline flex-1" bindtap="closeEdit">取消</button>
         <button class="btn btn-primary flex-1" bindtap="savePrice">确认修改</button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 新增价格弹窗（首次定价） -->
+  <view wx:if="{{showAdd}}" class="modal-mask" bindtap="closeAdd">
+    <view class="modal-body" catchtap="stopBubble">
+      <view class="modal-title">新增价格</view>
+
+      <view class="form-group">
+        <view class="form-label">供应商</view>
+        <picker range="{{suppliers}}" range-key="supplierName" bindchange="onAddSupplierPick">
+          <view class="form-input picker-value {{addForm.supplierId ? '' : 'picker-placeholder'}}">{{addForm.supplierName || '请选择供应商'}} ▾</view>
+        </picker>
+      </view>
+
+      <view class="form-group">
+        <view class="form-label">商品</view>
+        <picker range="{{products}}" range-key="name" bindchange="onAddProductPick">
+          <view class="form-input picker-value {{addForm.productId ? '' : 'picker-placeholder'}}">{{addForm.productName || '请选择商品'}} ▾</view>
+        </picker>
+      </view>
+
+      <view class="form-group">
+        <view class="form-label">价格 (元)</view>
+        <input class="form-input price-input" type="digit" placeholder="输入价格" value="{{addForm.price}}" bindinput="onAddPriceInput" focus="true" />
+      </view>
+
+      <view class="price-tip">
+        <text class="text-tertiary text-sm">💡 为没有协议价的「供应商 × 商品」组合首次定价，当天生效</text>
+      </view>
+
+      <view class="btn-group" style="margin-top:32rpx;">
+        <button class="btn btn-outline flex-1" bindtap="closeAdd">取消</button>
+        <button class="btn btn-primary flex-1" bindtap="saveNewPrice">确认添加</button>
       </view>
     </view>
   </view>
