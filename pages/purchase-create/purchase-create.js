@@ -291,11 +291,10 @@ Page({
     const allItems = [...selectedProducts, ...this.data.manualItems]
     if (allItems.length === 0) { util.showToast('请至少填写一种商品的数量'); return }
 
-    // S9 拍板（2026-09-22）：强制拆单——手动商品与档案商品不可混单
-    if (selectedProducts.length > 0 && this.data.manualItems.length > 0) {
-      util.showToast('手动商品需单独下单：请先提交当前商品，再另建一张手动商品采购单')
-      return
-    }
+    // S9 拍板（2026-09-22 升级）：自动拆单——同时选了档案商品与手动商品时，
+    // 自动生成两张采购单（档案单 + 手动单），无需用户分开下单。
+    const hasManual = this.data.manualItems.length > 0
+    const hasCatalog = selectedProducts.length > 0
 
     const app = getApp()
     const store = app.globalData.currentStore || {}
@@ -305,13 +304,26 @@ Page({
       return
     }
 
+    const buildPayload = (items, orderId) => ({
+      storeId: store.storeId || store.id,
+      storeName: store.storeName || store.name,
+      orderId,
+      orderDate: this.data.orderDate,
+      deliveryDate: this.data.deliveryDate,
+      createdBy: user.userId || user.id || user.name || user.username,
+      createdByName: user.name || user.username,
+      items,
+      remark: this.data.remark,
+      orderStatus
+    })
+
     const confirmed = await util.showConfirm(orderStatus === 'draft' ? '确认保存采购草稿？' : '确认提交门店采购申请？')
     if (!confirmed) return
 
     this.setData({ isSubmitting: true })
-    util.showLoading(orderStatus === 'draft' ? '保存中...' : '提交中...')
+    util.showLoading(hasManual && hasCatalog ? '拆单提交中...' : orderStatus === 'draft' ? '保存中...' : '提交中...')
 
-    const items = allItems.map(item => {
+    const toPayloadItems = list => list.map(item => {
       const l1 = (this.data.categoryL1List || []).find(c => c.id === item.categoryL1)
       const catL1Name = l1 ? l1.name : item.categoryL1
       const cat2 = (this.data.categories || []).find(c => c.id === item.categoryId)
@@ -328,18 +340,32 @@ Page({
       }
     })
 
-    const result = await cloud.callFunction('createPurchaseOrder', {
-      storeId: store.storeId || store.id,
-      storeName: store.storeName || store.name,
-      orderId: this.editingOrderId || undefined,
-      orderDate: this.data.orderDate,
-      deliveryDate: this.data.deliveryDate,
-      createdBy: user.userId || user.id || user.name || user.username,
-      createdByName: user.name || user.username,
-      items,
-      remark: this.data.remark,
-      orderStatus
-    })
+    let result
+    if (hasManual && hasCatalog) {
+      // 自动拆单：先提/更新档案商品单（沿用草稿单号），成功后再新建手动商品专用单
+      const catalogResult = await cloud.callFunction('createPurchaseOrder', buildPayload(toPayloadItems(selectedProducts), this.editingOrderId || undefined))
+      if (!catalogResult || catalogResult.code !== 0) {
+        util.hideLoading()
+        this.setData({ isSubmitting: false })
+        util.showToast((catalogResult && catalogResult.msg) || '采购单提交失败')
+        return
+      }
+      result = await cloud.callFunction('createPurchaseOrder', buildPayload(toPayloadItems(this.data.manualItems)))
+      if (!result || result.code !== 0) {
+        // 档案单已成功、手动单失败：提示用户手动单可重试，避免重复提交档案单
+        util.hideLoading()
+        this.setData({ isSubmitting: false })
+        wx.showModal({
+          title: '部分提交成功',
+          content: '商品采购单已提交，但手动商品单提交失败（' + ((result && result.msg) || '未知错误') + '）。请重新进入本页单独提交手动商品，勿重复提交商品单。',
+          showCancel: false
+        })
+        return
+      }
+      result = { code: 0, data: { ...(catalogResult.data || {}), splitOrder: true } }
+    } else {
+      result = await cloud.callFunction('createPurchaseOrder', buildPayload(toPayloadItems(allItems), this.editingOrderId || undefined))
+    }
 
     util.hideLoading()
     this.setData({ isSubmitting: false })
@@ -349,7 +375,9 @@ Page({
         title: orderStatus === 'draft' ? '草稿已保存' : '提交成功',
         content: warning
           ? warning
-          : (orderStatus === 'draft' ? '采购草稿已保存到数据库' : '采购申请已提交，下单报表已自动生成'),
+          : (result.data && result.data.splitOrder
+              ? '已自动拆为两张采购单：商品采购单 + 手动商品专用单（手动单金额待凭证核销）'
+              : (orderStatus === 'draft' ? '采购草稿已保存到数据库' : '采购申请已提交，下单报表已自动生成')),
         showCancel: false,
         success() { wx.navigateBack() }
       })
