@@ -7,7 +7,8 @@ const db = cloud.database()
 
 exports.main = async (event = {}) => {
   try {
-    const check = await auth.requireUser(event, ['super_admin', 'purchaser'])
+    // supplier 也可查：数据范围由下方分支自我约束（只看自己名下价格）
+    const check = await auth.requireUser(event, ['super_admin', 'purchaser', 'supplier'])
     if (check.error) return check.error
 
     const { supplierId, productId, onlyCurrent } = event

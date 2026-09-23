@@ -24,7 +24,7 @@ exports.main = async (event = {}) => {
         total: 0,
         page,
         pageSize,
-        statusCounts: { all: 0, draft: 0, submitted: 0, to_receive: 0, received: 0, receiptAbnormal: 0 }
+        statusCounts: { all: 0, draft: 0, submitted: 0, to_receive: 0, received: 0, receiptAbnormal: 0, cancelled: 0, partialReceived: 0 }
       }
     }
 
