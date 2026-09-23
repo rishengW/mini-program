@@ -9,6 +9,10 @@
       <view class="report-type-name">{{typeLabel}}</view>
       <view class="report-scope-info">{{scopeLabel}}: {{report.scopeName}}</view>
       <view class="report-date-info">日期: {{report.relatedDate}} · v{{report.fileVersion || 1}}</view>
+      <!-- 关联采购单入口：仅门店作用域且来源单号存在时显示 -->
+      <view wx:if="{{report.reportScope === 'store' && report.sourceOrderId}}" class="report-order-link" bindtap="goSourceOrder">
+        关联采购单: {{report.sourceOrderId}} ▸
+      </view>
     </view>
   </view>
 

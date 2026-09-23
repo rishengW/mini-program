@@ -94,6 +94,13 @@
   margin-top: 8rpx;
 }
 
+/* 关联采购单跳转入口 */
+.report-order-link {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #1890FF;
+}
+
 /* 导出 */
 .export-section {
   padding: 32rpx 0;

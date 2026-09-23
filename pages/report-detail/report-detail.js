@@ -35,6 +35,8 @@ Page({
         generatedAt: report.generatedAt || report.generated_at || '',
         fileVersion: report.fileVersion || report.file_version || 1,
         reportScope: report.reportScope || report.report_scope,
+        // 关联采购单号（报表生成时写入 source_order_id），用于「查看采购单」跳转
+        sourceOrderId: report.sourceOrderId || report.source_order_id || '',
         hasAbnormal: report.hasAbnormal !== undefined ? !!report.hasAbnormal : !!report.has_abnormal,
         abnormalSummary: report.abnormalSummary || report.abnormal_summary || ''
       }
@@ -63,6 +65,13 @@ Page({
     } else {
       util.showToast('加载失败')
     }
+  },
+
+  // 查看关联采购单（仅门店作用域报表：source_order_id 为单一采购单）
+  goSourceOrder() {
+    const orderId = this.data.report.sourceOrderId
+    if (!orderId) return
+    wx.navigateTo({ url: '/pages/purchase-detail/purchase-detail?id=' + orderId })
   },
 
   async exportReport() {

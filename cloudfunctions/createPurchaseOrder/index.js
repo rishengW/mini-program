@@ -101,7 +101,8 @@ exports.main = async (event = {}) => {
       createdByName,
       items: inputItems,
       remark,
-      orderStatus = 'submitted'
+      orderStatus = 'submitted',
+      requestId = ''
     } = event
     let items = inputItems
     // 业务日期按 UTC+8（项目用户全部在中国时区），避免凌晨 0-8 点落到前一天
@@ -118,9 +119,26 @@ exports.main = async (event = {}) => {
     if (!isDate(actualDate) || !isDate(actualDeliveryDate) || actualDeliveryDate < actualDate) {
       return { code: -1, msg: '采购日期或期望到货日期无效' }
     }
+
+    // 幂等防御：前端请求超时但服务端实际成功时，用户重试会带同一 requestId。
+    // 命中同用户已建的单则直接返回该单号，不再重复建单。
+    let idempotentOrderNo = ''
+    const trimmedRequestId = String(requestId || '').trim()
+    if (trimmedRequestId) {
+      const dupRes = await db.collection('purchase_order')
+        .where({ request_id: trimmedRequestId, created_by: user.user_id || user._id })
+        .orderBy('created_at', 'desc')
+        .limit(1)
+        .get()
+      if (dupRes.data.length) idempotentOrderNo = dupRes.data[0].purchase_order_id
+    }
     let existingOrder = null
     let storeId = inputStoreId
     let storeName = inputStoreName
+    // 幂等命中：该请求此前已成功建单，直接返回原单号（不区分草稿/已提交）
+    if (idempotentOrderNo) {
+      return { code: 0, data: { orderId: idempotentOrderNo, reportGenerated: false, reportsGenerated: 0, idempotent: true } }
+    }
     const isGlobal = ['super_admin', 'purchaser'].includes(user.role)
     if (!isGlobal) {
       if (!user.default_store_id || (storeId && storeId !== user.default_store_id)) return { code: -403, msg: '无权为其他门店创建采购订单' }
@@ -239,6 +257,7 @@ exports.main = async (event = {}) => {
       verify_status: manualCount > 0 ? 'none' : '',
       verify_amount: null,
       verify_voucher_file_ids: [],
+      request_id: trimmedRequestId,
       remark: remark || '',
       updated_at: db.serverDate()
     }

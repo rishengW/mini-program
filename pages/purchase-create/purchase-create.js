@@ -32,6 +32,9 @@ Page({
   async onLoad(options = {}) {
     this.editingOrderId = options.orderId || options.id || ''
     this.manualOrderId = '' // 拆单时已建的手动商品专用单号，重试/再保存时沿用避免重复建单
+    this.catalogOrderId = '' // 拆单时已建的档案商品单号：手动单失败重试时复用，避免档案单重复创建
+    // 幂等键：整单成功后重置；失败重试保持不变，服务端据此查重防超时重复建单
+    this.requestId = 'REQ' + Date.now() + Math.random().toString(36).slice(2, 8)
     const now = new Date()
     const today = util.formatDate(now)
     const tmr = new Date(now.getTime() + 86400000)
@@ -305,7 +308,7 @@ Page({
       return
     }
 
-    const buildPayload = (items, orderId) => ({
+    const buildPayload = (items, orderId, reqSuffix = '') => ({
       storeId: store.storeId || store.id,
       storeName: store.storeName || store.name,
       orderId,
@@ -315,7 +318,11 @@ Page({
       createdByName: user.name || user.username,
       items,
       remark: this.data.remark,
-      orderStatus
+      orderStatus,
+      // 幂等键：本次进入页面的一次「保存/提交」动作内所有请求共用（含失败重试），
+      // 服务端按 request_id 查重，请求超时后重试不会重复建单。
+      // 拆单时档案单/手动单各带 :c/:m 子键，避免两笔请求在服务端互相误判为重复
+      requestId: this.requestId + reqSuffix
     })
 
     const confirmed = await util.showConfirm(orderStatus === 'draft' ? '确认保存采购草稿？' : '确认提交门店采购申请？')
@@ -344,20 +351,22 @@ Page({
     let result
     if (hasManual && hasCatalog) {
       // 自动拆单：先提/更新档案商品单（沿用草稿单号），成功后再新建手动商品专用单
-      const catalogResult = await cloud.callFunction('createPurchaseOrder', buildPayload(toPayloadItems(selectedProducts), this.editingOrderId || undefined))
+      const catalogId = this.editingOrderId || this.catalogOrderId || undefined
+      const catalogResult = await cloud.callFunction('createPurchaseOrder', buildPayload(toPayloadItems(selectedProducts), catalogId, ':c'))
       if (!catalogResult || catalogResult.code !== 0) {
         util.hideLoading()
         this.setData({ isSubmitting: false })
         util.showToast((catalogResult && catalogResult.msg) || '采购单提交失败')
         return
       }
-      // 档案单已落库：消费掉草稿单号并清空档案商品数量，
-      // 此后本页任何重试都只提交手动商品单，不会重复创建档案单
-      const catalogOrderNo = (catalogResult.data && catalogResult.data.orderId) || this.editingOrderId || ''
+      // 档案单已落库：记录其单号（手动单失败重试时复用，防止重复建档案单），
+      // 清空编辑草稿号与档案商品数量，此后本页重试都只针对手动单
+      const catalogOrderNo = (catalogResult.data && catalogResult.data.orderId) || catalogId || ''
+      if (catalogOrderNo) this.catalogOrderId = catalogOrderNo
       this.editingOrderId = ''
       this._qtyMap = {}
       this.filterProducts()
-      const manualResult = await cloud.callFunction('createPurchaseOrder', buildPayload(toPayloadItems(this.data.manualItems), this.manualOrderId || undefined))
+      const manualResult = await cloud.callFunction('createPurchaseOrder', buildPayload(toPayloadItems(this.data.manualItems), this.manualOrderId || undefined, ':m'))
       if (!manualResult || manualResult.code !== 0) {
         util.hideLoading()
         this.setData({ isSubmitting: false })
@@ -375,14 +384,18 @@ Page({
       const warnings = [catalogResult.data && catalogResult.data.reportWarning, manualResult.data && manualResult.data.reportWarning].filter(Boolean)
       result = { code: 0, data: { ...(catalogResult.data || {}), splitOrder: true, reportWarning: warnings.join('；') || undefined } }
     } else {
-      // 拆单部分失败后的重试 / 纯手动单再次保存：沿用已建手动单号，避免重复建单
+      // 拆单部分失败后的重试 / 纯手动单再次保存：沿用已建手动单号，避免重复建单。
+      // 纯手动单沿用 :m 子键，与拆单时的手动请求同一幂等键，超时重试可被服务端查重
       const reuseId = this.editingOrderId || this.manualOrderId || undefined
-      result = await cloud.callFunction('createPurchaseOrder', buildPayload(toPayloadItems(allItems), reuseId))
+      const retrySuffix = hasManual && !hasCatalog ? ':m' : ''
+      result = await cloud.callFunction('createPurchaseOrder', buildPayload(toPayloadItems(allItems), reuseId, retrySuffix))
     }
 
     util.hideLoading()
     this.setData({ isSubmitting: false })
     if (result.code === 0) {
+      // 整单成功：重置幂等键，用户若在同一页面发起下一笔新订单不会误命中本次记录
+      this.requestId = 'REQ' + Date.now() + Math.random().toString(36).slice(2, 8)
       const warning = result.data && result.data.reportWarning
       wx.showModal({
         title: orderStatus === 'draft' ? '草稿已保存' : '提交成功',
