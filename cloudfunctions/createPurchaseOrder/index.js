@@ -123,6 +123,7 @@ exports.main = async (event = {}) => {
     // 幂等防御：前端请求超时但服务端实际成功时，用户重试会带同一 requestId。
     // 命中同用户已建的单则直接返回该单号，不再重复建单。
     let idempotentOrderNo = ''
+    let idempotentIsDraft = false
     const trimmedRequestId = String(requestId || '').trim()
     if (trimmedRequestId) {
       const dupRes = await db.collection('purchase_order')
@@ -130,13 +131,18 @@ exports.main = async (event = {}) => {
         .orderBy('created_at', 'desc')
         .limit(1)
         .get()
-      if (dupRes.data.length) idempotentOrderNo = dupRes.data[0].purchase_order_id
+      if (dupRes.data.length) {
+        idempotentOrderNo = dupRes.data[0].purchase_order_id
+        idempotentIsDraft = dupRes.data[0].order_status === 'draft'
+      }
     }
     let existingOrder = null
     let storeId = inputStoreId
     let storeName = inputStoreName
-    // 幂等命中：该请求此前已成功建单，直接返回原单号（不区分草稿/已提交）
-    if (idempotentOrderNo) {
+    // 幂等命中：该请求此前已成功建单，直接返回原单号（不区分草稿/已提交）。
+    // 例外：命中的正是本次要编辑的草稿（同单号且仍为草稿）——用户在同页修改内容后
+    // 再次保存，必须继续走编辑流程应用变更，否则修改被幂等短路静默丢弃。
+    if (idempotentOrderNo && !(orderId && orderId === idempotentOrderNo && idempotentIsDraft)) {
       return { code: 0, data: { orderId: idempotentOrderNo, reportGenerated: false, reportsGenerated: 0, idempotent: true } }
     }
     const isGlobal = ['super_admin', 'purchaser'].includes(user.role)

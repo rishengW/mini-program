@@ -33,6 +33,10 @@ Page({
     this.editingOrderId = options.orderId || options.id || ''
     this.manualOrderId = '' // 拆单时已建的手动商品专用单号，重试/再保存时沿用避免重复建单
     this.catalogOrderId = '' // 拆单时已建的档案商品单号：手动单失败重试时复用，避免档案单重复创建
+    // 已建档案单是否已提交：已提交的单后端拒绝再编辑（仅接受 draft），
+    // 此后本页新选的档案商品属追加采购，需独立成单
+    this.catalogOrderSubmitted = false
+    this.catalogSeq = 1 // 档案单幂等子键序号：首单 :c，追加采购递增 :c2/:c3，防命中首单导致本轮商品被静默丢弃
     // 幂等键：整单成功后重置；失败重试保持不变，服务端据此查重防超时重复建单
     this.requestId = 'REQ' + Date.now() + Math.random().toString(36).slice(2, 8)
     const now = new Date()
@@ -350,9 +354,14 @@ Page({
 
     let result
     if (hasManual && hasCatalog) {
-      // 自动拆单：先提/更新档案商品单（沿用草稿单号），成功后再新建手动商品专用单
-      const catalogId = this.editingOrderId || this.catalogOrderId || undefined
-      const catalogResult = await cloud.callFunction('createPurchaseOrder', buildPayload(toPayloadItems(selectedProducts), catalogId, ':c'))
+      // 自动拆单：先提/更新档案商品单（沿用草稿单号），成功后再新建手动商品专用单。
+      // catalogOrderId 仅草稿状态可复用：已提交的档案单后端拒绝再编辑，
+      // 本轮新选的档案商品按追加采购新建单，幂等子键递增（:c2/:c3）——
+      // 沿用 :c 会幂等命中首单，本轮商品被静默丢弃
+      const catalogReusable = !this.catalogOrderSubmitted
+      const catalogId = this.editingOrderId || (catalogReusable ? this.catalogOrderId || undefined : undefined)
+      const catalogSuffix = catalogReusable ? ':c' : ':c' + (++this.catalogSeq)
+      const catalogResult = await cloud.callFunction('createPurchaseOrder', buildPayload(toPayloadItems(selectedProducts), catalogId, catalogSuffix))
       if (!catalogResult || catalogResult.code !== 0) {
         util.hideLoading()
         this.setData({ isSubmitting: false })
@@ -363,6 +372,7 @@ Page({
       // 清空编辑草稿号与档案商品数量，此后本页重试都只针对手动单
       const catalogOrderNo = (catalogResult.data && catalogResult.data.orderId) || catalogId || ''
       if (catalogOrderNo) this.catalogOrderId = catalogOrderNo
+      this.catalogOrderSubmitted = orderStatus === 'submitted'
       this.editingOrderId = ''
       this._qtyMap = {}
       this.filterProducts()
