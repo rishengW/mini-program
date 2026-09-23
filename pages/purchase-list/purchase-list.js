@@ -82,17 +82,23 @@ Page({
     }
 
     const currentUser = getApp().globalData.userInfo || {}
-    const canReceiveRole = currentUser.role !== 'chef'
+    const canReceiveRole = currentUser.role !== "chef"
     const incoming = (result.data || []).map(cloud.normalizePurchaseOrder).map(order => this.decorateOrder(order, canReceiveRole))
     const orders = append ? this.data.orders.concat(incoming) : incoming
-    // tab 徽标使用服务端统计（契约：{ all, draft, submitted, to_receive, received, receiptAbnormal }）
-    const counts = { all: 0, draft: 0, submitted: 0, to_receive: 0, received: 0, receiptAbnormal: 0, ...(result.statusCounts || {}) }
-    if (!result.statusCounts && typeof result.total === 'number') counts.all = result.total
-    const filterTabs = this.data.filterTabs.map(tab => ({
-      ...tab,
-      count: counts[tab.value === 'receipt_abnormal' ? 'receiptAbnormal' : tab.value] || 0
-    }))
-    const total = typeof result.total === 'number' ? result.total : orders.length
+    // tab 计数来自服务端 statusCounts，不受分页截断影响（契约含 partial_received/cancelled）
+    const counts = { all: 0, draft: 0, submitted: 0, to_receive: 0, received: 0, receiptAbnormal: 0, partialReceived: 0, cancelled: 0, ...(result.statusCounts || {}) }
+    if (!result.statusCounts && typeof result.total === "number") counts.all = result.total
+    const filterTabs = [
+      { label: "全部", value: "all", count: counts.all || 0 },
+      { label: "草稿", value: "draft", count: counts.draft || 0 },
+      { label: "已提交", value: "submitted", count: counts.submitted || 0 },
+      { label: "待收货", value: "to_receive", count: counts.to_receive || 0 },
+      { label: "部分收货", value: "partial_received", count: counts.partialReceived || 0 },
+      { label: "已收货", value: "received", count: counts.received || 0 },
+      { label: "收货异常", value: "receipt_abnormal", count: counts.receiptAbnormal || 0 },
+      { label: "已作废", value: "cancelled", count: counts.cancelled || 0 }
+    ]
+    const total = typeof result.total === "number" ? result.total : orders.length
 
     this.setData({
       orders,

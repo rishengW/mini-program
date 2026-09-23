@@ -23,8 +23,12 @@ exports.main = async (event = {}) => {
     if (!Number.isFinite(numericPrice) || numericPrice <= 0) {
       return { code: -1, msg: '价格必须是大于0的数字' }
     }
-    // 生效日期缺省值按 UTC+8 取，避免凌晨 0-8 点落到前一天
-    const priceDate = effectiveDate || new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10)
+    // S5 拍板：不支持预约调价，仅允许当天生效（新价即刻 is_current:1，未来日期会立即生效造成口径混乱）
+    const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10)
+    const priceDate = effectiveDate || today
+    if (priceDate !== today) {
+      return { code: -1, msg: '生效日期仅支持当天，暂不支持预约调价' }
+    }
     const parsedDate = new Date(`${priceDate}T00:00:00Z`)
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(priceDate)) || Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== String(priceDate)) {
       return { code: -1, msg: '生效日期格式无效' }

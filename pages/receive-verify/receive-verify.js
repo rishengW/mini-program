@@ -45,6 +45,14 @@ Page({
   },
 
   async onLoad(options = {}) {
+    // 角色前置校验：厨师无权验收，直接拦截（与 createReceipt 后端白名单一致）
+    const app = getApp()
+    const currentUser = (app && app.globalData && app.globalData.userInfo) || {}
+    if (currentUser.role === 'chef') {
+      util.showToast('当前账号无权提交收货验收')
+      setTimeout(() => wx.navigateBack(), 1200)
+      return
+    }
     const id = options.orderId || options.id
     if (!id) {
       util.showToast('未获取到采购订单，请返回后重试')
@@ -52,7 +60,6 @@ Page({
     }
 
     util.showLoading('加载中...')
-    const app = getApp()
     const result = await cloud.callFunction('getPurchaseOrderDetail', {
       orderId: id,
     })
@@ -73,7 +80,8 @@ Page({
         productName: item.productNameSnapshot,
         unit: item.unitSnapshot,
         orderQty: item.orderQty,
-        receivedQty: item.orderQty,
+        // B3 分批收货：默认本批不收该行，数量留空/0 表示本批不收
+        receivedQty: 0,
         priceSnapshot: 0,
         payableFlag: true,
         isShortage: false,
@@ -87,7 +95,9 @@ Page({
 
   onReceivedQtyInput(e) {
     const index = e.currentTarget.dataset.index
-    this.setData({ [`items[${index}].receivedQty`]: parseFloat(e.detail.value) || 0 })
+    const raw = String(e.detail.value || '').trim()
+    // B3 分批收货：数量允许留空/0，留空表示本批不收该行
+    this.setData({ [`items[${index}].receivedQty`]: raw === '' ? 0 : (parseFloat(raw) || 0) })
   },
 
   toggleCheck(e) {
@@ -108,6 +118,12 @@ Page({
       success: (res) => {
         const newPhotos = res.tempFiles.map(f => f.tempFilePath)
         this.setData({ photos: [...this.data.photos, ...newPhotos] })
+      },
+      fail: (err) => {
+        // 用户拒绝隐私授权或取消选择，仅非主动取消时提示
+        if (err && err.errMsg && !/cancel/i.test(err.errMsg)) {
+          util.showToast('未获得相册/相机权限，无法选择照片')
+        }
       }
     })
   },
@@ -139,6 +155,12 @@ Page({
       util.showToast('实收数量不能超过订单数量，请检查后重试')
       return
     }
+    // B3 分批收货：只提交本次实收>0 或有异常标记的行，其余行本批不收
+    const submitItems = items.filter(item => item.receivedQty > 0 || item.isShortage || item.isQualityIssue || item.isWrongItem)
+    if (submitItems.length === 0) {
+      util.showToast('请填写本次实收数量后再提交')
+      return
+    }
 
     const app = getApp()
     const currentStore = app.globalData.currentStore || {}
@@ -150,8 +172,9 @@ Page({
       return
     }
 
-    const hasAbnormal = items.some(i => i.isShortage || i.isQualityIssue || i.isWrongItem)
-    const msg = hasAbnormal ? '本次验收有异常标记，确认提交？' : '确认提交验收？'
+    const hasAbnormal = submitItems.some(i => i.isShortage || i.isQualityIssue || i.isWrongItem)
+    const receivedLines = submitItems.filter(i => i.receivedQty > 0).length
+    const msg = hasAbnormal ? `本次验收有异常标记，确认提交第${receivedLines}行实收数量？` : `分批收货：本次实收${receivedLines}行，确认提交？`
     // 先置位再弹确认框，避免弹窗期间双击并发提交
     this.setData({ isSubmitting: true })
     const confirmed = await util.showConfirm(msg)
@@ -174,7 +197,8 @@ Page({
         photoFileIds,
         // 收货日期以门店本地日期为准，避免凌晨 0-8 点被服务端 UTC 时间归档到前一天
         receiptDate: util.formatDate(new Date()),
-        items: items.map(item => ({
+        // B3 分批收货：只传本次实收>0 或有异常标记的行
+        items: submitItems.map(item => ({
           orderItemId: item.itemId,
           productId: item.productId,
           productName: item.productName || item.productNameSnapshot,

@@ -108,6 +108,7 @@ function normalizePurchaseItem(item = {}) {
     categorySnapshot: item.categorySnapshot || item.category_snapshot || '',
     unitSnapshot: item.unitSnapshot || item.unit_snapshot || item.unit || '',
     supplierId: item.supplierId !== undefined ? item.supplierId : (item.supplier_id || ''),
+    supplierName: item.supplierName || item.supplier_name || '',
     orderQty: item.orderQty !== undefined ? item.orderQty : item.order_qty,
     isManual: item.isManual !== undefined ? item.isManual : !!item.is_manual,
     remark: item.remark || ''
@@ -130,6 +131,14 @@ function normalizePurchaseOrder(order = {}) {
     createdById: order.createdById || order.created_by_id || order.created_by || '',
     createdBy: order.createdByName || order.created_by_name || order.createdBy || order.created_by || '',
     orderStatus: order.orderStatus || order.order_status || '',
+    // S9：手动商品专用单与凭证核销状态
+    isManual: !!(order.isManual || order.is_manual),
+    verifyStatus: order.verifyStatus || order.verify_status || '',
+    verifyAmount: order.verifyAmount || order.verify_amount || '',
+    verifyNote: order.verifyNote || order.verify_note || '',
+    verifyRejectNote: order.verifyRejectNote || order.verify_reject_note || '',
+    verifyVoucherFileIds: order.verifyVoucherFileIds || order.verify_voucher_file_ids || [],
+    cancelRequested: !!(order.cancelRequested || order.cancel_requested),
     createdAt: formatDateTime(order.createdAt || order.created_at),
     submittedAt: formatDateTime(order.submittedAt || order.submitted_at || order.createdAt || order.created_at),
     remark: order.remark || '',
@@ -221,6 +230,22 @@ async function getFileUrl(fileID) {
   }
 }
 
+// 批量把 fileID 换成临时链接（getTempFileURL 单次最多 50 个，这里按 50 分批）
+async function getFileUrls(fileIDs = []) {
+  const ids = (fileIDs || []).filter(Boolean)
+  if (!wx.cloud || ids.length === 0) return []
+  const urls = []
+  for (let i = 0; i < ids.length; i += 50) {
+    try {
+      const res = await wx.cloud.getTempFileURL({ fileList: ids.slice(i, i + 50) })
+      res.fileList.forEach(f => { if (f && f.tempFileURL) urls.push(f.tempFileURL) })
+    } catch (err) {
+      console.warn('[cloud] 批量获取文件链接失败:', err)
+    }
+  }
+  return urls
+}
+
 module.exports = {
   callFunction,
   formatDateTime,
@@ -231,5 +256,6 @@ module.exports = {
   normalizePrice,
   normalizeReport,
   uploadReceiptPhotos,
-  getFileUrl
+  getFileUrl,
+  getFileUrls
 }

@@ -1,0 +1,70 @@
+/* pages/supplier-orders/supplier-orders.wxss */
+
+.tabs-scroll {
+  white-space: nowrap;
+  margin-bottom: 20rpx;
+}
+
+.tabs {
+  display: flex;
+  gap: 16rpx;
+}
+
+.tab-item {
+  flex-shrink: 0;
+  padding: 12rpx 28rpx;
+  border-radius: 32rpx;
+  background: var(--color-bg-card);
+  font-size: 26rpx;
+  color: var(--color-text-secondary);
+  box-shadow: var(--shadow-card);
+}
+
+.tab-item-active {
+  background: var(--color-primary);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.tab-count {
+  margin-left: 8rpx;
+  font-size: 22rpx;
+  opacity: 0.85;
+}
+
+.order-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.order-store {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.order-no {
+  margin-top: 8rpx;
+}
+
+.order-meta {
+  margin-top: 4rpx;
+}
+
+.order-product {
+  padding: 10rpx 0;
+  font-size: 28rpx;
+}
+
+.order-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 20rpx;
+  margin-top: 20rpx;
+}
+
+.list-footer {
+  text-align: center;
+  padding: 24rpx 0;
+}

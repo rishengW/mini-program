@@ -13,7 +13,11 @@ Page({
     keyword: '',
     showEdit: false,
     editItem: null,
-    newPrice: ''
+    newPrice: '',
+    // 新增价格（首次定价：supplier_product_price 无记录的商品）
+    showAdd: false,
+    products: [],
+    addForm: { supplierId: '', supplierName: '', productId: '', productName: '', price: '' }
   },
 
   onLoad(options) {
@@ -56,6 +60,7 @@ Page({
     this._initialSupplierId = ''
     this.setData({
       suppliers,
+      products,
       supplierOptions: [{ supplierId: '', supplierName: '全部供应商' }, ...suppliers],
       allPrices,
       selectedSupplierId,
@@ -134,6 +139,58 @@ Page({
       await this.loadData()
     } else {
       util.showToast(result.msg || '更新失败')
+    }
+  },
+
+  // ===== 新增价格（首次定价）=====
+  showAddPrice() {
+    this.setData({
+      showAdd: true,
+      addForm: { supplierId: '', supplierName: '', productId: '', productName: '', price: '' }
+    })
+  },
+
+  closeAdd() { this.setData({ showAdd: false }) },
+
+  onAddSupplierPick(e) {
+    const sup = this.data.suppliers[e.detail.value]
+    if (sup) this.setData({ 'addForm.supplierId': sup.supplierId, 'addForm.supplierName': sup.supplierName })
+  },
+
+  onAddProductPick(e) {
+    const product = this.data.products[e.detail.value]
+    if (product) this.setData({ 'addForm.productId': product.productId, 'addForm.productName': product.name })
+  },
+
+  onAddPriceInput(e) {
+    this.setData({ 'addForm.price': e.detail.value })
+  },
+
+  async saveNewPrice() {
+    const { addForm } = this.data
+    if (!addForm.supplierId) return util.showToast('请选择供应商')
+    if (!addForm.productId) return util.showToast('请选择商品')
+    const price = parseFloat(addForm.price)
+    if (isNaN(price) || price <= 0) return util.showToast('请输入有效价格')
+
+    // 已有当前价的组合引导走列表改价，避免重复建行
+    const existed = this.data.allPrices.some(p => p.supplierId === addForm.supplierId && p.productId === addForm.productId)
+    if (existed) return util.showToast('该供应商已有此商品价格，请在列表中修改')
+
+    const app = getApp()
+    const result = await cloud.callFunction('updateProductPrice', {
+      supplierId: addForm.supplierId,
+      productId: addForm.productId,
+      newPrice: price,
+      updatedBy: (app.globalData.userInfo && app.globalData.userInfo.name) || ''
+    })
+
+    if (result.code === 0) {
+      util.showSuccess('价格已添加')
+      this.setData({ showAdd: false })
+      await this.loadData()
+    } else {
+      util.showToast(result.msg || '添加失败')
     }
   }
 })

@@ -30,7 +30,8 @@ Page({
         const id = e.currentTarget.dataset.id
         const idx = this.data.messages.findIndex(m => m.id === id)
         if (idx < 0) return
-        if (!this.data.messages[idx].read) {
+        const message = this.data.messages[idx]
+        if (!message.read) {
             const app = getApp()
             const result = await cloud.callFunction('dataService', {
                 action: 'markMessageRead',
@@ -41,6 +42,16 @@ Page({
                 [`messages[${idx}].read`]: true,
                 unreadCount: Math.max(0, this.data.unreadCount - 1)
             })
+        }
+        // 带 biz_id 的订单类消息跳转对应单据：门店侧进采购单详情，供货商进订单列表
+        if (message.bizId) {
+            const role = (getApp().globalData.userInfo || {}).role
+            if (role === 'supplier') {
+                wx.navigateTo({ url: '/pages/supplier-orders/supplier-orders' })
+            } else {
+                wx.navigateTo({ url: '/pages/purchase-detail/purchase-detail?id=' + message.bizId })
+            }
+            return
         }
         util.showToast('已读')
     },

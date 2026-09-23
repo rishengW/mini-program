@@ -60,6 +60,22 @@
   border-top: 1rpx solid #F0F0F0;
 }
 
+/* 供货商分组头（S6） */
+.supplier-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20rpx 0 12rpx;
+  border-bottom: 1rpx solid #E8E8E8;
+  margin-bottom: 4rpx;
+}
+
+.supplier-group-name {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #595959;
+}
+
 /* 商品行 */
 .goods-row {
   display: flex;
@@ -111,6 +127,21 @@
 .manual-goods-row {
   border-left: 4rpx solid #FAAD14;
   padding-left: 16rpx;
+}
+
+/* S9：凭证图片 */
+.voucher-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  margin-top: 16rpx;
+}
+
+.voucher-img {
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: 8rpx;
+  border: 1rpx solid #F0F0F0;
 }
 
 /* 底部操作 */

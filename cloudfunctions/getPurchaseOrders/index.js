@@ -6,7 +6,6 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
 const TO_RECEIVE_STATUS = ['submitted', 'approved', 'report_generated', 'partial_received', 'to_receive']
-
 exports.main = async (event = {}) => {
   try {
     const check = await auth.requireUser(event)
@@ -43,13 +42,15 @@ exports.main = async (event = {}) => {
     if (orderDate) query.order_date = orderDate
 
     // 各状态数量用于前端筛选 tab：在角色约束的基准条件上统计，不受当前 orderStatus 过滤影响
-    const [allRes, draftRes, submittedRes, toReceiveRes, receivedRes, abnormalRes] = await Promise.all([
+    const [allRes, draftRes, submittedRes, toReceiveRes, receivedRes, abnormalRes, cancelledRes, partialRes] = await Promise.all([
       db.collection('purchase_order').where(baseQuery).count(),
       db.collection('purchase_order').where({ ...baseQuery, order_status: 'draft' }).count(),
       db.collection('purchase_order').where({ ...baseQuery, order_status: 'submitted' }).count(),
       db.collection('purchase_order').where({ ...baseQuery, order_status: _.in(TO_RECEIVE_STATUS) }).count(),
       db.collection('purchase_order').where({ ...baseQuery, order_status: 'received' }).count(),
-      db.collection('purchase_order').where({ ...baseQuery, order_status: 'receipt_abnormal' }).count()
+      db.collection('purchase_order').where({ ...baseQuery, order_status: 'receipt_abnormal' }).count(),
+      db.collection('purchase_order').where({ ...baseQuery, order_status: 'cancelled' }).count(),
+      db.collection('purchase_order').where({ ...baseQuery, order_status: 'partial_received' }).count()
     ])
     const statusCounts = {
       all: allRes.total,
@@ -57,7 +58,9 @@ exports.main = async (event = {}) => {
       submitted: submittedRes.total,
       to_receive: toReceiveRes.total,
       received: receivedRes.total,
-      receiptAbnormal: abnormalRes.total
+      receiptAbnormal: abnormalRes.total,
+      cancelled: cancelledRes.total,
+      partialReceived: partialRes.total
     }
 
     const countRes = await db.collection('purchase_order').where(query).count()

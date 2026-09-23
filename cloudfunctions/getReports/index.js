@@ -33,7 +33,8 @@ exports.main = async (event = {}) => {
 
     const allowedReportTypes = [
       'store_order_report', 'store_receipt_report', 'store_receipt_price_report',
-      'supplier_order_report', 'supplier_receipt_report', 'supplier_receipt_price_report'
+      'supplier_order_report', 'supplier_receipt_report', 'supplier_receipt_price_report',
+      'store_daily_summary_report', 'store_monthly_summary_report'
     ]
     if (reportType) {
       if (!allowedReportTypes.includes(reportType)) return { code: -1, msg: '报表类型无效' }

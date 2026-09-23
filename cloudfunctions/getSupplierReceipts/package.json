@@ -1,0 +1,9 @@
+{
+  "name": "getSupplierReceipts",
+  "version": "1.0.0",
+  "description": "供货商视角的收货明细列表（对账用）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

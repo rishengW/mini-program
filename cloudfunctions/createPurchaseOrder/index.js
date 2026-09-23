@@ -69,7 +69,8 @@ exports.main = async (event = {}) => {
       createdByName,
       items: inputItems,
       remark,
-      orderStatus = 'submitted'
+      orderStatus = 'submitted',
+      requestId = ''
     } = event
     let items = inputItems
     // 业务日期按 UTC+8（项目用户全部在中国时区），避免凌晨 0-8 点落到前一天
@@ -86,9 +87,32 @@ exports.main = async (event = {}) => {
     if (!isDate(actualDate) || !isDate(actualDeliveryDate) || actualDeliveryDate < actualDate) {
       return { code: -1, msg: '采购日期或期望到货日期无效' }
     }
+
+    // 幂等防御：前端请求超时但服务端实际成功时，用户重试会带同一 requestId。
+    // 命中同用户已建的单则直接返回该单号，不再重复建单。
+    let idempotentOrderNo = ''
+    let idempotentIsDraft = false
+    const trimmedRequestId = String(requestId || '').trim()
+    if (trimmedRequestId) {
+      const dupRes = await db.collection('purchase_order')
+        .where({ request_id: trimmedRequestId, created_by: user.user_id || user._id })
+        .orderBy('created_at', 'desc')
+        .limit(1)
+        .get()
+      if (dupRes.data.length) {
+        idempotentOrderNo = dupRes.data[0].purchase_order_id
+        idempotentIsDraft = dupRes.data[0].order_status === 'draft'
+      }
+    }
     let existingOrder = null
     let storeId = inputStoreId
     let storeName = inputStoreName
+    // 幂等命中：该请求此前已成功建单，直接返回原单号（不区分草稿/已提交）。
+    // 例外：命中的正是本次要编辑的草稿（同单号且仍为草稿）——用户在同页修改内容后
+    // 再次保存，必须继续走编辑流程应用变更，否则修改被幂等短路静默丢弃。
+    if (idempotentOrderNo && !(orderId && orderId === idempotentOrderNo && idempotentIsDraft)) {
+      return { code: 0, data: { orderId: idempotentOrderNo, reportGenerated: false, reportsGenerated: 0, idempotent: true } }
+    }
     const isGlobal = ['super_admin', 'purchaser'].includes(user.role)
     if (!isGlobal) {
       if (!user.default_store_id || (storeId && storeId !== user.default_store_id)) return { code: -403, msg: '无权为其他门店创建采购订单' }
@@ -184,6 +208,10 @@ exports.main = async (event = {}) => {
     if (manualCount > 5) {
       return { code: -1, msg: '手动商品每单最多5个' }
     }
+    // S9 拍板（2026-09-22）：强制拆单——手动商品与档案商品不可混单（后端兜底，防绕过前端）
+    if (manualCount > 0 && manualCount < items.length) {
+      return { code: -1, msg: '手动商品需单独下单：手动商品与档案商品不能混在同一张采购单' }
+    }
 
     // 编辑草稿时沿用原订单号；新建时生成订单号。
     const dateStr = actualDate.replace(/-/g, '')
@@ -197,6 +225,13 @@ exports.main = async (event = {}) => {
       order_date: actualDate,
       delivery_date: actualDeliveryDate,
       order_status: orderStatus,
+      // S9 拍板（2026-09-22）：手动商品专用单标记（整单只有手动商品才有值，混单已在上方拦截）
+      is_manual: manualCount > 0,
+      // 凭证核销状态：手动单收货后进入待核销，管理员核销回填实付金额后闭环（B 方案）
+      verify_status: manualCount > 0 ? 'none' : '',
+      verify_amount: null,
+      verify_voucher_file_ids: [],
+      request_id: trimmedRequestId,
       remark: remark || '',
       updated_at: db.serverDate()
     }
@@ -263,7 +298,10 @@ exports.main = async (event = {}) => {
 
     // ===== 报表1: 门店下单报表 =====
     const storeVer = await getNextVersion('store_order_report', storeId, actualDate)
-    let csv1 = csvField('商品名称') + ',' + csvField('分类') + ',' + csvField('单位') + ',' + csvField('下单数量') + ',' + csvField('备注') + '\n'
+    // S9：手动商品专用单在报表头打标，区分口径（不推送供应商、金额走凭证核销）
+    const manualTag = manualCount > 0 ? [csvField('单据类型'), csvField('手动商品专用单（线下采购，凭证核销）')].join(',') + '\n' : ''
+    const csv1Info = manualTag + [csvField('采购单号'), csvField(orderNo), csvField('门店'), csvField(storeName), csvField('下单日期'), csvField(actualDate), csvField('期望到货'), csvField(actualDeliveryDate), csvField('经办人'), csvField(createdByName || '')].join(',') + '\n'
+    let csv1 = csv1Info + [csvField('商品名称'), csvField('分类'), csvField('单位'), csvField('下单数量'), csvField('备注')].join(',') + '\n'
     items.forEach(item => {
       csv1 += [csvField(item.productName), csvField(item.category), csvField(item.unit), csvField(item.orderQty), csvField(item.remark || '')].join(',') + '\n'
     })
@@ -273,7 +311,7 @@ exports.main = async (event = {}) => {
       data: {
         report_id: 'RPT_SO_' + orderNo, report_type: 'store_order_report',
         report_scope: 'store', scope_id: storeId, scope_name: storeName,
-        related_date: actualDate, source_order_id: orderNo,
+        related_date: actualDate, source_order_id: orderNo, basis_date_type: 'order_date',
         file_name: f1, file_url: u1.fileID, file_version: storeVer,
         generated_at: db.serverDate(), generated_by_system: true, status: 'generated'
       }
@@ -295,7 +333,10 @@ exports.main = async (event = {}) => {
       const idChunk = orderSupplierIds.slice(i, i + 20)
       const supRes = await db.collection('supplier').where({ supplier_id: _.in(idChunk) }).limit(100).get()
       supRes.data.forEach(s => {
-        if (supplierMap[s.supplier_id]) supplierMap[s.supplier_id].name = s.supplier_name
+        if (supplierMap[s.supplier_id]) {
+          supplierMap[s.supplier_id].name = s.supplier_name
+          supplierMap[s.supplier_id].contact = [s.contact_name, s.contact_phone].filter(Boolean).join(' ')
+        }
       })
     }
 
@@ -305,7 +346,8 @@ exports.main = async (event = {}) => {
       const supName = supplierMap[sid].name || sid
       const supVer = await getNextVersion('supplier_order_report', sid, actualDate)
 
-      let csvSup = [csvField('门店'), csvField('商品名称'), csvField('订货数量'), csvField('单位'), csvField('备注')].join(',') + '\n'
+      let csvSup = [csvField('采购单号'), csvField(orderNo), csvField('供应商'), csvField(supName), csvField('联系人'), csvField(supplierMap[sid].contact || ''), csvField('下单日期'), csvField(actualDate), csvField('期望到货'), csvField(actualDeliveryDate)].join(',') + '\n'
+      csvSup += [csvField('门店'), csvField('商品名称'), csvField('订货数量'), csvField('单位'), csvField('备注')].join(',') + '\n'
       supItems.forEach(item => {
         csvSup += [csvField(storeName), csvField(item.productName), csvField(item.orderQty), csvField(item.unit), csvField(item.remark || '')].join(',') + '\n'
       })
@@ -316,7 +358,7 @@ exports.main = async (event = {}) => {
         data: {
           report_id: 'RPT_SUO_' + sid + '_' + orderNo, report_type: 'supplier_order_report',
           report_scope: 'supplier', scope_id: sid, scope_name: supName,
-          related_date: actualDate, source_order_id: orderNo,
+          related_date: actualDate, source_order_id: orderNo, basis_date_type: 'order_date',
           file_name: fSup, file_url: uSup.fileID, file_version: supVer,
           generated_at: db.serverDate(), generated_by_system: true, status: 'generated'
         }
@@ -335,6 +377,34 @@ exports.main = async (event = {}) => {
     // duplicate order or incorrectly report that the save failed.
     if (persistedOrderNo) {
       console.error('[createPurchaseOrder] 订单已保存，但报表生成失败:', err)
+      // 清单 #7：缺口从"静默缺失"变为"有标记、有提示"，管理员可经
+      // dataService.regenerateOrderReports 补生成 ① ② 报表。
+      try {
+        await db.collection('purchase_order')
+          .where({ purchase_order_id: persistedOrderNo })
+          .update({ data: { missing_reports: true, updated_at: db.serverDate() } })
+        const adminRes = await db.collection('app_user')
+          .where({ role: 'super_admin', status: 1 })
+          .limit(1)
+          .get()
+        const adminId = (adminRes.data[0] && (adminRes.data[0].user_id || adminRes.data[0]._id)) || ''
+        await db.collection('message').add({
+          data: {
+            message_id: `MSG_ORDER_REPORT_MISSING_${persistedOrderNo}`,
+            type: 'abnormal',
+            title: '订货报表生成失败',
+            content: `采购单 ${persistedOrderNo} 已保存，但订货报表生成失败，请管理员补生成。`,
+            biz_id: persistedOrderNo,
+            recipient_user_id: adminId,
+            store_id: orderData && orderData.store_id || '',
+            read: false,
+            read_by: [],
+            created_at: db.serverDate()
+          }
+        })
+      } catch (markErr) {
+        console.error('[createPurchaseOrder] 缺报表标记/通知写入失败:', markErr)
+      }
       return {
         code: 0,
         data: { orderId: persistedOrderNo, reportGenerated: false, reportsGenerated: 0, reportWarning: '订单已保存，但报表生成失败，请联系管理员处理。' }

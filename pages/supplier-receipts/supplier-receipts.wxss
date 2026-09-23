@@ -1,0 +1,16 @@
+/* pages/supplier-receipts/supplier-receipts.wxss */
+
+.receipt-head {
+  font-size: 30rpx;
+  color: var(--color-text-primary);
+}
+
+.receipt-product {
+  font-size: 28rpx;
+  color: var(--color-text-primary);
+}
+
+.list-footer {
+  text-align: center;
+  padding: 24rpx 0;
+}

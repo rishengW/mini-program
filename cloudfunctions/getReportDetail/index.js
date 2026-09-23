@@ -119,6 +119,7 @@ exports.main = async (event = {}) => {
           const order = orderMap[item.purchase_order_id]
           if (!order) return
           rows.push({
+            purchaseOrderId: item.purchase_order_id,
             storeName: order.store_name,
             productName: item.product_name_snapshot,
             orderQty: item.order_qty,
@@ -150,6 +151,7 @@ exports.main = async (event = {}) => {
           if (!receipt) return
           const abnormalTypeNames = getAbnormalTypeNames(item)
           rows.push({
+            purchaseOrderId: receipt.purchase_order_id,
             storeName: receipt.store_name,
             productName: item.product_name,
             receivedQty: item.received_qty,

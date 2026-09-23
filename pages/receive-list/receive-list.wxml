@@ -39,7 +39,17 @@
           <text class="text-sm text-tertiary">{{item.items.length}}种商品</text>
         </view>
       </view>
-      <view class="text-sm text-tertiary">收货人: {{item.receivedBy}}</view>
+      <view class="flex-between" style="margin-top:8rpx;">
+        <view class="text-sm text-tertiary">
+          收货人: {{item.receivedBy}}
+          <text wx:if="{{item.missingReports}}" class="tag tag-danger" style="margin-left:8rpx;">缺报表</text>
+        </view>
+        <view style="display:flex;gap:16rpx;">
+          <text wx:if="{{item.photoCount > 0}}" class="action-link" catchtap="previewReceiptPhotos" data-index="{{index}}">照片({{item.photoCount}})</text>
+          <text wx:if="{{item.missingReports && canRegenerate}}" class="action-link" catchtap="regenerateReports" data-index="{{index}}">补生成</text>
+          <text wx:if="{{item.hasAbnormal}}" class="action-link" catchtap="settleReceipt" data-index="{{index}}">补结算</text>
+        </view>
+      </view>
     </view>
   </view>
 </view>

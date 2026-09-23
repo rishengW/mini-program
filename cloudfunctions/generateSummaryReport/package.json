@@ -1,0 +1,9 @@
+{
+  "name": "generateSummaryReport",
+  "version": "1.0.0",
+  "description": "门店日汇总/月汇总报表生成",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

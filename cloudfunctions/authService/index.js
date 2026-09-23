@@ -6,6 +6,7 @@ const db = cloud.database()
 
 const USER_COLLECTION = 'app_user'
 const STORE_COLLECTION = 'store'
+const SUPPLIER_COLLECTION = 'supplier'
 const PASSWORD_ITERATIONS = 120000
 const PASSWORD_KEY_LENGTH = 32
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000
@@ -13,9 +14,11 @@ const ROLE_LABELS = {
   chef: '门店下单人员',
   store_manager: '店长',
   purchaser: '管理员',
-  super_admin: '超级管理员'
+  super_admin: '超级管理员',
+  supplier: '供货商'
 }
 const STORE_ROLES = ['chef', 'store_manager']
+const SUPPLIER_ROLE = 'supplier'
 
 function normalizeUsername(value) {
   return String(value || '').trim().toLowerCase()
@@ -52,6 +55,7 @@ function publicUser(user) {
     role: user.role,
     roleLabel: user.role_label || ROLE_LABELS[user.role] || user.role,
     defaultStoreId: user.default_store_id || null,
+    defaultSupplierId: user.default_supplier_id || null,
     status: user.status === undefined ? 1 : user.status
   }
 }
@@ -76,6 +80,15 @@ async function findStore(storeId) {
   return result.data[0] || null
 }
 
+async function findSupplier(supplierId) {
+  if (!supplierId) return null
+  const result = await db.collection(SUPPLIER_COLLECTION)
+    .where({ supplier_id: supplierId, status: 1 })
+    .limit(1)
+    .get()
+  return result.data[0] || null
+}
+
 async function getDefaultStore(user) {
   const assignedStore = await findStore(user.default_store_id)
   if (assignedStore) return assignedStore
@@ -91,14 +104,27 @@ async function getDefaultStore(user) {
 
 async function getSessionUser(authToken) {
   if (!authToken) return null
+  const tokenHash = hashToken(authToken)
   const result = await db.collection(USER_COLLECTION)
-    .where({ session_token_hash: hashToken(authToken), status: 1 })
+    .where({ status: 1, sessions: { token_hash: tokenHash } })
     .limit(1)
     .get()
-  const user = result.data[0]
-  if (!user || !user.session_expires_at) return null
-
-  const expiresAt = new Date(user.session_expires_at).getTime()
+  let user = result.data[0]
+  if (!user) {
+    // 兼容旧单会话字段（未重新登录的历史设备）
+    const legacy = await db.collection(USER_COLLECTION)
+      .where({ session_token_hash: tokenHash, status: 1 })
+      .limit(1)
+      .get()
+    user = legacy.data[0]
+    if (!user || !user.session_expires_at) return null
+    const legacyExpires = new Date(user.session_expires_at).getTime()
+    if (!Number.isFinite(legacyExpires) || legacyExpires <= Date.now()) return null
+    return user
+  }
+  const session = (user.sessions || []).find(s => s && s.token_hash === tokenHash)
+  if (!session || !session.expires_at) return null
+  const expiresAt = new Date(session.expires_at).getTime()
   if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return null
   return user
 }
@@ -119,6 +145,9 @@ function validateUserInput(data, requirePassword) {
   }
   if (STORE_ROLES.includes(role) && !data.defaultStoreId) {
     return { error: '该角色必须关联门店' }
+  }
+  if (role === SUPPLIER_ROLE && !data.defaultSupplierId) {
+    return { error: '该角色必须关联供货商' }
   }
   return { username, name, password, role }
 }
@@ -158,27 +187,50 @@ async function login(event) {
     return { code: -1, msg: '账号与所选登录角色不匹配' }
   }
 
-  const store = await getDefaultStore(user)
-  if (!store) return { code: -1, msg: '账号未关联有效门店，请联系管理员' }
+  // 供货商角色不关联门店，改为校验并加载其供货商档案
+  let store = null
+  let supplier = null
+  if (user.role === SUPPLIER_ROLE) {
+    supplier = await findSupplier(user.default_supplier_id)
+    if (!supplier) return { code: -1, msg: '账号关联的供货商档案不存在或已停用，请联系管理员' }
+  } else {
+    store = await getDefaultStore(user)
+    if (!store) return { code: -1, msg: '账号未关联有效门店，请联系管理员' }
+  }
 
   const sessionToken = crypto.randomBytes(32).toString('hex')
   const sessionExpiresAt = new Date(Date.now() + SESSION_TTL_MS)
-  await db.collection(USER_COLLECTION).doc(user._id).update({
-    data: {
-      session_token_hash: hashToken(sessionToken),
-      session_expires_at: sessionExpiresAt,
-      login_fail_count: 0,
-      login_locked_until: null,
-      last_login_at: db.serverDate(),
-      updated_at: db.serverDate()
-    }
-  })
+  // B12 多设备会话：每台设备一条会话记录，最多保留 5 条（挤出最旧的）
+  const sessions = (Array.isArray(user.sessions) ? user.sessions : [])
+    .filter(s => s && new Date(s.expires_at).getTime() > Date.now())
+  sessions.push({ token_hash: hashToken(sessionToken), expires_at: sessionExpiresAt })
+  while (sessions.length > 5) sessions.shift()
+  // 记录当前设备 openid（微信订阅消息推送的 touser 需要）；同一微信号多账号登录时以后登录者为准
+  const wxContext = cloud.getWXContext()
+  const loginUpdate = {
+    // session_token_hash 兼容保留（指向最新会话），旧版云函数未重部署时仍可用
+    session_token_hash: hashToken(sessionToken),
+    session_expires_at: sessionExpiresAt,
+    sessions,
+    login_fail_count: 0,
+    login_locked_until: null,
+    last_login_at: db.serverDate(),
+    updated_at: db.serverDate()
+  }
+  if (wxContext && wxContext.OPENID) loginUpdate.openid = wxContext.OPENID
+  await db.collection(USER_COLLECTION).doc(user._id).update({ data: loginUpdate })
 
   return {
     code: 0,
     data: {
       user: publicUser(user),
       store: publicStore(store),
+      supplier: supplier ? {
+        supplierId: supplier.supplier_id,
+        supplierName: supplier.supplier_name,
+        contactName: supplier.contact_name || '',
+        contactPhone: supplier.contact_phone || ''
+      } : null,
       sessionToken,
       sessionExpiresAt: sessionExpiresAt.toISOString()
     }
@@ -188,8 +240,17 @@ async function login(event) {
 async function logout(event) {
   const user = await getSessionUser(event.authToken)
   if (user) {
+    // 仅移除当前设备的会话，其他设备不受影响
+    const tokenHash = hashToken(event.authToken || '')
+    const sessions = (Array.isArray(user.sessions) ? user.sessions : [])
+      .filter(s => s && s.token_hash !== tokenHash)
     await db.collection(USER_COLLECTION).doc(user._id).update({
-      data: { session_token_hash: '', session_expires_at: null, updated_at: db.serverDate() }
+      data: {
+        sessions,
+        session_token_hash: '',
+        session_expires_at: null,
+        updated_at: db.serverDate()
+      }
     })
   }
   return { code: 0 }
@@ -212,6 +273,7 @@ async function changePassword(event) {
       password_salt: salt,
       password_hash: hashPassword(newPassword, salt),
       password_iterations: PASSWORD_ITERATIONS,
+      sessions: [],
       session_token_hash: '',
       session_expires_at: null,
       updated_at: db.serverDate()
@@ -268,6 +330,9 @@ async function createUser(event) {
   if (STORE_ROLES.includes(input.role) && !(await findStore(event.defaultStoreId))) {
     return { code: -1, msg: '关联门店不存在或已停用' }
   }
+  if (input.role === SUPPLIER_ROLE && !(await findSupplier(event.defaultSupplierId))) {
+    return { code: -1, msg: '关联供货商不存在或已停用' }
+  }
 
   const salt = crypto.randomBytes(16).toString('hex')
   const userId = 'U' + Date.now()
@@ -280,6 +345,7 @@ async function createUser(event) {
       role: input.role,
       role_label: ROLE_LABELS[input.role],
       default_store_id: STORE_ROLES.includes(input.role) ? event.defaultStoreId : '',
+      default_supplier_id: input.role === SUPPLIER_ROLE ? event.defaultSupplierId : '',
       status: 1,
       password_salt: salt,
       password_hash: hashPassword(input.password, salt),
@@ -312,6 +378,9 @@ async function updateUser(event) {
   if (STORE_ROLES.includes(input.role) && !(await findStore(event.defaultStoreId))) {
     return { code: -1, msg: '关联门店不存在或已停用' }
   }
+  if (input.role === SUPPLIER_ROLE && !(await findSupplier(event.defaultSupplierId))) {
+    return { code: -1, msg: '关联供货商不存在或已停用' }
+  }
 
   const effectiveRole = target.username === 'admin' ? 'super_admin' : input.role
   const updateData = {
@@ -321,6 +390,7 @@ async function updateUser(event) {
     role: effectiveRole,
     role_label: ROLE_LABELS[effectiveRole],
     default_store_id: STORE_ROLES.includes(effectiveRole) ? event.defaultStoreId : '',
+    default_supplier_id: effectiveRole === SUPPLIER_ROLE ? event.defaultSupplierId : '',
     updated_at: db.serverDate()
   }
   if (input.password) {
@@ -328,6 +398,7 @@ async function updateUser(event) {
     updateData.password_salt = salt
     updateData.password_hash = hashPassword(input.password, salt)
     updateData.password_iterations = PASSWORD_ITERATIONS
+    updateData.sessions = []
     updateData.session_token_hash = ''
     updateData.session_expires_at = null
   }
@@ -355,6 +426,7 @@ async function resetPassword(event) {
       password_salt: salt,
       password_hash: hashPassword(newPassword, salt),
       password_iterations: PASSWORD_ITERATIONS,
+      sessions: [],
       session_token_hash: '',
       session_expires_at: null,
       updated_at: db.serverDate()

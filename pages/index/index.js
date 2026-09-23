@@ -13,7 +13,8 @@ Page({
     recentOrders: [],
     recentReports: [],
     isSuperAdmin: false,
-    isManager: false
+    isManager: false,
+    unreadMsg: 0
   },
 
   async onShow() {
@@ -24,6 +25,11 @@ Page({
     }
 
     const user = app.globalData.userInfo
+    // 供货商有独立门户，误入门店首页时直接转走
+    if (user && user.role === 'supplier') {
+      wx.reLaunch({ url: '/pages/supplier-home/supplier-home' })
+      return
+    }
     const store = app.globalData.currentStore || {}
     const authToken = app.globalData.authToken || wx.getStorageSync('authToken')
 
@@ -69,15 +75,23 @@ Page({
       roleLabel: user.roleLabel || user.role,
       isSuperAdmin: user.role === 'super_admin',
       isManager: ['super_admin', 'purchaser'].includes(user.role),
+      unreadMsg,
       stats, recentOrders, recentReports
     })
   },
 
   goStore() { wx.navigateTo({ url: '/pages/store-switch/store-switch' }) },
 
+  // 顶部铃铛入口：进消息中心（tabBar 页面需用 switchTab）
+  goMessages() {
+    wx.switchTab({ url: '/pages/message/message' })
+  },
+
   goAccount() { wx.navigateTo({ url: '/pages/account/account' }) },
 
   async switchAccount() {
+    const confirmed = await util.showConfirm('退出当前账号？')
+    if (!confirmed) return
     const app = getApp()
     await cloud.callFunction('authService', {
       action: 'logout',

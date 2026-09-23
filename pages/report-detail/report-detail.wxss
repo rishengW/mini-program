@@ -94,6 +94,19 @@
   margin-top: 8rpx;
 }
 
+/* 关联采购单跳转入口 */
+.report-order-link {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #1890FF;
+}
+
+/* 供应商报表行级跳转：商品名超链接样式 */
+.link-text {
+  color: #1890FF;
+  text-decoration: underline;
+}
+
 /* 导出 */
 .export-section {
   padding: 32rpx 0;

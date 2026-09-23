@@ -1,0 +1,31 @@
+<!-- pages/supplier-receipts/supplier-receipts.wxml -->
+<view class="container">
+  <view wx:for="{{items}}" wx:key="receipt_item_id" class="list-item">
+    <view class="flex-between">
+      <view class="receipt-head text-bold">{{item.store_name}} · {{item.receipt_date}}</view>
+      <view wx:if="{{item.abnormal}}" class="tag tag-danger">异常</view>
+      <view wx:else class="tag tag-success">正常</view>
+    </view>
+    <view class="text-sm text-tertiary" style="margin-top:6rpx;">收货单 {{item.receipt_id}} · 订单 {{item.purchase_order_id}}</view>
+    <view class="divider"></view>
+    <view class="flex-between">
+      <text class="receipt-product">{{item.product_name}}</text>
+      <text class="{{item.abnormal ? 'text-danger' : ''}}">实收 {{item.receivedQty}} / 订 {{item.orderQty}} {{item.unit_snapshot}}</text>
+    </view>
+    <view class="flex-between" style="margin-top:10rpx;">
+      <text class="text-sm text-tertiary">单价 {{item.priceText}}</text>
+      <text class="text-bold">金额 {{item.amountText}}</text>
+    </view>
+    <view wx:if="{{item.remark}}" class="text-sm text-tertiary" style="margin-top:10rpx;">备注: {{item.remark}}</view>
+    <block wx:if="{{item.abnormals.length}}">
+      <view wx:for="{{item.abnormals}}" wx:for-item="rec" wx:key="index" class="text-sm {{rec.done ? 'text-tertiary' : 'text-danger'}}" style="margin-top:6rpx;">⚠ {{rec.text}}</view>
+    </block>
+  </view>
+
+  <view wx:if="{{items.length === 0 && !loading}}" class="empty-state">
+    <view class="empty-state-icon">📦</view>
+    <view class="empty-state-text">暂无收货记录</view>
+  </view>
+
+  <view wx:if="{{items.length > 0 && items.length >= total}}" class="list-footer text-sm text-tertiary">已加载全部 {{total}} 条</view>
+</view>
