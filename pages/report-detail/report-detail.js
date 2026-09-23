@@ -74,6 +74,13 @@ Page({
     wx.navigateTo({ url: '/pages/purchase-detail/purchase-detail?id=' + orderId })
   },
 
+  // 供应商类报表行点击：按行跳对应采购单（供应商报表按日聚合多单，需逐行跳转）
+  goRowOrder(e) {
+    const orderId = e.currentTarget.dataset.orderId
+    if (!orderId) return
+    wx.navigateTo({ url: '/pages/purchase-detail/purchase-detail?id=' + orderId })
+  },
+
   async exportReport() {
     const { report } = this.data
     if (report.fileUrl || report.file_url) {

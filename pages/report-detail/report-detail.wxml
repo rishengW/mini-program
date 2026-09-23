@@ -48,7 +48,7 @@
         <text class="col-unit">单位</text>
       </view>
       <view wx:for="{{rows}}" wx:key="index" class="table-row {{item.receivedQty < item.orderQty ? 'row-warning' : ''}}">
-        <text class="col-name">{{item.productName}}</text>
+        <text class="col-name link-text" bindtap="goSourceOrder">{{item.productName}} ›</text>
         <text class="col-num">{{item.orderQty}}</text>
         <text class="col-num text-bold {{item.receivedQty < item.orderQty ? 'text-danger' : 'text-success'}}">{{item.receivedQty}}</text>
         <text class="col-unit">{{item.unit}}</text>
@@ -64,9 +64,9 @@
         <text class="col-num">实收</text>
         <text class="col-unit">单位</text>
       </view>
-      <view wx:for="{{rows}}" wx:key="index" class="table-row">
+      <view wx:for="{{rows}}" wx:key="index" class="table-row" data-order-id="{{item.purchaseOrderId}}">
         <text class="col-store text-sm">{{item.storeName}}</text>
-        <text class="col-name">{{item.productName}}</text>
+        <text class="col-name link-text" bindtap="goRowOrder" data-order-id="{{item.purchaseOrderId}}">{{item.productName}} ›</text>
         <text class="col-num text-bold">{{item.receivedQty}}</text>
         <text class="col-unit">{{item.unit}}</text>
         <text wx:if="{{item.abnormal}}" class="abnormal-label">{{item.abnormalStatus}}：{{item.abnormalText}}</text>
@@ -82,7 +82,7 @@
         <text class="col-amount">小计</text>
       </view>
       <view wx:for="{{rows}}" wx:key="index" class="table-row">
-        <text class="col-name">{{item.productName}}</text>
+        <text class="col-name link-text" bindtap="{{report.reportType === 'store_receipt_price_report' ? 'goSourceOrder' : 'goRowOrder'}}" data-order-id="{{item.purchaseOrderId}}">{{item.productName}} ›</text>
         <text class="col-num">{{item.receivedQty || item.qty}}</text>
         <text class="col-num">¥{{item.unitPrice}}</text>
         <text class="col-amount text-bold">¥{{item.subtotal}}</text>
@@ -103,8 +103,8 @@
         <text class="col-num">数量</text>
         <text class="col-unit">单位</text>
       </view>
-      <view wx:for="{{rows}}" wx:key="index" class="table-row">
-        <text class="col-name">{{item.productName}}</text>
+      <view wx:for="{{rows}}" wx:key="index" class="table-row" data-order-id="{{item.purchaseOrderId}}">
+        <text class="col-name link-text" bindtap="goRowOrder" data-order-id="{{item.purchaseOrderId}}">{{item.productName}} ›</text>
         <text class="col-store text-sm">{{item.storeName}}</text>
         <text class="col-num text-bold">{{item.orderQty || item.qty}}</text>
         <text class="col-unit">{{item.unit}}</text>

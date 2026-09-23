@@ -101,6 +101,12 @@
   color: #1890FF;
 }
 
+/* 供应商报表行级跳转：商品名超链接样式 */
+.link-text {
+  color: #1890FF;
+  text-decoration: underline;
+}
+
 /* 导出 */
 .export-section {
   padding: 32rpx 0;
