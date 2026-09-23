@@ -112,6 +112,8 @@ Page({
   goAccount() { wx.navigateTo({ url: '/pages/account/account' }) },
 
   async switchAccount() {
+    const confirmed = await util.showConfirm('退出当前账号？')
+    if (!confirmed) return
     const app = getApp()
     await cloud.callFunction('authService', {
       action: 'logout',

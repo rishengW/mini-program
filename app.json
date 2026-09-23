@@ -23,7 +23,8 @@
     "pages/supplier-home/supplier-home",
     "pages/supplier-orders/supplier-orders",
     "pages/supplier-receipts/supplier-receipts",
-    "pages/supplier-prices/supplier-prices"
+    "pages/supplier-prices/supplier-prices",
+    "pages/supplier-messages/supplier-messages"
   ],
   "window": {
     "navigationBarBackgroundColor": "#1890FF",

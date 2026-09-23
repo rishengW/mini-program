@@ -58,8 +58,12 @@ Page({
   },
 
   goMessages() {
-    // 消息中心是 tabBar 页面，navigateTo 无法打开
-    wx.switchTab({ url: '/pages/message/message' })
+    // 供应商专用消息页（非 tabBar），可正常 navigateTo
+    wx.navigateTo({ url: '/pages/supplier-messages/supplier-messages' })
+  },
+
+  goMessageCenter() {
+    wx.navigateTo({ url: '/pages/supplier-messages/supplier-messages' })
   },
 
   // 新订单微信服务通知：一次性订阅（授权一次可推一条），进门户时静默拉起；

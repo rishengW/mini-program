@@ -11,7 +11,7 @@
   </view>
 
   <!-- 通知条：未读消息（新订单下推等） -->
-  <view wx:if="{{unreadCount > 0 || latestMessage}}" class="notice-bar" bindtap="goMessages">
+  <view wx:if="{{unreadCount > 0 || latestMessage}}" class="notice-bar" bindtap="goMessageCenter">
     <view class="notice-icon">🔔</view>
     <view class="notice-content">
       <view class="notice-title">
@@ -35,6 +35,15 @@
   <!-- 功能入口 -->
   <view class="card">
     <view class="card-title">业务功能</view>
+    <view class="entry-item" bindtap="goMessages">
+      <view class="entry-icon">🔔</view>
+      <view class="entry-info">
+        <view class="entry-title">我的消息</view>
+        <view class="entry-desc">订单通知等站内消息</view>
+      </view>
+      <view wx:if="{{unreadCount > 0}}" class="notice-badge">{{unreadCount > 99 ? '99+' : unreadCount}}</view>
+      <view class="entry-arrow">▸</view>
+    </view>
     <view class="entry-item" bindtap="goOrders">
       <view class="entry-icon">📋</view>
       <view class="entry-info">
