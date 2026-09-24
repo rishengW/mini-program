@@ -80,12 +80,12 @@ Page({
     const canRequestCancel = cancelEligible && currentUser.role !== 'chef' && !order.cancelRequested
     const canForceCancel = cancelEligible && currentUser.role === 'super_admin'
     // S9（2026-09-22）：手动商品专用单凭证核销
-    // 提交凭证：店长/采购员/管理员，收货后可提交；核销裁决：仅管理员
+    // 提交凭证：店长/采购员/管理员，#22 拍板：须收齐（received）才可提交；核销裁决：仅管理员
     const isManualOrder = !!order.isManual
     const verifyStatus = order.verifyStatus || ''
     const canSubmitVoucher = isManualOrder &&
       ['store_manager', 'purchaser', 'super_admin'].includes(currentUser.role) &&
-      ['received', 'receipt_abnormal', 'partial_received'].includes(order.orderStatus) &&
+      order.orderStatus === 'received' &&
       ['none', 'rejected'].includes(verifyStatus)
     const canVerify = isManualOrder && verifyStatus === 'pending' &&
       ['purchaser', 'super_admin'].includes(currentUser.role)

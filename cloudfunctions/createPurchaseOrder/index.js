@@ -353,6 +353,8 @@ exports.main = async (event = {}) => {
     // ===== 报表2: 供应商订货汇总（按供应商分组） =====
     const supplierMap = {}
     items.forEach(item => {
+      // 清单 #24：手动商品不进订货汇总（显式 is_manual 过滤，不依赖 supplier_id 为空的隐式前提）
+      if (item.isManual || item.is_manual) return
       const sid = item.supplierId || 'unknown'
       if (!supplierMap[sid]) supplierMap[sid] = { items: [], name: '' }
       supplierMap[sid].items.push(item)

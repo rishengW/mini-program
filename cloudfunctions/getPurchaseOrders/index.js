@@ -65,20 +65,27 @@ exports.main = async (event = {}) => {
       return { code: -403, msg: '当前账号无权查看采购订单' }
     }
 
-    if (orderStatus) query.order_status = orderStatus
+    // to_verify 是虚拟筛选：按核销状态而非订单状态过滤（仅对能核销的全局角色有意义，清单 #20）
+    if (orderStatus === 'to_verify') {
+      if (!isGlobal) return { code: -403, msg: '当前账号无权查看待核销订单' }
+      query.verify_status = 'pending'
+    } else if (orderStatus) {
+      query.order_status = orderStatus
+    }
     if (orderDate) query.order_date = orderDate
 
     // 各状态数量用于前端筛选 tab：在角色约束的基准条件上统计，不受当前 orderStatus 过滤影响
     const baseQuery = { ...query }
     delete baseQuery.order_status
-    const [allRes, draftRes, submittedRes, receivedRes, abnormalRes, cancelledRes, partialRes] = await Promise.all([
+    const [allRes, draftRes, submittedRes, receivedRes, abnormalRes, cancelledRes, partialRes, toVerifyRes] = await Promise.all([
       db.collection('purchase_order').where(baseQuery).count(),
       db.collection('purchase_order').where({ ...baseQuery, order_status: 'draft' }).count(),
       db.collection('purchase_order').where({ ...baseQuery, order_status: 'submitted' }).count(),
       db.collection('purchase_order').where({ ...baseQuery, order_status: 'received' }).count(),
       db.collection('purchase_order').where({ ...baseQuery, order_status: 'receipt_abnormal' }).count(),
       db.collection('purchase_order').where({ ...baseQuery, order_status: 'cancelled' }).count(),
-      db.collection('purchase_order').where({ ...baseQuery, order_status: 'partial_received' }).count()
+      db.collection('purchase_order').where({ ...baseQuery, order_status: 'partial_received' }).count(),
+      db.collection('purchase_order').where({ ...baseQuery, verify_status: 'pending' }).count()
     ])
     const statusCounts = {
       all: allRes.total,
@@ -87,7 +94,8 @@ exports.main = async (event = {}) => {
       received: receivedRes.total,
       receiptAbnormal: abnormalRes.total,
       cancelled: cancelledRes.total,
-      partialReceived: partialRes.total
+      partialReceived: partialRes.total,
+      toVerify: toVerifyRes.total
     }
 
     const countRes = await db.collection('purchase_order').where(query).count()

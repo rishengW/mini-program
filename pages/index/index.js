@@ -64,6 +64,8 @@ Page({
     const pendingOrders = statsData.submitted || 0
     const pendingReceive = statsData.receivable || 0
     const completedOrders = statsData.received || 0
+    // 待核销：已收货待核销的手动单，仅管理员可见可点击（清单 #20 催办）
+    const toVerify = statsData.to_verify || 0
     const unreadMsg = messages.filter(m => !m.read).length
 
     const stats = [
@@ -72,6 +74,9 @@ Page({
       { label: '已完成', value: completedOrders, icon: '✅', color: '#52C41A', status: 'received' },
       { label: '需关注', value: unreadMsg, icon: '⚠️', color: '#FF4D4F', status: 'message' }
     ]
+    if (['super_admin', 'purchaser'].includes(user.role)) {
+      stats.push({ label: '待核销', value: toVerify, icon: '🧾', color: '#FA8C16', status: 'to_verify' })
+    }
 
     // 最近采购单
     const recentOrders = myOrders.slice(0, 3).map(o => {

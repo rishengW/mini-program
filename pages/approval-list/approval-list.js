@@ -30,7 +30,9 @@ Page({
           requesterName: o.createdBy,
           expectedDeliveryDate: o.deliveryDate || o.orderDate,
           submittedAt: o.submittedAt,
-          statusText: statusInfo.text
+          statusText: statusInfo.text,
+          // 清单 #21：手动单显式标识（特殊审批：不核协议价，核销走凭证回填）
+          isManual: o.isManual
         }
       })
     this.setData({ list })

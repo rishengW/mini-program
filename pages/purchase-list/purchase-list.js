@@ -69,6 +69,7 @@ Page({
     const total = Number(result.total) || 0
     // tab 计数来自服务端 statusCounts，不受分页截断影响
     const counts = result.statusCounts || {}
+    const isGlobal = ['super_admin', 'purchaser'].includes((getApp().globalData.userInfo || {}).role)
     const filterTabs = [
       { label: '全部', value: 'all', count: counts.all || 0 },
       { label: '草稿', value: 'draft', count: counts.draft || 0 },
@@ -78,6 +79,10 @@ Page({
       { label: '收货异常', value: 'receipt_abnormal', count: counts.receiptAbnormal || 0 },
       { label: '已作废', value: 'cancelled', count: counts.cancelled || 0 }
     ]
+    // 待核销 tab 仅管理员可见（清单 #20 催办入口）
+    if (isGlobal) {
+      filterTabs.push({ label: '待核销', value: 'to_verify', count: counts.toVerify || 0 })
+    }
     this.setData({
       filterTabs,
       orders,

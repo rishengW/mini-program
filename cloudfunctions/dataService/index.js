@@ -277,6 +277,8 @@ async function sendSubscribeMessage(user, payload) {
 async function notifySuppliersNewOrder(order, orderItems) {
   const supplierMap = {}
   orderItems.forEach(item => {
+    // 清单 #24：手动商品不推送（显式 is_manual 过滤，不依赖 supplier_id 为空的隐式前提）
+    if (item.is_manual) return
     const sid = item.supplier_id || ''
     if (!sid) return
     // 下单明细无价格字段（价格快照在收货时才生成），摘要只报项数不报金额
@@ -409,6 +411,8 @@ async function regenerateApprovedOrderReports(order, orderItems, qtyMap, qtyChan
   // 供应商订货汇总（审核后数量，按供应商分组）
   const supplierMap = {}
   items.forEach(item => {
+    // 清单 #24：手动商品不进订货汇总（显式 is_manual 过滤）
+    if (item.is_manual) return
     const sid = item.supplierId || 'unknown'
     if (!supplierMap[sid]) supplierMap[sid] = []
     supplierMap[sid].push(item)
@@ -777,17 +781,24 @@ async function getOrderStats(event) {
     return { code: -403, msg: '当前账号无权查看采购订单' }
   }
   const receivableStatuses = ['approved', 'report_generated', 'partial_received', 'to_receive']
-  const [submittedRes, receivableRes, receivedRes] = await Promise.all([
+  // 待核销（verify_status=pending）的手动单不计入「已完成」（流程图 S9 口径，清单 #20）
+  const receivedQuery = { ...baseQuery, order_status: 'received', verify_status: _.neq('pending') }
+  const [submittedRes, receivableRes, receivedRes, toVerifyRes] = await Promise.all([
     db.collection('purchase_order').where({ ...baseQuery, order_status: 'submitted' }).count(),
     db.collection('purchase_order').where({ ...baseQuery, order_status: _.in(receivableStatuses) }).count(),
-    db.collection('purchase_order').where({ ...baseQuery, order_status: 'received' }).count()
+    db.collection('purchase_order').where(receivedQuery).count(),
+    // 管理员待办：已收货待核销的手动单（仅全局角色需要）
+    GLOBAL_ROLES.includes(auth.user.role)
+      ? db.collection('purchase_order').where({ ...baseQuery, verify_status: 'pending' }).count()
+      : Promise.resolve({ total: 0 })
   ])
   return {
     code: 0,
     data: {
       submitted: submittedRes.total,
       receivable: receivableRes.total,
-      received: receivedRes.total
+      received: receivedRes.total,
+      to_verify: toVerifyRes.total
     }
   }
 }
@@ -848,8 +859,9 @@ async function settleReceipt(event) {
     .where({ receipt_id: receiptId })
     .limit(1000)
     .get()
-  // payable_flag 缺失（旧数据）视为可付款；价格为 0 的行跳过不结算
-  const payableItems = itemRes.data.filter(item => item.payable_flag !== false && Number(item.price_snapshot) > 0)
+  // payable_flag 缺失（旧数据）视为可付款；价格为 0 的行跳过不结算；
+  // 清单 #24：手动商品行显式排除（金额走凭证核销回填，不进补结算）
+  const payableItems = itemRes.data.filter(item => !item.is_manual && item.payable_flag !== false && Number(item.price_snapshot) > 0)
   if (payableItems.length === 0) return { code: -1, msg: '无可结算的明细行' }
 
   const receiptDate = receipt.receipt_date || new Date().toISOString().slice(0, 10)
@@ -1151,15 +1163,19 @@ async function cancelOrder(event) {
   }
 
   await db.runTransaction(async transaction => {
-    await transaction.collection('purchase_order').doc(order._id).update({
-      data: {
-        order_status: 'cancelled',
-        cancel_reason: reason,
-        cancelled_by: auth.user.name,
-        cancelled_at: db.serverDate(),
-        updated_at: db.serverDate()
-      }
-    })
+    const updateData = {
+      order_status: 'cancelled',
+      cancel_reason: reason,
+      cancelled_by: auth.user.name,
+      cancelled_at: db.serverDate(),
+      updated_at: db.serverDate()
+    }
+    // 清单 #23：手动单作废时重置核销状态（凭证文件保留在 vouchers/ 留痕，只重置状态）
+    if (order.is_manual && order.verify_status && order.verify_status !== 'none') {
+      updateData.verify_status = 'none'
+      updateData.verify_cancel_note = `订单作废时重置核销状态（原状态 ${order.verify_status}），作废原因：${reason}`
+    }
+    await transaction.collection('purchase_order').doc(order._id).update({ data: updateData })
     // 关联报表标记 superseded（保留审计痕迹）
     await transaction.collection('report_file')
       .where({ source_order_id: event.orderId, report_type: _.in(['store_order_report', 'supplier_order_report']) })
@@ -1242,10 +1258,11 @@ async function verifyManualOrder(event) {
     return { code: -403, msg: '无权操作其他门店的采购订单' }
   }
 
-  // 提交凭证：店长/采购员/管理员均可；订单须已收货（received/receipt_abnormal/partial_received）
+  // 提交凭证：店长/采购员/管理员均可；#22 拍板（2026-09-24）：必须收齐（received）才能核销，
+  // 部分收货/收货异常的单剩余批次未定，不允许提前闭环
   if (action === 'submit') {
-    if (!['received', 'receipt_abnormal', 'partial_received'].includes(order.order_status)) {
-      return { code: -1, msg: '订单尚未收货，无法提交付款凭证' }
+    if (order.order_status !== 'received') {
+      return { code: -1, msg: '订单尚未收齐，需全部批次收货完成后才能提交付款凭证' }
     }
     if (order.verify_status === 'approved') return { code: -1, msg: '该单已核销通过，无需重复提交' }
     if (voucherFileIds.length === 0) return { code: -1, msg: '请上传付款证明或发票' }
