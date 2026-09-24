@@ -3,6 +3,7 @@ const cloud = require('wx-server-sdk')
 const crypto = require('crypto')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
+const _ = db.command
 
 function hashToken(token) {
   return crypto.createHash('sha256').update(String(token || '')).digest('hex')
@@ -36,6 +37,32 @@ async function getSessionUser(authToken) {
   return Number.isFinite(legacyExpires) && legacyExpires > Date.now() ? user : null
 }
 
+// #10 拍板（2026-09-24）：结算仍取收货日现价（不锁价），但调价波及面要可见——
+// 统计含此「供应商+商品」的在途订单数，供前端在调价前提示。
+// 在途 = 已提交且未收完（草稿未提交不算；已收货单价格快照已固化，不受影响）。
+const INFLIGHT_ORDER_STATUS = ['submitted', 'pending_approval', 'approved', 'report_generated', 'partial_received', 'to_receive']
+async function countInflightOrders(supplierId, productId) {
+  try {
+    const itemRes = await db.collection('purchase_order_item')
+      .where({ supplier_id: supplierId, product_id: productId })
+      .limit(1000)
+      .get()
+    const orderIds = [...new Set(itemRes.data.map(item => item.purchase_order_id).filter(Boolean))]
+    let total = 0
+    for (let i = 0; i < orderIds.length; i += 20) {
+      const chunk = orderIds.slice(i, i + 20)
+      const countRes = await db.collection('purchase_order')
+        .where({ purchase_order_id: _.in(chunk), order_status: _.in(INFLIGHT_ORDER_STATUS) })
+        .count()
+      total += countRes.total
+    }
+    return total
+  } catch (err) {
+    console.warn('[updateProductPrice] 在途单波及计数失败，按 0 处理:', err)
+    return 0
+  }
+}
+
 exports.main = async (event = {}) => {
   try {
     const user = await getSessionUser(event.authToken)
@@ -67,6 +94,12 @@ exports.main = async (event = {}) => {
     if (!supplierRes.data.length) return { code: -1, msg: '供应商不存在或已停用' }
     if (!productRes.data.length) return { code: -1, msg: '商品不存在或已停用' }
 
+    // #10：调价波及面计数。dryRun=true 只校验+计数不落库，供前端先弹确认框。
+    const affectedOrders = await countInflightOrders(supplierId, productId)
+    if (event.dryRun === true) {
+      return { code: 0, data: { dryRun: true, affectedOrders } }
+    }
+
     const priceId = 'PRC_' + Date.now()
     // Switching the current price and inserting the replacement must be one
     // transaction, otherwise concurrent updates can leave two current rows.
@@ -97,7 +130,7 @@ exports.main = async (event = {}) => {
       })
     })
 
-    return { code: 0, data: { priceId, message: '价格已更新' } }
+    return { code: 0, data: { priceId, affectedOrders, message: '价格已更新' } }
   } catch (err) {
     console.error('[updateProductPrice] 价格更新失败:', err)
     return { code: -1, msg: '价格更新失败，请稍后重试' }

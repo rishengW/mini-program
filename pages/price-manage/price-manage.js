@@ -126,15 +126,31 @@ Page({
     if (isNaN(price) || price <= 0) return util.showToast('请输入有效价格')
 
     const app = getApp()
+    const updatedBy = (app.globalData.userInfo && app.globalData.userInfo.name) || ''
+    // #10 拍板（2026-09-24）：收货日价口径——调价波及在途订单，先 dryRun 计数再确认
+    const probe = await cloud.callFunction('updateProductPrice', {
+      supplierId: editItem.supplierId,
+      productId: editItem.productId,
+      newPrice: price,
+      updatedBy,
+      dryRun: true
+    })
+    if (probe.code !== 0) return util.showToast(probe.msg || '更新失败')
+    const affected = (probe.data && probe.data.affectedOrders) || 0
+    if (affected > 0) {
+      const confirmed = await util.showConfirm(`当前有 ${affected} 张在途采购单含此商品，调价后它们将按新价结算。确认调价？`, '调价波及提醒')
+      if (!confirmed) return
+    }
+
     const result = await cloud.callFunction('updateProductPrice', {
       supplierId: editItem.supplierId,
       productId: editItem.productId,
       newPrice: price,
-      updatedBy: (app.globalData.userInfo && app.globalData.userInfo.name) || ''
+      updatedBy
     })
 
     if (result.code === 0) {
-      util.showSuccess('价格已更新')
+      util.showToast(affected > 0 ? `价格已更新，${affected} 张在途订单将按新价结算` : '价格已更新', affected > 0 ? 'none' : 'success')
       this.setData({ showEdit: false })
       await this.loadData()
     } else {
@@ -186,7 +202,9 @@ Page({
     })
 
     if (result.code === 0) {
-      util.showSuccess('价格已添加')
+      // 首次定价对在途单是好消息：收货时不再触发 #11 缺价异常，按此价正常结算
+      const affected = (result.data && result.data.affectedOrders) || 0
+      util.showToast(affected > 0 ? `已定价，${affected} 张在途订单收货时将按此价结算` : '价格已添加', affected > 0 ? 'none' : 'success')
       this.setData({ showAdd: false })
       await this.loadData()
     } else {
