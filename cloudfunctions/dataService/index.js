@@ -219,6 +219,25 @@ async function getStoreManagerId(storeId) {
   }
 }
 
+// 定向给单据创建人的消息：创建人已停用/不存在（离职，#17）时改发本店店长，
+// 仍查不到则回退 ''（门店广播），避免消息落进死信箱（2026-09-24 拍板）。
+async function resolveActiveRecipient(userId, storeId) {
+  if (userId) {
+    try {
+      const res = await db.collection('app_user')
+        .where(_.or([{ user_id: userId }, { _id: userId }]))
+        .limit(1)
+        .get()
+      const target = res.data[0]
+      if (target && (target.status === undefined ? 1 : target.status) === 1) return userId
+    } catch (err) {
+      console.warn('[dataService] 查询消息收件人状态失败，按在岗处理:', err)
+      return userId
+    }
+  }
+  return await getStoreManagerId(storeId)
+}
+
 // ===== 审核通过 → 通知供货商（新订单下推） =====
 // 订阅消息模板配置：小程序后台申请通过后填入 TEMPLATE_ID 即可真实下发；
 // TEMPLATE_ID 为空时只记日志、不发送（站内通知不受影响，作为兜底触达）。
@@ -379,7 +398,7 @@ async function regenerateApprovedOrderReports(order, orderItems, qtyMap, qtyChan
       content: `采购单 ${orderNo}（${storeName}）审核改量后已重发订货单，原供货商确认已重置，请线下通知供应商（${confirmedSuppliers.join('、')}）按新数量重新确认接单。`,
       type: 'order',
       storeId,
-      recipientUserId: order.created_by || ''
+      recipientUserId: await resolveActiveRecipient(order.created_by, storeId)
     })
   }
 
@@ -966,6 +985,81 @@ async function regenerateOrderReports(event) {
 // 本入口按 receipt_id 重读 receipt_item（价格快照都在库里），重走
 // ③ 门店收货 / ④ 门店带价 / ⑤ 供应商到货 / ⑥ 供应商带价账单 四类报表。
 // 不自动重试的原因：失败多为云存储/网络问题，人工触发天然幂等、量极少。
+// ===== #11 拍板（2026-09-24）：补价后补账 =====
+// 收货时缺价（missing_price 异常）的行，管理员在价格管理页补配协议价后，
+// 用本入口按当前 is_current 价刷新 receipt_item 的价格快照并转回可付款，
+// 同时关闭对应缺价异常，再重走 ③④⑤⑥ 报表把账单补出来。
+// 复用 regenerateReceiptReports 的报表重建逻辑（_RG 后缀，幂等）。
+async function repriceReceipt(event) {
+  const auth = await requireUser(event, GLOBAL_ROLES)
+  if (auth.error) return auth.error
+  const receiptId = String(event.receiptId || '').trim()
+  if (!receiptId) return { code: -1, msg: '缺少收货单号' }
+
+  const itemRes = await db.collection('receipt_item')
+    .where({ receipt_id: receiptId })
+    .limit(1000)
+    .get()
+  const items = itemRes.data || []
+  // 只处理缺价行：档案商品（非手动）、有供应商、快照 0 价
+  const missingItems = items.filter(item => !item.is_manual && item.supplier_id && Number(item.price_snapshot || 0) <= 0)
+  if (missingItems.length === 0) return { code: -1, msg: '该收货单没有缺价行，无需补账' }
+
+  // 批量取当前协议价
+  const priceMap = {}
+  const productIds = [...new Set(missingItems.map(item => item.product_id).filter(Boolean))]
+  for (let i = 0; i < productIds.length; i += 20) {
+    const idChunk = productIds.slice(i, i + 20)
+    const priceRes = await db.collection('supplier_product_price')
+      .where({ product_id: _.in(idChunk), is_current: 1 })
+      .limit(100)
+      .get()
+    priceRes.data.forEach(p => { priceMap[`${p.supplier_id}|${p.product_id}`] = Number(p.price) || 0 })
+  }
+
+  const repriced = []
+  const stillMissing = []
+  for (const item of missingItems) {
+    const price = priceMap[`${item.supplier_id}|${item.product_id}`] || 0
+    if (price <= 0) { stillMissing.push(item.product_name); continue }
+    await db.collection('receipt_item').doc(item._id).update({
+      data: { price_snapshot: price, payable_flag: true, updated_at: db.serverDate() }
+    })
+    repriced.push(item.product_name)
+  }
+  if (repriced.length === 0) {
+    return { code: -1, msg: `仍未找到协议价：${stillMissing.join('、')}。请先在价格管理页补配价格` }
+  }
+
+  // 关闭已补价的 missing_price 异常（标记 resolved，补价即处置完成）
+  const abnormalRes = await db.collection('abnormal_record')
+    .where({ receipt_id: receiptId, type: 'missing_price', status: _.in(['pending', 'processing']) })
+    .limit(100)
+    .get()
+  for (const rec of abnormalRes.data) {
+    await db.collection('abnormal_record').doc(rec._id).update({
+      data: {
+        status: 'resolved',
+        resolution: '已补配协议价并刷新价格快照，账单按补价重出',
+        handled_by: auth.user.name,
+        updated_at: db.serverDate()
+      }
+    })
+  }
+
+  // 重走 ③④⑤⑥ 报表（复用补生成逻辑，账单按新快照补出）
+  const regen = await regenerateReceiptReports(event)
+  if (regen.code !== 0) return regen
+  return {
+    code: 0,
+    data: {
+      message: `已补价 ${repriced.length} 行${stillMissing.length ? `；仍有 ${stillMissing.length} 行缺价：${stillMissing.join('、')}` : ''}，账单已重新生成`,
+      repriced: repriced.length,
+      stillMissing
+    }
+  }
+}
+
 async function regenerateReceiptReports(event) {
   const auth = await requireUser(event, GLOBAL_ROLES)
   if (auth.error) return auth.error
@@ -1347,6 +1441,7 @@ exports.main = async (event = {}) => {
       case 'closeAbnormal': return await closeAbnormal(event)
       case 'getOrderStats': return await getOrderStats(event)
       case 'settleReceipt': return await settleReceipt(event)
+      case 'repriceReceipt': return await repriceReceipt(event)
       case 'regenerateReceiptReports': return await regenerateReceiptReports(event)
       case 'regenerateOrderReports': return await regenerateOrderReports(event)
       case 'cancelOrder': return await cancelOrder(event)

@@ -52,7 +52,8 @@ function safePathPart(value) {
 const ABNORMAL_TYPE_NAMES = {
   shortage: '少货/缺货',
   quality: '质量问题',
-  wrong_item: '错货'
+  wrong_item: '错货',
+  missing_price: '缺价待补'
 }
 
 function getItemAbnormalTypes(item) {
@@ -60,6 +61,8 @@ function getItemAbnormalTypes(item) {
   if (item && item.isShortage) types.push('shortage')
   if (item && item.isQualityIssue) types.push('quality')
   if (item && item.isWrongItem) types.push('wrong_item')
+  // #11 拍板（2026-09-24）：档案商品缺价视为异常，提醒补价
+  if (item && item.isMissingPrice) types.push('missing_price')
   return types
 }
 
@@ -347,6 +350,11 @@ exports.main = async (event = {}) => {
         item.payableFlag = false
       } else {
         item.payableFlag = !hardAbnormal && item.payableFlag !== false && priceSnapshot > 0
+        // #11 拍板（2026-09-24）：档案商品缺价不再是静默漏账——标记 missing_price，
+        // 生成 abnormal_record 提醒补价，补价后可走 repriceReceipt 补出账单。
+        if (!item.isManual && priceSnapshot <= 0 && item.supplierId && item.receivedQty > 0) {
+          item.isMissingPrice = true
+        }
       }
     }
 
@@ -416,6 +424,7 @@ exports.main = async (event = {}) => {
         if (item.isShortage) abnormalTypes.push('shortage')
         if (item.isQualityIssue) abnormalTypes.push('quality')
         if (item.isWrongItem) abnormalTypes.push('wrong_item')
+        if (item.isMissingPrice) abnormalTypes.push('missing_price')
         for (let j = 0; j < abnormalTypes.length; j++) {
           const type = abnormalTypes[j]
           let description = `${item.productName}验收异常`
@@ -425,6 +434,8 @@ exports.main = async (event = {}) => {
             description = `${item.productName}存在质量问题`
           } else if (type === 'wrong_item') {
             description = `${item.productName}存在错货问题`
+          } else if (type === 'missing_price') {
+            description = `${item.productName}未配置供应商协议价，实收${item.receivedQty}${item.unit}未进结算，请补价后补账`
           }
           if (item.remark) description += `：${item.remark}`
           await transaction.collection('abnormal_record').add({

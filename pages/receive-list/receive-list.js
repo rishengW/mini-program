@@ -63,10 +63,18 @@ Page({
       statusType: (receipt.receiptStatus || receipt.receipt_status) === 'abnormal' ? 'danger' : 'success',
       // 清单 #7：报表生成失败的收货单带缺报表标记
       missingReports: !!receipt.missing_reports,
+      // #11 拍板（2026-09-24）：缺价行标记——档案商品 0 价且非手动，提示补账
+      hasMissingPrice: (receipt.items || []).some(it =>
+        !it.isManual && !it.is_manual && (it.supplierId || it.supplier_id) &&
+        Number(it.priceSnapshot !== undefined ? it.priceSnapshot : it.price_snapshot || 0) <= 0),
       photoCount: (receipt.photo_file_ids || []).length,
       items: receipt.items || []
     }))
-    this.setData({ orders, receipts, canRegenerate: ['purchaser', 'super_admin'].includes(user.role) })
+    this.setData({
+      orders, receipts,
+      canRegenerate: ['purchaser', 'super_admin'].includes(user.role),
+      canReprice: ['purchaser', 'super_admin'].includes(user.role)
+    })
   },
 
   // 照片回显：按 fileID 换临时链接后全屏预览（临时链接约 2 小时有效，每次现取不缓存）
@@ -131,6 +139,27 @@ Page({
       return
     }
     util.showSuccess('补生成完成')
+    await this.onShow()
+  },
+
+  // #11 拍板（2026-09-24）：补价后补账——按当前协议价刷新缺价行快照并重出账单
+  async repriceReceipt(e) {
+    const receiptId = e.currentTarget.dataset.id
+    if (!receiptId) return
+    const confirmed = await util.showConfirm('确认对该收货单执行补价补账？将按当前协议价刷新缺价行并重新生成账单。若商品仍未配价，请先到价格管理页补配。')
+    if (!confirmed) return
+    util.showLoading('补价补账中...')
+    const result = await cloud.callFunction('dataService', {
+      action: 'repriceReceipt',
+      receiptId
+    })
+    wx.hideLoading()
+    if (!result || result.code !== 0) {
+      util.showToast((result && result.msg) || '补价补账失败')
+      return
+    }
+    const data = result.data || {}
+    util.showSuccess(data.message || '补价补账完成')
     await this.onShow()
   }
 })

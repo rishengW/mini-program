@@ -67,9 +67,11 @@ Page({
       supplierGroups = Object.values(groups)
     }
     const canReceive = currentUser.role !== 'chef' && ['approved', 'report_generated', 'partial_received', 'to_receive'].includes(order.orderStatus)
+    // #18（2026-09-24 拍板）：本店店长可代改/代提交本店任何人的草稿（含离职员工遗留草稿）
     const canEdit = order.orderStatus === 'draft' && (
       ['super_admin', 'purchaser'].includes(currentUser.role) ||
-      order.createdById === (currentUser.userId || currentUser.id)
+      order.createdById === (currentUser.userId || currentUser.id) ||
+      (currentUser.role === 'store_manager' && !!order.storeId && order.storeId === currentUser.defaultStoreId)
     )
     // 驳回的单子原样保留，可复制为新草稿改后重提（B7）
     const canCopy = order.orderStatus === 'rejected'

@@ -164,8 +164,15 @@ exports.main = async (event = {}) => {
       if (existingOrder.order_status !== 'draft') {
         return { code: -1, msg: '只有草稿订单可以编辑或提交' }
       }
-      if (!isGlobal && (existingOrder.store_id !== user.default_store_id || existingOrder.created_by !== (user.user_id || user._id))) {
-        return { code: -403, msg: '无权编辑该草稿订单' }
+      // #18（2026-09-24 拍板）：草稿视为门店资产——本店店长可代改/代提交
+      // 本店任何人的草稿（含离职员工遗留草稿，解决停用后草稿卡死问题）；
+      // created_by 仍保留原创建人（见下方 orderData 赋值），追溯链不变。
+      if (!isGlobal) {
+        const isCreator = existingOrder.created_by === (user.user_id || user._id)
+        const isStoreManager = user.role === 'store_manager'
+        if (existingOrder.store_id !== user.default_store_id || (!isCreator && !isStoreManager)) {
+          return { code: -403, msg: '无权编辑该草稿订单' }
+        }
       }
       if (isGlobal && inputStoreId && existingOrder.store_id !== inputStoreId) {
         return { code: -403, msg: '编辑草稿时不能更换门店' }
