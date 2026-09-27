@@ -498,6 +498,50 @@ async function deleteUser(event) {
   return { code: 0 }
 }
 
+// 新增门店仅超管可操作。store_id 自动生成（S+序号），store_code 默认取
+// store_id，保持与 seed 数据 S001/S002 的既有口径一致。
+async function createStore(event) {
+  const auth = await requireSuperAdmin(event)
+  if (auth.error) return auth.error
+
+  const storeName = String(event.storeName || '').trim()
+  const storeCode = String(event.storeCode || '').trim()
+  if (!storeName) return { code: -1, msg: '请输入门店名称' }
+  if (storeName.length > 30) return { code: -1, msg: '门店名称不能超过30个字' }
+
+  const allStores = await db.collection(STORE_COLLECTION)
+    .orderBy('store_id', 'desc')
+    .limit(100)
+    .get()
+  if (allStores.data.some(s => (s.store_name || '') === storeName)) {
+    return { code: -1, msg: '该门店名称已存在' }
+  }
+  if (storeCode && allStores.data.some(s => (s.store_code || '') === storeCode)) {
+    return { code: -1, msg: '该门店编号已存在' }
+  }
+
+  let maxSeq = 0
+  allStores.data.forEach(s => {
+    const m = /^S(\d+)$/.exec(s.store_id || '')
+    if (m) maxSeq = Math.max(maxSeq, parseInt(m[1], 10))
+  })
+  const seq = maxSeq + 1
+  const storeId = 'S' + String(seq).padStart(3, '0')
+  const finalCode = storeCode || storeId
+
+  await db.collection(STORE_COLLECTION).add({
+    data: {
+      store_id: storeId,
+      store_name: storeName,
+      store_code: finalCode,
+      status: 1,
+      created_at: db.serverDate(),
+      updated_at: db.serverDate()
+    }
+  })
+  return { code: 0, data: { storeId, storeName, storeCode: finalCode } }
+}
+
 exports.main = async (event = {}) => {
   try {
     switch (event.action) {
@@ -505,6 +549,7 @@ exports.main = async (event = {}) => {
       case 'logout': return await logout(event)
       case 'changePassword': return await changePassword(event)
       case 'getStores': return await getStores(event)
+      case 'createStore': return await createStore(event)
       case 'listUsers': return await listUsers(event)
       case 'createUser': return await createUser(event)
       case 'updateUser': return await updateUser(event)
