@@ -67,7 +67,8 @@ exports.main = async (event = {}) => {
     const pageSize = Math.min(100, Math.max(1, Math.floor(Number(event.pageSize) || 20)))
 
     // 1. 查出该供货商的所有订单明细，得到关联订单号集合
-    const itemQuery = { supplier_id: supplierId }
+    // 清单 #24 双保险：显式排除手动商品行，不依赖 supplier_id 为空的隐式前提
+    const itemQuery = { supplier_id: supplierId, is_manual: _.neq(true) }
     const itemsRes = await db.collection('purchase_order_item')
       .where(itemQuery)
       .limit(1000)

@@ -50,7 +50,8 @@ exports.main = async (event = {}) => {
     const pageSize = Math.min(100, Math.max(1, Math.floor(Number(event.pageSize) || 20)))
 
     // receipt_item 上没有 receipt_date 字段（日期在 receipt 主表），这里只按供货商过滤
-    const query = { supplier_id: supplierId }
+    // 清单 #24 双保险：显式排除手动商品行，不依赖 supplier_id 为空的隐式前提
+    const query = { supplier_id: supplierId, is_manual: _.neq(true) }
 
     const countRes = await db.collection('receipt_item').where(query).count()
     const itemsRes = await db.collection('receipt_item')

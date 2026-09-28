@@ -579,7 +579,8 @@ exports.main = async (event = {}) => {
     // 异常行的数量与异常类型记录在不含价的收货报表中，走异常流程跟进。
     // ===== 报表2: 门店带价格收货报表（仅可付款行） =====
     {
-      const payableItems = items.filter(item => item.payableFlag)
+      // 清单 #24 双保险：手动行不进带价报表（payableFlag 本就为 false，显式过滤防供应商建档后失效）
+      const payableItems = items.filter(item => item.payableFlag && !item.isManual)
       if (payableItems.length > 0) {
         const v2 = await getNextVersion('store_receipt_price_report', storeId, receiptDate)
         let csv2 = infoHead + [csvField('商品名称'), csvField('供应商'), csvField('实收数量'), csvField('单位'), csvField('单价'), csvField('小计'), csvField('是否可付款')].join(',') + '\n'
@@ -659,7 +660,8 @@ exports.main = async (event = {}) => {
     // ===== 报表4: 供应商带价格账单（仅可付款行，行级隔离） =====
     for (const sid of Object.keys(supplierMap)) {
       if (sid === 'unknown') continue
-      const supPayableItems = supplierMap[sid].items.filter(item => item.payableFlag)
+      // 清单 #24 双保险：手动行不进供应商带价报表
+      const supPayableItems = supplierMap[sid].items.filter(item => item.payableFlag && !item.isManual)
       if (supPayableItems.length === 0) continue
       const supName = supplierMap[sid].name || sid
       const v4 = await getNextVersion('supplier_receipt_price_report', sid, receiptDate)
