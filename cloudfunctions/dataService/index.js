@@ -1313,7 +1313,9 @@ async function cancelOrder(event) {
 
 // ===== B8 采购员申请取消（审批后单据，需管理员确认后执行 cancelOrder）=====
 async function requestCancel(event) {
-  const auth = await requireUser(event)
+  // 角色限制：B8 口径为采购员/店长发起、管理员确认；chef 与 supplier 不可发起，
+  // 防止反复刷取消申请骚扰管理员（原实现仅 requireUser 未限角色）
+  const auth = await requireUser(event, ['purchaser', 'store_manager', 'super_admin'])
   if (auth.error) return auth.error
   const reason = String(event.reason || '').trim()
   if (!reason) return { code: -1, msg: '申请取消必须填写原因' }
@@ -1333,15 +1335,21 @@ async function requestCancel(event) {
     return { code: -403, msg: '当前账号无权对该门店订单申请取消' }
   }
 
-  await db.collection('purchase_order').doc(order._id).update({
-    data: {
-      cancel_requested: true,
-      cancel_requested_by: auth.user.name,
-      cancel_request_reason: reason,
-      cancel_requested_at: db.serverDate(),
-      updated_at: db.serverDate()
-    }
-  })
+  // 条件更新防重复：已有待确认的取消申请时直接返回，不重复写标记/发通知
+  const cancelRes = await db.collection('purchase_order')
+    .where({ _id: order._id, cancel_requested: _.neq(true) })
+    .update({
+      data: {
+        cancel_requested: true,
+        cancel_requested_by: auth.user.name,
+        cancel_request_reason: reason,
+        cancel_requested_at: db.serverDate(),
+        updated_at: db.serverDate()
+      }
+    })
+  if (!cancelRes.stats || cancelRes.stats.updated === 0) {
+    return { code: -1, msg: '该订单已有待确认的取消申请，请勿重复提交' }
+  }
 
   await createMessage({
     type: 'cancel',

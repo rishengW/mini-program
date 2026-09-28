@@ -115,9 +115,12 @@ Page({
   },
 
   async doAction(orderId, action, successText) {
+    if (this._submitting) return
+    this._submitting = true
     util.showLoading('提交中...')
     const res = await cloud.callFunction('confirmSupplierOrder', { orderId, action })
     util.hideLoading()
+    this._submitting = false
     if (res && res.code === 0) {
       util.showSuccess(successText)
       this.reload()

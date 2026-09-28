@@ -117,14 +117,18 @@ Page({
 
   // S9：提交付款凭证（店长/采购员/管理员），上传图片后登记
   async submitVoucher() {
-    const that = this
+    if (this._submitting) return
+    this._submitting = true
     const res = await new Promise(resolve => {
       wx.chooseMedia({
         count: 3, mediaType: ['image'], sourceType: ['album', 'camera'],
         success: resolve, fail: () => resolve(null)
       })
     })
-    if (!res || !res.tempFiles || !res.tempFiles.length) return
+    if (!res || !res.tempFiles || !res.tempFiles.length) {
+      this._submitting = false
+      return
+    }
     util.showLoading('上传凭证中...')
     try {
       const fileIds = []
@@ -150,6 +154,8 @@ Page({
     } catch (err) {
       util.hideLoading()
       util.showToast('凭证上传失败，请重试')
+    } finally {
+      this._submitting = false
     }
   },
 
@@ -164,6 +170,7 @@ Page({
 
   // S9：管理员核销——通过回填实付金额 / 驳回重传
   async verifyDecide(e) {
+    if (this._submitting) return
     const approve = e.currentTarget.dataset.approve === true || e.currentTarget.dataset.approve === 'true'
     const d = this.data.detail
     let amount = null
@@ -179,6 +186,7 @@ Page({
       if (!input.trim()) { util.showToast('驳回必须填写原因'); return }
       note = input.trim()
     }
+    this._submitting = true
     util.showLoading('处理中...')
     const result = await cloud.callFunction('dataService', {
       action: 'verifyManualOrder',
@@ -188,6 +196,7 @@ Page({
       note
     })
     util.hideLoading()
+    this._submitting = false
     if (result && result.code === 0) {
       util.showSuccess(approve ? '已核销' : '已驳回')
       this.loadData()
@@ -206,6 +215,8 @@ Page({
       util.showToast('申请取消必须填写原因')
       return
     }
+    if (this._submitting) return
+    this._submitting = true
     util.showLoading('提交申请中...')
     const result = await cloud.callFunction('dataService', {
       action: 'requestCancel',
@@ -213,6 +224,7 @@ Page({
       reason: reason.trim()
     })
     util.hideLoading()
+    this._submitting = false
     if (result && result.code === 0) {
       util.showSuccess('已提交取消申请')
       this.loadData()
@@ -231,6 +243,8 @@ Page({
       util.showToast('作废必须填写原因')
       return
     }
+    if (this._submitting) return
+    this._submitting = true
     util.showLoading('作废中...')
     const result = await cloud.callFunction('dataService', {
       action: 'cancelOrder',
@@ -238,6 +252,7 @@ Page({
       reason: reason.trim()
     })
     util.hideLoading()
+    this._submitting = false
     if (result && result.code === 0) {
       util.showSuccess('已作废')
       this.loadData()

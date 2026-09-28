@@ -177,21 +177,17 @@ async function login(event) {
       await db.collection(USER_COLLECTION).where({ _id: user._id }).update({
         data: { login_fail_count: _.inc(1), updated_at: db.serverDate() }
       })
-      // 自增后重新读取，判断是否达到锁定阈值（并发下也只有最后一个请求触发锁定）
-      const after = await db.collection(USER_COLLECTION)
-        .where({ _id: user._id })
-        .limit(1)
-        .get()
-      const failCount = (after.data[0] && Number(after.data[0].login_fail_count)) || 0
-      if (failCount >= 5) {
-        await db.collection(USER_COLLECTION).doc(user._id).update({
+      // 条件更新锁定：仅当计数仍 >=5 时写锁并归零。并发下第一个请求把计数清零后，
+      // 其余请求的 where 不再匹配，不会重复写 locked_until 顺延锁定期。
+      await db.collection(USER_COLLECTION)
+        .where({ _id: user._id, login_fail_count: _.gte(5) })
+        .update({
           data: {
             login_locked_until: new Date(Date.now() + 10 * 60 * 1000),
             login_fail_count: 0,
             updated_at: db.serverDate()
           }
         })
-      }
     }
     return { code: -1, msg: '账号或密码错误' }
   }
@@ -542,19 +538,31 @@ async function createStore(event) {
   if (!storeName) return { code: -1, msg: '请输入门店名称' }
   if (storeName.length > 30) return { code: -1, msg: '门店名称不能超过30个字' }
 
-  const allStores = await db.collection(STORE_COLLECTION)
-    .orderBy('store_id', 'desc')
-    .limit(100)
+  // 查重改条件查询：原 orderBy+limit(100) 在门店超过 100 家后查不到老门店的重名/重编号
+  const dupName = await db.collection(STORE_COLLECTION)
+    .where({ store_name: storeName })
+    .limit(1)
     .get()
-  if (allStores.data.some(s => (s.store_name || '') === storeName)) {
+  if (dupName.data.length > 0) {
     return { code: -1, msg: '该门店名称已存在' }
   }
-  if (storeCode && allStores.data.some(s => (s.store_code || '') === storeCode)) {
-    return { code: -1, msg: '该门店编号已存在' }
+  if (storeCode) {
+    const dupCode = await db.collection(STORE_COLLECTION)
+      .where({ store_code: storeCode })
+      .limit(1)
+      .get()
+    if (dupCode.data.length > 0) {
+      return { code: -1, msg: '该门店编号已存在' }
+    }
   }
 
+  // 序号取现有最大序号+1（仅取 store_id 字段，全量遍历而非采样），插入撞号靠下方重试兜底
+  const seqRes = await db.collection(STORE_COLLECTION)
+    .field({ store_id: true })
+    .limit(1000)
+    .get()
   let maxSeq = 0
-  allStores.data.forEach(s => {
+  seqRes.data.forEach(s => {
     const m = /^S(\d+)$/.exec(s.store_id || '')
     if (m) maxSeq = Math.max(maxSeq, parseInt(m[1], 10))
   })

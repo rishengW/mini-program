@@ -118,12 +118,15 @@ Page({
     if (!receiptId) return
     const confirmed = await util.showConfirm('确认对该收货单执行补结算？将按当前可付款明细生成补充账单。')
     if (!confirmed) return
+    if (this._submitting) return
+    this._submitting = true
     util.showLoading('补结算中...')
     const result = await cloud.callFunction('dataService', {
       action: 'settleReceipt',
       receiptId
     })
     wx.hideLoading()
+    this._submitting = false
     if (!result || result.code !== 0) {
       util.showToast((result && result.msg) || '补结算失败')
       return
@@ -137,12 +140,15 @@ Page({
     if (!receiptId) return
     const confirmed = await util.showConfirm('确认补生成该收货单的全部报表？将按收货明细重新生成四类报表。')
     if (!confirmed) return
+    if (this._submitting) return
+    this._submitting = true
     util.showLoading('补生成中...')
     const result = await cloud.callFunction('dataService', {
       action: 'regenerateReceiptReports',
       receiptId
     })
     wx.hideLoading()
+    this._submitting = false
     if (!result || result.code !== 0) {
       util.showToast((result && result.msg) || '补生成失败')
       return
@@ -157,12 +163,15 @@ Page({
     if (!receiptId) return
     const confirmed = await util.showConfirm('确认对该收货单执行补价补账？将按当前协议价刷新缺价行并重新生成账单。若商品仍未配价，请先到价格管理页补配。')
     if (!confirmed) return
+    if (this._submitting) return
+    this._submitting = true
     util.showLoading('补价补账中...')
     const result = await cloud.callFunction('dataService', {
       action: 'repriceReceipt',
       receiptId
     })
     wx.hideLoading()
+    this._submitting = false
     if (!result || result.code !== 0) {
       util.showToast((result && result.msg) || '补价补账失败')
       return

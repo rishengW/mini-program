@@ -227,7 +227,8 @@ exports.main = async (event = {}) => {
     const relatedDate = date // 月汇总也存传入日期
     const version = await getNextVersion(reportType, storeId, relatedDate)
     const pathDate = period === 'daily' ? date : date.slice(0, 7)
-    const fileName = `reports/summary/${period}/${storeId}/${pathDate}-summary-v${version}.csv`
+    // 文件名不含单号，并发生成同门店同日汇总会取到相同版本号，加随机后缀避免同路径互相覆盖
+    const fileName = `reports/summary/${period}/${storeId}/${pathDate}-summary-v${version}-${Date.now().toString(36)}${crypto.randomBytes(3).toString('hex')}.csv`
     const uploadRes = await cloud.uploadFile({
       cloudPath: fileName,
       fileContent: Buffer.from(String.fromCharCode(0xFEFF) + csv, 'utf-8')

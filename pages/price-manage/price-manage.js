@@ -126,6 +126,8 @@ Page({
     const { editItem, newPrice } = this.data
     const price = parseFloat(newPrice)
     if (isNaN(price) || price <= 0) return util.showToast('请输入有效价格')
+    if (this._submitting) return
+    this._submitting = true
 
     const app = getApp()
     const updatedBy = (app.globalData.userInfo && app.globalData.userInfo.name) || ''
@@ -158,6 +160,7 @@ Page({
     } else {
       util.showToast(result.msg || '更新失败')
     }
+    this._submitting = false
   },
 
   // ===== 新增价格（首次定价）=====
@@ -194,6 +197,8 @@ Page({
     // 已有当前价的组合引导走列表改价，避免重复建行
     const existed = this.data.allPrices.some(p => p.supplierId === addForm.supplierId && p.productId === addForm.productId)
     if (existed) return util.showToast('该供应商已有此商品价格，请在列表中修改')
+    if (this._submitting) return
+    this._submitting = true
 
     const app = getApp()
     const result = await cloud.callFunction('updateProductPrice', {
@@ -212,5 +217,6 @@ Page({
     } else {
       util.showToast(result.msg || '添加失败')
     }
+    this._submitting = false
   }
 })
