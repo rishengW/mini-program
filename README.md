@@ -29,6 +29,16 @@
 - **#11 缺价不静默（2026-09-24 拍板，已实施）**：收货时档案商品无协议价 → 标 `missing_price` 异常 + 定向店长消息提醒补价；管理员补价后走「补价补账」（`dataService.repriceReceipt`）刷新价格快照、关闭缺价异常、重出 ③④⑤⑥ 账单。
 - **#18 草稿属门店资产（2026-09-24 拍板）**：本店店长可代改/代提交本店任何人的草稿（解决离职员工停用后草稿卡死），`created_by` 保留原创建人、追溯链不变；审核改量的站内通知在创建人已停用/不存在时改发本店店长（查不到回退门店广播），不再落死信箱。
 
+## 安全加固（2026-09-28 实施留痕）
+
+并发与安全审查发现的问题已全部修复（详见 `review.md` 与提交 `ffb5bf4`/`9350b9d`/`d48b17c`）：
+
+- **会话安全**：启动时异步调 `authService.validate` 服务端裁决会话（`app.js`），失败自动清本地登录态；`utils/cloud.js` 统一拦截 `-401`（清会话 + 防抖跳登录）；除登录页外 25 个页面全部接入 `utils/auth-guard.js` 登录守卫。
+- **并发竞态**：`createReceipt` 超收校验与批次号生成移入事务内；`confirmSupplierOrder`/`dataService.auditOrder` 改条件更新/事务内复查，拒绝重复确认与重复审核；报表版本号改 `report_version_counter` 原子计数器（4 个云函数）；业务 ID（RCP/U/P/SUP/MSG/storeId）加随机后缀或撞号重试。
+- **登录防护**：失败计数 `_.inc` 原子自增，达 5 次条件更新锁定 10 分钟（并发不顺延）；登录页不再预填任何演示账号。
+- **操作防重**：详情页/列表页全部写操作加 `_submitting` 防重入；`purchase-detail` 提交/复制带 `requestId` 幂等键（服务端去重）；`requestCancel` 限采购员/店长/管理员且防重复申请刷通知。
+- **配置卫生**：`sitemap.json` 全站 disallow；移除无效的 `permission.scope.camera`；新增 `.gitignore`（忽略 `_tmp_test/` 等含测试口令的本地目录，**入库口令需轮换**）。
+
 完整决策留痕见 [业务模糊点确认清单.md](业务模糊点确认清单.md)。
 
 ## 供货商新订单通知（三层触达）
@@ -85,10 +95,12 @@ seed-data/             初始数据与导入说明（见 seed-data/README.md）
 ## 部署与初始化
 
 1. 微信开发者工具导入项目（`project.config.json`），开通云开发环境。
-2. 上传 `cloudfunctions/` 下全部云函数（改动过的需重新部署：如 `dataService`、`authService`、`confirmSupplierOrder`）。
+2. 上传 `cloudfunctions/` 下全部云函数；2026-09-28 安全修复后**以下 6 个需重新部署**（云端安装依赖）：`authService`、`dataService`、`createReceipt`、`confirmSupplierOrder`、`createPurchaseOrder`、`generateSummaryReport`。建议一次全部部署，避免新旧版本混跑。
 3. 按 `seed-data/README.md` 导入初始数据（含初始账号与建议索引：`app_user.username` 唯一索引等）。
 4. 小程序后台申请**订阅消息模板**，模板 ID 填入上表两处占位符。
 5. 云数据库需建集合：`store`、`app_user`、`category`、`supplier`、`product`、`supplier_product_price`、`purchase_order`、`purchase_order_item`、`receipt`、`receipt_item`、`report_file`、`message`、`abnormal_record`。
+6. `report_version_counter`（报表版本计数器）由云函数首次调用自动创建，无需手工建表；若环境权限禁止自动建集合，请手动创建空集合。
+7. **首次部署后验证**：双设备并发收货验证超收拦截；连续输错 5 次密码验证账号锁定与 10 分钟自动解锁。
 
 ## 相关文档
 
