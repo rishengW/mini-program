@@ -36,22 +36,29 @@ Page({
 
     const storeId = store.storeId || store.id || ''
     // 统计走服务端聚合计数；最近订单只取前 3 条，不再为统计拉全量订单
-    const [ordersResult, reportsResult, messagesResult, statsResult] = await Promise.all([
-      cloud.callFunction('getPurchaseOrders', {
-        role: user.role,
-        storeId,
-        createdBy: user.role === 'chef' ? (user.userId || user.id || user.name) : '',
-        pageSize: 3
-      }),
-      cloud.callFunction('getReports', {
-        role: user.role,
-        storeId,
-        reportType: '',
-        relatedDate: ''
-      }),
-      cloud.callFunction('dataService', { action: 'getMessages' }),
-      cloud.callFunction('dataService', { action: 'getOrderStats', storeId })
-    ])
+    let ordersResult, reportsResult, messagesResult, statsResult
+    try {
+      ;[ordersResult, reportsResult, messagesResult, statsResult] = await Promise.all([
+        cloud.callFunction('getPurchaseOrders', {
+          role: user.role,
+          storeId,
+          createdBy: user.role === 'chef' ? (user.userId || user.id || user.name) : '',
+          pageSize: 3
+        }),
+        cloud.callFunction('getReports', {
+          role: user.role,
+          storeId,
+          reportType: '',
+          relatedDate: ''
+        }),
+        cloud.callFunction('dataService', { action: 'getMessages' }),
+        cloud.callFunction('dataService', { action: 'getOrderStats', storeId })
+      ])
+    } catch (err) {
+      console.error('[index] 首页数据加载异常:', err)
+      util.showToast('首页数据加载失败，请稍后重试')
+      return
+    }
     if (ordersResult.code !== 0 || reportsResult.code !== 0 || messagesResult.code !== 0 || statsResult.code !== 0) {
       util.showToast('首页数据加载失败，请稍后重试')
       return

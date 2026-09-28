@@ -56,7 +56,7 @@ async function createSubmissionMessage(orderNo, orderDate, storeId, storeName) {
   try {
     await db.collection('message').add({
       data: {
-        message_id: 'MSG' + Date.now() + Math.floor(Math.random() * 1000),
+        message_id: 'MSG' + Date.now() + crypto.randomBytes(4).toString('hex'),
         type: 'order',
         title: '采购申请已提交',
         content: `${orderDate} ${storeName}采购申请已成功提交`,
@@ -72,15 +72,25 @@ async function createSubmissionMessage(orderNo, orderDate, storeId, storeName) {
   }
 }
 
-// 辅助：查询同类报表最高版本号。版本号仅用于展示，报表路径已含单号保证唯一；
-// 查询失败必须向上抛出，不能静默回落 v1 加剧版本号竞争。
+// 辅助：原子计数器取下一版本号，避免并发"查最大+1"取得相同版本。
+// 计数器文档 _id = 类型_范围_日期，先原子自增，文档不存在则创建（创建冲突时重试自增）。
 async function getNextVersion(reportType, scopeId, relatedDate) {
-  const res = await db.collection('report_file')
-    .where({ report_type: reportType, scope_id: scopeId, related_date: relatedDate })
-    .orderBy('file_version', 'desc')
-    .limit(1)
-    .get()
-  return res.data.length > 0 ? (Number(res.data[0].file_version) || 0) + 1 : 1
+  const _ = db.command
+  const counterId = `${reportType}_${scopeId}_${relatedDate}`
+  const counters = db.collection('report_version_counter')
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const incRes = await counters.doc(counterId).update({ data: { count: _.inc(1), updated_at: db.serverDate() } })
+    if (incRes.stats && incRes.stats.updated > 0) {
+      const doc = await counters.doc(counterId).get()
+      const count = Number(doc.data && doc.data.count)
+      if (Number.isFinite(count) && count > 0) return count
+    }
+    try {
+      await counters.add({ data: { _id: counterId, count: 1, updated_at: db.serverDate() } })
+      return 1
+    } catch (err) { /* 并发创建冲突，重试自增 */ }
+  }
+  throw new Error('getNextVersion: 计数器更新失败')
 }
 
 exports.main = async (event = {}) => {

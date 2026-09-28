@@ -70,10 +70,5 @@
   "sitemapLocation": "sitemap.json",
   "cloud": true,
   "lazyCodeLoading": "requiredComponents",
-  "__usePrivacyCheck__": true,
-  "permission": {
-    "scope.camera": {
-      "desc": "用于收货验货时拍照上传凭证"
-    }
-  }
+  "__usePrivacyCheck__": true
 }

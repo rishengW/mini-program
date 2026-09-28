@@ -246,6 +246,17 @@ Page({
     }
   },
 
+  // 生成幂等请求键：同一订单同一操作在页面存活期间保持不变，
+  // 超时重试/双击时服务端按此去重（createPurchaseOrder 幂等防御）
+  _genRequestId(kind) {
+    if (!this._requestIds) this._requestIds = {}
+    if (!this._requestIds[kind]) {
+      const d = this.data.detail || {}
+      this._requestIds[kind] = `${kind}_${d.purchaseOrderId || ''}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+    }
+    return this._requestIds[kind]
+  },
+
   editRequest() {
     if (!this.data.detail.purchaseOrderId) return
     wx.navigateTo({ url: '/pages/purchase-create/purchase-create?orderId=' + this.data.detail.purchaseOrderId })
@@ -275,7 +286,9 @@ Page({
       deliveryDate: d.deliveryDate || util.formatDate(new Date()),
       items,
       remark: d.remark || '',
-      orderStatus: 'draft'
+      orderStatus: 'draft',
+      // 幂等键：超时重试/双击时服务端按此去重，防止重复建单
+      requestId: this._genRequestId('copy')
     })
     util.hideLoading()
     if (result && result.code === 0) {
@@ -312,7 +325,9 @@ Page({
       createdByName: d.createdBy,
       items,
       remark: d.remark || '',
-      orderStatus: 'submitted'
+      orderStatus: 'submitted',
+      // 幂等键：超时重试/双击时服务端按此去重，防止重复提交
+      requestId: this._genRequestId('submit')
     })
     util.hideLoading()
     if (result && result.code === 0) {

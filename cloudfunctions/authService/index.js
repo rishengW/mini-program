@@ -3,6 +3,7 @@ const cloud = require('wx-server-sdk')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
+const _ = db.command
 
 const USER_COLLECTION = 'app_user'
 const STORE_COLLECTION = 'store'
@@ -172,13 +173,25 @@ async function login(event) {
   }
   if (!user || !verifyPassword(password, user)) {
     if (user) {
-      const failCount = (Number(user.login_fail_count) || 0) + 1
-      const updateData = { login_fail_count: failCount, updated_at: db.serverDate() }
+      // 原子自增失败计数，避免并发请求各自读到相同旧值绕过锁定
+      await db.collection(USER_COLLECTION).where({ _id: user._id }).update({
+        data: { login_fail_count: _.inc(1), updated_at: db.serverDate() }
+      })
+      // 自增后重新读取，判断是否达到锁定阈值（并发下也只有最后一个请求触发锁定）
+      const after = await db.collection(USER_COLLECTION)
+        .where({ _id: user._id })
+        .limit(1)
+        .get()
+      const failCount = (after.data[0] && Number(after.data[0].login_fail_count)) || 0
       if (failCount >= 5) {
-        updateData.login_locked_until = new Date(Date.now() + 10 * 60 * 1000)
-        updateData.login_fail_count = 0
+        await db.collection(USER_COLLECTION).doc(user._id).update({
+          data: {
+            login_locked_until: new Date(Date.now() + 10 * 60 * 1000),
+            login_fail_count: 0,
+            updated_at: db.serverDate()
+          }
+        })
       }
-      await db.collection(USER_COLLECTION).doc(user._id).update({ data: updateData })
     }
     return { code: -1, msg: '账号或密码错误' }
   }
@@ -355,7 +368,7 @@ async function createUser(event) {
   }
 
   const salt = crypto.randomBytes(16).toString('hex')
-  const userId = 'U' + Date.now()
+  const userId = 'U' + Date.now() + crypto.randomBytes(3).toString('hex')
   const addResult = await db.collection(USER_COLLECTION).add({
     data: {
       user_id: userId,
@@ -545,20 +558,39 @@ async function createStore(event) {
     const m = /^S(\d+)$/.exec(s.store_id || '')
     if (m) maxSeq = Math.max(maxSeq, parseInt(m[1], 10))
   })
-  const seq = maxSeq + 1
-  const storeId = 'S' + String(seq).padStart(3, '0')
-  const finalCode = storeCode || storeId
+  // 门店创建是低频操作：序号取最大+1，插入时若并发撞号则递增重试（最多 3 次）
+  let seq = maxSeq + 1
+  let storeId = 'S' + String(seq).padStart(3, '0')
+  const finalCodeBase = storeCode || storeId
+  let finalCode = finalCodeBase
 
-  await db.collection(STORE_COLLECTION).add({
-    data: {
-      store_id: storeId,
-      store_name: storeName,
-      store_code: finalCode,
-      status: 1,
-      created_at: db.serverDate(),
-      updated_at: db.serverDate()
+  // 并发创建时 store_id 可能撞号：递增重试（store_code 冲突则报错由用户改编号）
+  let added = false
+  let lastErr = null
+  for (let attempt = 0; attempt < 3 && !added; attempt++) {
+    try {
+      await db.collection(STORE_COLLECTION).add({
+        data: {
+          store_id: storeId,
+          store_name: storeName,
+          store_code: finalCode,
+          status: 1,
+          created_at: db.serverDate(),
+          updated_at: db.serverDate()
+        }
+      })
+      added = true
+    } catch (err) {
+      lastErr = err
+      seq++
+      storeId = 'S' + String(seq).padStart(3, '0')
+      if (!storeCode) finalCode = storeId
     }
-  })
+  }
+  if (!added) {
+    console.error('[authService] 门店创建失败:', lastErr)
+    return { code: -1, msg: '门店创建失败，请稍后重试' }
+  }
   return { code: 0, data: { storeId, storeName, storeCode: finalCode } }
 }
 

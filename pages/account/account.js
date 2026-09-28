@@ -48,24 +48,23 @@ Page({
     this.setData({ submitting: false })
 
     if (res.code !== 0) {
-      if (res.code === -401) {
-        util.showToast(res.msg || '登录已过期，请重新登录')
-        setTimeout(() => wx.reLaunch({ url: '/pages/login/login' }), 800)
-      } else {
+      // -401 已由 utils/cloud.js 统一拦截（清会话+跳登录），此处只提示其他错误
+      if (res.code !== -401) {
         util.showToast(res.msg || '密码修改失败')
       }
       return
     }
 
-    app.globalData.isLoggedIn = false
-    app.globalData.userInfo = null
-    app.globalData.currentStore = null
-    app.globalData.authToken = ''
-    wx.removeStorageSync('userInfo')
-    wx.removeStorageSync('currentStore')
-    wx.removeStorageSync('supplierInfo')
-    wx.removeStorageSync('authToken')
-    wx.removeStorageSync('sessionExpiresAt')
+    // 改密成功后清空本地登录态并重新登录
+    if (typeof app.clearSession === 'function') {
+      app.clearSession()
+    } else {
+      app.globalData.isLoggedIn = false
+      app.globalData.userInfo = null
+      app.globalData.currentStore = null
+      app.globalData.authToken = ''
+      ;['userInfo', 'currentStore', 'supplierInfo', 'authToken', 'sessionExpiresAt'].forEach(key => wx.removeStorageSync(key))
+    }
     util.showSuccess('密码已更新，请重新登录')
     setTimeout(() => wx.reLaunch({ url: '/pages/login/login' }), 900)
   }

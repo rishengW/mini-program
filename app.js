@@ -10,7 +10,15 @@ App({
     const userInfo = wx.getStorageSync('userInfo')
     const authToken = wx.getStorageSync('authToken')
     const sessionExpiresAt = wx.getStorageSync('sessionExpiresAt')
-    const sessionValid = authToken && sessionExpiresAt && new Date(sessionExpiresAt).getTime() > Date.now()
+    // 兼容 iOS 对 "2026-09-24 12:00:00" 等非 ISO 格式解析为 Invalid Date 的问题：
+    // 数字直接用，字符串把 "-" 换成 "/"（JSCore 可解析），解析失败视为会话无效
+    const parseExpires = value => {
+      if (!value) return NaN
+      if (typeof value === 'number') return value
+      const date = new Date(String(value).replace(/-/g, '/').replace('T', ' '))
+      return date.getTime()
+    }
+    const sessionValid = authToken && sessionExpiresAt && parseExpires(sessionExpiresAt) > Date.now()
     if (userInfo && sessionValid) {
       this.globalData.userInfo = userInfo
       this.globalData.authToken = authToken

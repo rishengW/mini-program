@@ -97,7 +97,7 @@ exports.main = async (event = {}) => {
         const supplierName = (supRes.data[0] && supRes.data[0].supplier_name) || supplierId
         await db.collection('message').add({
           data: {
-            message_id: 'MSG' + Date.now() + Math.floor(Math.random() * 1000),
+            message_id: 'MSG' + Date.now() + crypto.randomBytes(4).toString('hex'),
             type: 'order',
             title: '供货商已发货',
             content: `${supplierName}已对采购单 ${order.order_no || orderId} 标记发货，请留意收货。`,

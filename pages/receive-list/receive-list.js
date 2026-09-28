@@ -14,20 +14,27 @@ Page({
     const store = app.globalData.currentStore || {}
     const role = user.role || 'store_manager'
     const storeId = store.storeId || store.id || ''
-    const [result, receiptResult] = await Promise.all([
-      cloud.callFunction('getPurchaseOrders', {
-        role,
-        storeId,
-        createdBy: role === 'chef' ? (user.userId || user.id || user.name || '') : '',
-        pageSize: 100
-      }),
-      cloud.callFunction('getReceipts', {
-        role,
-        storeId,
-        page: 1,
-        pageSize: 5
-      })
-    ])
+    let result, receiptResult
+    try {
+      ;[result, receiptResult] = await Promise.all([
+        cloud.callFunction('getPurchaseOrders', {
+          role,
+          storeId,
+          createdBy: role === 'chef' ? (user.userId || user.id || user.name || '') : '',
+          pageSize: 100
+        }),
+        cloud.callFunction('getReceipts', {
+          role,
+          storeId,
+          page: 1,
+          pageSize: 5
+        })
+      ])
+    } catch (err) {
+      console.error('[receive-list] 数据加载异常:', err)
+      util.showToast('数据加载失败，请稍后重试')
+      return
+    }
     if (!result || result.code !== 0) {
       util.showToast((result && result.msg) || '待收货订单加载失败，请稍后重试')
       return

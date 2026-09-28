@@ -45,11 +45,19 @@ Page({
                 unreadCount: Math.max(0, this.data.unreadCount - 1)
             })
         }
-        // 带 biz_id 的订单类消息跳转对应单据：门店侧进采购单详情，供货商进订单列表
+        // 按消息类型路由：订单类 bizId 是采购单号，跳采购单详情；
+        // 收货/异常类 bizId 是收货单号(RCP...)或异常编号，跳收货列表。
+        // 旧消息可能缺 type，用 bizId 前缀兜底。
         if (message.bizId) {
             const role = (getApp().globalData.userInfo || {}).role
             if (role === 'supplier') {
                 wx.navigateTo({ url: '/pages/supplier-orders/supplier-orders' })
+                return
+            }
+            const isReceiptMsg = ['receive', 'abnormal'].includes(message.type)
+                || String(message.bizId).indexOf('RCP') === 0
+            if (isReceiptMsg) {
+                wx.navigateTo({ url: '/pages/receive-list/receive-list' })
             } else {
                 wx.navigateTo({ url: '/pages/purchase-detail/purchase-detail?id=' + message.bizId })
             }

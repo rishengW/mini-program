@@ -122,7 +122,7 @@ async function saveProduct(event) {
     return { code: 0, data: { productId: event.productId } }
   }
 
-  const productId = 'P' + String(Date.now()).slice(-9)
+  const productId = 'P' + Date.now() + crypto.randomBytes(3).toString('hex')
   await db.collection('product').add({
     data: { ...data, product_id: productId, status: 1, created_at: db.serverDate() }
   })
@@ -166,7 +166,7 @@ async function saveSupplier(event) {
     return { code: 0, data: { supplierId: event.supplierId } }
   }
 
-  const supplierId = 'SUP' + String(Date.now()).slice(-9)
+  const supplierId = 'SUP' + Date.now() + crypto.randomBytes(3).toString('hex')
   await db.collection('supplier').add({
     data: { ...data, supplier_id: supplierId, status: 1, created_at: db.serverDate() }
   })
@@ -185,7 +185,7 @@ async function toggleSupplier(event) {
 }
 
 async function createMessage(data) {
-  const messageId = 'MSG' + Date.now() + Math.floor(Math.random() * 1000)
+  const messageId = 'MSG' + Date.now() + crypto.randomBytes(4).toString('hex')
   await db.collection('message').add({
     data: {
       message_id: messageId,
@@ -359,13 +359,22 @@ function safePathPart(value) {
 }
 
 async function getNextVersion(reportType, scopeId, relatedDate) {
-  // 版本号仅用于展示，报表路径含单号+audit标记保证唯一；查询失败必须抛出。
-  const res = await db.collection('report_file')
-    .where({ report_type: reportType, scope_id: scopeId, related_date: relatedDate })
-    .orderBy('file_version', 'desc')
-    .limit(1)
-    .get()
-  return res.data.length > 0 ? (Number(res.data[0].file_version) || 0) + 1 : 1
+  // 原子计数器取下一版本号，避免并发"查最大+1"取得相同版本（报表路径含单号+audit标记仍保证唯一）
+  const counterId = `${reportType}_${scopeId}_${relatedDate}`
+  const counters = db.collection('report_version_counter')
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const incRes = await counters.doc(counterId).update({ data: { count: _.inc(1), updated_at: db.serverDate() } })
+    if (incRes.stats && incRes.stats.updated > 0) {
+      const doc = await counters.doc(counterId).get()
+      const count = Number(doc.data && doc.data.count)
+      if (Number.isFinite(count) && count > 0) return count
+    }
+    try {
+      await counters.add({ data: { _id: counterId, count: 1, updated_at: db.serverDate() } })
+      return 1
+    } catch (err) { /* 并发创建冲突，重试自增 */ }
+  }
+  throw new Error('getNextVersion: 计数器更新失败')
 }
 
 // 审核改量后，按批准数量重新生成下单类报表：旧版本标记 superseded（保留审计痕迹），
