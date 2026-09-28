@@ -2,6 +2,7 @@
 const meta = require('../../utils/meta')
 const cloud = require('../../utils/cloud')
 const util = require('../../utils/util')
+const authGuard = require('../../utils/auth-guard')
 
 Page({
   data: {
@@ -15,6 +16,7 @@ Page({
   },
 
   async onLoad(options) {
+    if (!authGuard.requireLogin()) return
     const reportId = options.id
     const app = getApp()
     util.showLoading('加载报表...')

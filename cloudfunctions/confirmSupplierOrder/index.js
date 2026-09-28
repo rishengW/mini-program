@@ -13,6 +13,8 @@ const CONFIRMABLE_ORDER_STATUS = ['submitted', 'approved']
 const SHIPPABLE_ORDER_STATUS = ['submitted', 'approved', 'report_generated', 'to_receive', 'partial_received']
 const ACTION_STATUS = { confirm: 'confirmed', ship: 'shipped' }
 
+const _ = db.command
+
 function hashToken(token) {
   return crypto.createHash('sha256').update(String(token || '')).digest('hex')
 }
@@ -59,16 +61,6 @@ exports.main = async (event = {}) => {
     if (!status) return { code: -1, msg: '不支持的操作类型' }
     const allowedStatus = action === 'ship' ? SHIPPABLE_ORDER_STATUS : CONFIRMABLE_ORDER_STATUS
 
-    const orderRes = await db.collection('purchase_order')
-      .where({ purchase_order_id: orderId })
-      .limit(1)
-      .get()
-    const order = orderRes.data[0]
-    if (!order) return { code: -1, msg: '订单不存在' }
-    if (!allowedStatus.includes(order.order_status)) {
-      return { code: -1, msg: '订单当前状态不可操作（可能已收货或已作废）' }
-    }
-
     // 该订单必须真的包含此供货商的商品，防止越权确认别人的订单
     const itemRes = await db.collection('purchase_order_item')
       .where({ purchase_order_id: orderId, supplier_id: supplierId })
@@ -76,24 +68,28 @@ exports.main = async (event = {}) => {
       .get()
     if (!itemRes.data.length) return { code: -403, msg: '该订单不包含贵司供货的商品' }
 
-    const confirmations = order.supplier_confirmations || {}
-    const mine = confirmations[supplierId]
-    if (mine && mine.status === status) {
-      return { code: 0, data: { orderId, supplierId, status }, msg: '状态未变化' }
-    }
-
-    // 用点路径只更新自己的确认记录，避免覆盖同单其他供货商的状态
+    // 用条件更新实现原子"检查状态+写入"，避免读-判-写竞态（并发作废/收货后仍写入确认）
     const updateData = { updated_at: db.serverDate() }
     updateData[`supplier_confirmations.${supplierId}`] = {
       status,
       updated_at: db.serverDate(),
       updated_by: user.user_id || user._id
     }
-    await db.collection('purchase_order').doc(order._id).update({ data: updateData })
+    const condRes = await db.collection('purchase_order')
+      .where({ purchase_order_id: orderId, order_status: _.in(allowedStatus) })
+      .update({ data: updateData })
+    if (!condRes.stats || condRes.stats.updated === 0) {
+      return { code: -1, msg: '订单不存在或当前状态不可操作（可能已收货或已作废）' }
+    }
 
     // 发货时向订单所属门店写站内消息（biz_id 关联采购单号，消息中心可跳单据详情）
     if (action === 'ship') {
       try {
+        const orderRes = await db.collection('purchase_order')
+          .where({ purchase_order_id: orderId })
+          .limit(1)
+          .get()
+        const order = orderRes.data[0] || {}
         const supRes = await db.collection('supplier')
           .where({ supplier_id: supplierId })
           .limit(1)

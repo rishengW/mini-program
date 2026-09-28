@@ -1,6 +1,7 @@
 // pages/approval-detail/approval-detail.js
 const util = require('../../utils/util')
 const cloud = require('../../utils/cloud')
+const authGuard = require('../../utils/auth-guard')
 
 Page({
   data: {
@@ -9,6 +10,7 @@ Page({
   },
 
   async onLoad(options = {}) {
+    if (!authGuard.requireLogin()) return
     this.orderId = options.id || options.orderId || ''
     const app = getApp()
     const result = await cloud.callFunction('getPurchaseOrderDetail', {

@@ -2,6 +2,7 @@
 const meta = require('../../utils/meta')
 const cloud = require('../../utils/cloud')
 const util = require('../../utils/util')
+const authGuard = require('../../utils/auth-guard')
 
 const PAGE_SIZE = 20
 
@@ -17,6 +18,7 @@ Page({
   },
 
   onShow() {
+    if (!authGuard.requireLogin()) return
     this.initTabs()
     this.reload()
   },

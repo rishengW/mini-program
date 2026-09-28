@@ -2,6 +2,7 @@
 // 重写：商品直接在列表中输入数量，不再先选有/没有
 const util = require('../../utils/util')
 const cloud = require('../../utils/cloud')
+const authGuard = require('../../utils/auth-guard')
 
 Page({
   data: {
@@ -30,6 +31,7 @@ Page({
   },
 
   async onLoad(options = {}) {
+    if (!authGuard.requireLogin()) return
     this.editingOrderId = options.orderId || options.id || ''
     this.manualOrderId = '' // 拆单时已建的手动商品专用单号，重试/再保存时沿用避免重复建单
     this.catalogOrderId = '' // 拆单时已建的档案商品单号：手动单失败重试时复用，避免档案单重复创建

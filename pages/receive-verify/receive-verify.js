@@ -1,6 +1,7 @@
 // pages/receive-verify/receive-verify.js
 const util = require('../../utils/util')
 const cloud = require('../../utils/cloud')
+const authGuard = require('../../utils/auth-guard')
 
 async function recoverCommittedReceipt(orderId, failedResult) {
   const message = String(failedResult && failedResult.msg || '')
@@ -45,6 +46,7 @@ Page({
   },
 
   async onLoad(options = {}) {
+    if (!authGuard.requireLogin()) return
     // 角色前置校验：厨师无权验收，直接拦截（与 createReceipt 后端白名单一致）
     const app = getApp()
     const currentUser = (app && app.globalData && app.globalData.userInfo) || {}

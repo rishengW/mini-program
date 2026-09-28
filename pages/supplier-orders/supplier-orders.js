@@ -2,6 +2,7 @@
 const meta = require('../../utils/meta')
 const util = require('../../utils/util')
 const cloud = require('../../utils/cloud')
+const authGuard = require('../../utils/auth-guard')
 
 const TABS = [
   { key: 'pending', label: '待确认' },
@@ -24,6 +25,7 @@ Page({
   },
 
   onLoad(options = {}) {
+  if (!authGuard.requireLogin()) return
     if (options.status && TABS.some(t => t.key === options.status)) {
       this.setData({ activeTab: options.status })
     }

@@ -1,6 +1,7 @@
 // pages/supplier-messages/supplier-messages.js
 const cloud = require('../../utils/cloud')
 const util = require('../../utils/util')
+const authGuard = require('../../utils/auth-guard')
 
 Page({
   data: {
@@ -9,6 +10,7 @@ Page({
   },
 
   async onShow() {
+  if (!authGuard.requireLogin()) return
     const app = getApp()
     const user = app.globalData.userInfo || {}
     if (!app.globalData.isLoggedIn || user.role !== 'supplier') {

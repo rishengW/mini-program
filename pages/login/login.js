@@ -8,17 +8,17 @@ Page({
     password: '',
     isSuperAdminLogin: false,
     roles: [
-      { key: 'chef', label: '下单人员', icon: '🍳', defaultUser: 'chef' },
-      { key: 'store_manager', label: '店长', icon: '👨‍💼', defaultUser: 'manager' },
-      { key: 'purchaser', label: '管理员', icon: '📊', defaultUser: 'admin_user' },
-      { key: 'supplier', label: '供货商', icon: '🚚', defaultUser: 'supplier_test' }
+      { key: 'chef', label: '下单人员', icon: '🍳' },
+      { key: 'store_manager', label: '店长', icon: '👨‍💼' },
+      { key: 'purchaser', label: '管理员', icon: '📊' },
+      { key: 'supplier', label: '供货商', icon: '🚚' }
     ],
     selectedRole: 'chef'
   },
 
   onShow() {
-    // 初始化默认填入第一项
-    this.selectRole({ currentTarget: { dataset: { role: 'chef' } } })
+    // 不预填任何账号，避免向使用者公示测试账号
+    this.setData({ username: '', password: '' })
   },
 
   onInput(e) {
@@ -28,10 +28,9 @@ Page({
 
   selectRole(e) {
     const roleKey = e.currentTarget.dataset.role
-    const role = this.data.roles.find(item => item.key === roleKey)
     this.setData({
       selectedRole: roleKey,
-      username: role ? role.defaultUser : '',
+      username: '',
       password: ''
     })
   },
@@ -40,12 +39,9 @@ Page({
     const isSuper = !this.data.isSuperAdminLogin
     this.setData({
       isSuperAdminLogin: isSuper,
-      username: isSuper ? 'admin' : '',
+      username: '',
       password: ''
     })
-    if (!isSuper) {
-      this.selectRole({ currentTarget: { dataset: { role: this.data.selectedRole } } })
-    }
   },
 
   async login() {

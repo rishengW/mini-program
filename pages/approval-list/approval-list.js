@@ -2,11 +2,13 @@
 const util = require('../../utils/util')
 const cloud = require('../../utils/cloud')
 const meta = require('../../utils/meta')
+const authGuard = require('../../utils/auth-guard')
 
 Page({
   data: { list: [] },
 
   async onShow() {
+    if (!authGuard.requireLogin()) return
     const app = getApp()
     const user = app.globalData.userInfo || {}
     const store = app.globalData.currentStore || {}

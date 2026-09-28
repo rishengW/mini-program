@@ -368,6 +368,8 @@ exports.main = async (event = {}) => {
     })
 
     // 收货主表、明细和订单状态必须同时成功或同时回滚。
+    // committedBatchNo 由事务内赋值，提交后用于 CSV 批次展示，保证与落库 batch_no 一致
+    let committedBatchNo = batchNo
     await db.runTransaction(async transaction => {
       const latestOrderRes = await transaction.collection('purchase_order').doc(order._id).get()
       // B3 分批收货：已全部收齐（received）才拦截；receipt_abnormal 状态允许继续补收
@@ -382,6 +384,37 @@ exports.main = async (event = {}) => {
         throw statusError
       }
 
+      // 事务内复查历史累计实收，防止并发提交超收（事务外的校验只是预检）
+      const txItemIds = items.map(item => item.orderItemId).filter(Boolean)
+      const txHistoryRes = await transaction.collection('receipt_item')
+        .where({ purchase_order_item_id: _.in(txItemIds) })
+        .limit(1000)
+        .get()
+      const txHistoryQty = {}
+      ;(txHistoryRes.data || []).forEach(h => {
+        const key = h.purchase_order_item_id
+        if (!key) return
+        txHistoryQty[key] = (txHistoryQty[key] || 0) + (Number(h.received_qty) || 0)
+      })
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i]
+        const orderQty = Number(item.orderQty)
+        const txHistoryQtyVal = txHistoryQty[item.orderItemId] || 0
+        if (!Number.isFinite(orderQty) || txHistoryQtyVal + item.receivedQty > orderQty) {
+          const overError = new Error(`OVER_RECEIVE:${item.productName}`)
+          overError.code = 'OVER_RECEIVE'
+          throw overError
+        }
+      }
+
+      // 批次号在事务内按已提交收货单数生成，避免并发重号
+      const txHistoryReceiptRes = await transaction.collection('receipt')
+        .where({ purchase_order_id: purchaseOrderId })
+        .limit(1000)
+        .get()
+      const txBatchNo = txHistoryReceiptRes.data.length + 1
+      committedBatchNo = txBatchNo
+
       await transaction.collection('receipt').add({
         data: {
           receipt_id: receiptId, purchase_order_id: purchaseOrderId,
@@ -389,7 +422,7 @@ exports.main = async (event = {}) => {
           receipt_date: receiptDate, received_by: receivedBy,
           receipt_status: hasAbnormal ? 'abnormal' : 'completed', overall_remark: overallRemark,
           photo_file_ids: photoFileIds.filter(Boolean),
-          batch_no: batchNo,
+          batch_no: txBatchNo,
           is_final: isFinalBatch,
           created_at: db.serverDate()
         }
@@ -493,7 +526,7 @@ exports.main = async (event = {}) => {
     // 单据信息头共用字段：订单号、门店、收货日期、下单日期、期望到货、经办人
     const orderDateStr = order.order_date || ''
     const deliveryDateStr = order.delivery_date || ''
-    const infoHead = [csvField('采购单号'), csvField(purchaseOrderId), csvField('门店'), csvField(storeName), csvField('收货日期'), csvField(receiptDate), csvField('下单日期'), csvField(orderDateStr), csvField('期望到货'), csvField(deliveryDateStr), csvField('验收人'), csvField(receivedBy || ''), csvField('批次'), csvField(`第${batchNo}批${isFinalBatch ? '（收齐）' : ''}`)].join(',') + '\n'
+    const infoHead = [csvField('采购单号'), csvField(purchaseOrderId), csvField('门店'), csvField(storeName), csvField('收货日期'), csvField(receiptDate), csvField('下单日期'), csvField(orderDateStr), csvField('期望到货'), csvField(deliveryDateStr), csvField('验收人'), csvField(receivedBy || ''), csvField('批次'), csvField(`第${committedBatchNo}批${isFinalBatch ? '（收齐）' : ''}`)].join(',') + '\n'
 
     // 批量查供应商名称（明细行供应商字段供各报表使用）
     const supplierNameMap = {}
@@ -693,6 +726,9 @@ exports.main = async (event = {}) => {
     }
     if (err && (err.code === 'ORDER_NOT_RECEIVABLE' || err.message === 'ORDER_NOT_RECEIVABLE')) {
       return { code: -1, msg: '当前订单状态不可收货，请刷新订单后重试' }
+    }
+    if (err && (err.code === 'OVER_RECEIVE' || (err.message || '').startsWith('OVER_RECEIVE:'))) {
+      return { code: -1, msg: `商品${String(err.message || '').split(':')[1] || ''}累计实收超过下单量，请检查后重试` }
     }
     console.error('[createReceipt] 收货验收提交失败:', err)
     return { code: -1, msg: '收货验收提交失败，请稍后重试' }

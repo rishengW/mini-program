@@ -2,11 +2,13 @@
 const meta = require('../../utils/meta')
 const util = require('../../utils/util')
 const cloud = require('../../utils/cloud')
+const authGuard = require('../../utils/auth-guard')
 
 Page({
   data: { detail: { items: [] }, canReceive: false, canEdit: false, canCancel: false, voucherImages: [] },
 
   onLoad(options = {}) {
+    if (!authGuard.requireLogin()) return
     this.orderId = options.id || options.orderId || ''
     if (!this.orderId) util.showToast('未获取到采购订单，请返回后重试')
   },

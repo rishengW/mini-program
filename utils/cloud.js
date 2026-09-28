@@ -29,6 +29,23 @@ function ensureCloudReady() {
   return true
 }
 
+// 统一 401 处理：会话失效时清除本地登录态并跳转登录页（一处拦截覆盖所有页面）。
+// 登录页自身不发带 token 的请求，不会被误伤；防抖避免并发请求重复跳转。
+let redirectingToLogin = false
+function handleSessionExpired() {
+  try {
+    const app = getApp()
+    if (app && typeof app.clearSession === 'function') app.clearSession()
+  } catch (err) { /* ignore */ }
+  if (redirectingToLogin) return
+  redirectingToLogin = true
+  setTimeout(() => { redirectingToLogin = false }, 1500)
+  wx.showToast({ title: '登录已过期，请重新登录', icon: 'none' })
+  setTimeout(() => {
+    wx.reLaunch({ url: '/pages/login/login' })
+  }, 600)
+}
+
 async function callFunction(name, data = {}) {
   if (!ensureCloudReady()) {
     return { code: -1, errorType: 'CLOUD_UNAVAILABLE', msg: '当前环境不支持 CloudBase' }
@@ -47,7 +64,11 @@ async function callFunction(name, data = {}) {
   }
   try {
     const res = await wx.cloud.callFunction({ name, data: requestData })
-    return res.result || { code: -1, msg: '云函数未返回有效结果' }
+    const result = res.result || { code: -1, msg: '云函数未返回有效结果' }
+    if (result.code === -401) {
+      handleSessionExpired()
+    }
+    return result
   } catch (err) {
     console.error(`[cloud] 云函数 ${name} 调用失败:`, err)
     return getCloudFailureResult(name, err)

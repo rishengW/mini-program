@@ -1,6 +1,7 @@
 // pages/supplier-receipts/supplier-receipts.js
 const util = require('../../utils/util')
 const cloud = require('../../utils/cloud')
+const authGuard = require('../../utils/auth-guard')
 
 Page({
   data: {
@@ -12,6 +13,7 @@ Page({
   },
 
   onShow() {
+  if (!authGuard.requireLogin()) return
     const app = getApp()
     const user = app.globalData.userInfo || {}
     if (!app.globalData.isLoggedIn) {

@@ -513,6 +513,16 @@ async function auditOrder(event) {
   }
 
   await db.runTransaction(async transaction => {
+    // 事务内复查订单状态，防止并发审核重复执行改量/通知
+    const recheck = await transaction.collection('purchase_order')
+      .where({ purchase_order_id: event.orderId })
+      .limit(1)
+      .get()
+    const currentOrder = recheck.data[0]
+    if (!currentOrder || !['submitted', 'pending_approval'].includes(currentOrder.order_status)) {
+      await transaction.rollback({ code: -1, msg: '该订单已经审核，请勿重复操作' })
+      return
+    }
     for (const item of itemResult.data) {
       const approvedQty = qtyMap[item.item_id]
       if (event.status === 'approved' && Number.isFinite(approvedQty) && approvedQty >= 0) {
@@ -530,6 +540,10 @@ async function auditOrder(event) {
         updated_at: db.serverDate()
       }
     })
+  }).catch(err => {
+    // rollback 携带的自定义信息
+    if (err && err.errMsg && err.errMsg.includes('该订单已经审核')) return { code: -1, msg: '该订单已经审核，请勿重复操作' }
+    throw err
   })
 
   await createMessage({

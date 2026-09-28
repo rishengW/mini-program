@@ -1,6 +1,7 @@
 // pages/supplier-home/supplier-home.js
 const cloud = require('../../utils/cloud')
 const util = require('../../utils/util')
+const authGuard = require('../../utils/auth-guard')
 
 // 微信订阅消息模板 ID：小程序后台申请通过后填入；为空时不拉起授权弹窗
 const NEW_ORDER_TEMPLATE_ID = ''
@@ -21,6 +22,7 @@ Page({
   },
 
   onShow() {
+  if (!authGuard.requireLogin()) return
     const app = getApp()
     if (!app.globalData.isLoggedIn) {
       wx.redirectTo({ url: '/pages/login/login' })

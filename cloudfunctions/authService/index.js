@@ -237,6 +237,26 @@ async function login(event) {
   }
 }
 
+// 会话有效性校验（服务端裁决）：客户端启动时异步调用，
+// 防止仅凭本地存储伪造 sessionExpiresAt 维持"永久登录"。
+async function validateSession(event) {
+  const user = await getSessionUser(event.authToken)
+  if (!user) return { code: -401, msg: '登录已过期，请重新登录' }
+  return {
+    code: 0,
+    data: {
+      user: publicUser(user),
+      sessionExpiresAt: (() => {
+        const tokenHash = hashToken(event.authToken || '')
+        const session = (user.sessions || []).find(s => s && s.token_hash === tokenHash)
+        const raw = (session && session.expires_at) || user.session_expires_at
+        const d = raw ? new Date(raw) : null
+        return d && !Number.isNaN(d.getTime()) ? d.toISOString() : ''
+      })()
+    }
+  }
+}
+
 async function logout(event) {
   const user = await getSessionUser(event.authToken)
   if (user) {
@@ -614,6 +634,7 @@ exports.main = async (event = {}) => {
   try {
     switch (event.action) {
       case 'login': return await login(event)
+      case 'validate': return await validateSession(event)
       case 'logout': return await logout(event)
       case 'changePassword': return await changePassword(event)
       case 'getStores': return await getStores(event)

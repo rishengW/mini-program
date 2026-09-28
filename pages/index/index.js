@@ -3,6 +3,7 @@
 const cloud = require('../../utils/cloud')
 const meta = require('../../utils/meta')
 const util = require('../../utils/util')
+const authGuard = require('../../utils/auth-guard')
 
 Page({
   data: {
@@ -18,6 +19,7 @@ Page({
   },
 
   async onShow() {
+    if (!authGuard.requireLogin()) return
     const app = getApp()
     if (!app.globalData.isLoggedIn) {
       wx.redirectTo({ url: '/pages/login/login' })

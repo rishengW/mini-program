@@ -1,6 +1,7 @@
 // pages/user-manage/user-manage.js
 const cloud = require('../../utils/cloud')
 const util = require('../../utils/util')
+const authGuard = require('../../utils/auth-guard')
 
 Page({
   data: {
@@ -23,6 +24,7 @@ Page({
   },
 
   onShow() {
+  if (!authGuard.requireLogin()) return
     this.loadData()
   },
 

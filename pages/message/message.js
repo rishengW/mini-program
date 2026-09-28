@@ -1,6 +1,7 @@
 // pages/message/message.js
 const cloud = require('../../utils/cloud')
 const util = require('../../utils/util')
+const authGuard = require('../../utils/auth-guard')
 
 Page({
     data: {
@@ -9,6 +10,7 @@ Page({
     },
 
     async onShow() {
+        if (!authGuard.requireLogin()) return
         const app = getApp()
         const result = await cloud.callFunction('dataService', {
             action: 'getMessages',

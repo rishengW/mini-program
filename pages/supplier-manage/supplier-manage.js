@@ -1,6 +1,7 @@
 // pages/supplier-manage/supplier-manage.js
 const cloud = require('../../utils/cloud')
 const util = require('../../utils/util')
+const authGuard = require('../../utils/auth-guard')
 
 Page({
   data: {
@@ -11,7 +12,10 @@ Page({
     form: { supplierName: '', contactName: '', contactPhone: '', remark: '' }
   },
 
-  onShow() { this.loadData() },
+  onShow() {
+  if (!authGuard.requireLogin()) return
+    this.loadData()
+  },
 
   async loadData() {
     const app = getApp()

@@ -3,6 +3,7 @@
 const meta = require('../../utils/meta')
 const util = require('../../utils/util')
 const cloud = require('../../utils/cloud')
+const authGuard = require('../../utils/auth-guard')
 
 const PAGE_SIZE = 20
 
@@ -19,6 +20,7 @@ Page({
   },
 
   onLoad(options) {
+    if (!authGuard.requireLogin()) return
     // 支持从首页带状态参数跳转
     if (options.status) {
       this.setData({ activeFilter: options.status })

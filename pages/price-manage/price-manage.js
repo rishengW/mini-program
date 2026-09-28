@@ -1,6 +1,7 @@
 // pages/price-manage/price-manage.js
 const cloud = require('../../utils/cloud')
 const util = require('../../utils/util')
+const authGuard = require('../../utils/auth-guard')
 
 Page({
   data: {
@@ -21,6 +22,7 @@ Page({
   },
 
   onLoad(options) {
+    if (!authGuard.requireLogin()) return
     this._initialSupplierId = options.supplierId || ''
   },
 
