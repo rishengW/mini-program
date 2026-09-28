@@ -79,9 +79,9 @@ Page({
     const canCopy = order.orderStatus === 'rejected'
     // B8：已提交待审核的订单，采购员/管理员可作废
     const canCancel = order.orderStatus === 'submitted' && ['purchaser', 'super_admin'].includes(currentUser.role)
-    // B8：审批后未收货的订单，非厨师可申请取消（管理员确认后作废）；管理员可直接作废
+    // B8（2026-09-28 口径）：审批后订单仅管理员可申请取消（super_admin 作废确认），下单人员/店长无取消权限
     const cancelEligible = ['approved', 'report_generated', 'partial_received', 'to_receive'].includes(order.orderStatus)
-    const canRequestCancel = cancelEligible && currentUser.role !== 'chef' && !order.cancelRequested
+    const canRequestCancel = cancelEligible && ['purchaser', 'super_admin'].includes(currentUser.role) && !order.cancelRequested
     const canForceCancel = cancelEligible && currentUser.role === 'super_admin'
     // S9（2026-09-22）：手动商品专用单凭证核销
     // 提交凭证：店长/采购员/管理员，#22 拍板：须收齐（received）才可提交；核销裁决：仅管理员

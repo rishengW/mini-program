@@ -1313,9 +1313,9 @@ async function cancelOrder(event) {
 
 // ===== B8 采购员申请取消（审批后单据，需管理员确认后执行 cancelOrder）=====
 async function requestCancel(event) {
-  // 角色限制：B8 口径为采购员/店长发起、管理员确认；chef 与 supplier 不可发起，
-  // 防止反复刷取消申请骚扰管理员（原实现仅 requireUser 未限角色）
-  const auth = await requireUser(event, ['purchaser', 'store_manager', 'super_admin'])
+  // 角色限制（2026-09-28 口径更新）：订单一经审核，取消仅管理员（purchaser/super_admin）可发起，
+  // 下单人员/店长无取消权限；super_admin 经 cancelOrder 直接作废确认
+  const auth = await requireUser(event, GLOBAL_ROLES)
   if (auth.error) return auth.error
   const reason = String(event.reason || '').trim()
   if (!reason) return { code: -1, msg: '申请取消必须填写原因' }

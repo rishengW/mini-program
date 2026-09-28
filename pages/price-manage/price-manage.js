@@ -139,11 +139,17 @@ Page({
       updatedBy,
       dryRun: true
     })
-    if (probe.code !== 0) return util.showToast(probe.msg || '更新失败')
+    if (probe.code !== 0) {
+      this._submitting = false
+      return util.showToast(probe.msg || '更新失败')
+    }
     const affected = (probe.data && probe.data.affectedOrders) || 0
     if (affected > 0) {
       const confirmed = await util.showConfirm(`当前有 ${affected} 张在途采购单含此商品，调价后它们将按新价结算。确认调价？`, '调价波及提醒')
-      if (!confirmed) return
+      if (!confirmed) {
+        this._submitting = false
+        return
+      }
     }
 
     const result = await cloud.callFunction('updateProductPrice', {
