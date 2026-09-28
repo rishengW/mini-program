@@ -14,7 +14,7 @@
 
 代码位置：`cloudfunctions/authService/index.js`（角色白名单、会话管理、B12 多设备登录）。
 
-> **账号管理（#17 软删除）**：离职账号走「停用」而非物理删除（`setUserStatus`），停用即离职——登录会话即时失效、历史单据关联保留；`deleteUser` 仅对无未完结单据的账号放行，且不可删除 `admin` 与当前登录账号。用户管理入口仅 `super_admin` 可见。
+> **账号管理（#17 软删除）**：离职账号走「停用」而非物理删除（`setUserStatus`），停用即离职——登录会话即时失效、历史单据关联保留；`deleteUser` 已不再物理删除，内部直接落到停用（软删除），恢复走 `setUserStatus(status: 1)`。用户管理入口仅 `super_admin` 可见。
 
 ## 核心业务流（已拍板口径）
 

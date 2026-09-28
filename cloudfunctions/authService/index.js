@@ -492,39 +492,10 @@ async function setUserStatus(event) {
   return { code: 0, data: { status } }
 }
 
-// 物理删除仅保留给"建错从未使用的账号"。名下还有未完结单据或处理中
-// 异常时拒绝删除，引导改用停用（软删除）。
+// 软删除：删除请求一律落到停用（status: 0），记录保留以维持历史单据的
+// created_by 追溯链；恢复入口是 setUserStatus(status: 1)。
 async function deleteUser(event) {
-  const auth = await requireSuperAdmin(event)
-  if (auth.error) return auth.error
-  if (!event.id) return { code: -1, msg: '用户信息缺失' }
-  if (event.id === auth.user._id) return { code: -1, msg: '不能删除当前登录账号' }
-
-  const targetResult = await db.collection(USER_COLLECTION).doc(event.id).get()
-  const target = targetResult.data
-  if (!target) return { code: -1, msg: '用户不存在' }
-  if (target.username === 'admin') return { code: -1, msg: '无法删除默认系统超管' }
-
-  const _ = db.command
-  const identities = [target.user_id, target._id, target.name].filter(Boolean)
-  const ACTIVE_ORDER_STATUS = ['draft', 'submitted', 'pending_approval', 'approved', 'report_generated', 'partial_received', 'to_receive']
-  const [orderRes, abnormalRes] = await Promise.all([
-    db.collection('purchase_order')
-      .where({ created_by: _.in(identities), order_status: _.in(ACTIVE_ORDER_STATUS) })
-      .count(),
-    db.collection('abnormal_record')
-      .where({ handled_by: target.name, status: _.in(['pending', 'processing']) })
-      .count()
-  ])
-  if (orderRes.total > 0) {
-    return { code: -1, msg: `该账号名下还有 ${orderRes.total} 张未完结采购单，离职请改用「停用」` }
-  }
-  if (abnormalRes.total > 0) {
-    return { code: -1, msg: `该账号还有 ${abnormalRes.total} 条处理中的异常记录，离职请改用「停用」` }
-  }
-
-  await db.collection(USER_COLLECTION).doc(target._id).remove()
-  return { code: 0 }
+  return await setUserStatus({ ...event, status: 0 })
 }
 
 // 新增门店仅超管可操作。store_id 自动生成（S+序号），store_code 默认取
