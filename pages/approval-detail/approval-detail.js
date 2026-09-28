@@ -54,6 +54,12 @@ Page({
     try {
       const confirmed = await util.showConfirm('确认通过该采购申请？')
       if (!confirmed) return
+      // 审批数量必须大于 0：0 通过会把该商品行审批成 0 量，等于静默删行
+      const invalidItem = (this.data.detail.items || []).find(item => !(Number(item.approveQty) > 0))
+      if (invalidItem) {
+        util.showToast(`「${invalidItem.productName || '商品'}」审批数量必须大于 0`)
+        return
+      }
       const app = getApp()
       const result = await cloud.callFunction('dataService', {
         action: 'auditOrder',

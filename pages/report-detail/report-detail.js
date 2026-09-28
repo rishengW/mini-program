@@ -31,7 +31,7 @@ Page({
       const typeInfo = meta.getReportTypeInfo(report.reportType || report.report_type)
       const rpt = {
         ...report,
-        reportType: report.reportType || report.report_type,
+        reportType: report.reportType || report.report_type || '',
         scopeName: report.scopeName || report.scope_name || '',
         relatedDate: report.relatedDate || report.related_date,
         generatedAt: report.generatedAt || report.generated_at || '',

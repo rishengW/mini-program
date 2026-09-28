@@ -66,9 +66,12 @@ exports.main = async (event = {}) => {
     }
 
     // to_verify 是虚拟筛选：按核销状态而非订单状态过滤（仅对能核销的全局角色有意义，清单 #20）
+    // receivable 同样是虚拟筛选：与首页「待收货」卡片、getOrderStats 口径一致
     if (orderStatus === 'to_verify') {
       if (!isGlobal) return { code: -403, msg: '当前账号无权查看待核销订单' }
       query.verify_status = 'pending'
+    } else if (orderStatus === 'receivable') {
+      query.order_status = _.in(['approved', 'report_generated', 'partial_received', 'to_receive'])
     } else if (orderStatus) {
       query.order_status = orderStatus
     }

@@ -506,8 +506,9 @@ async function auditOrder(event) {
       const sourceItem = item && item.itemId
         ? itemResult.data.find(source => source.item_id === item.itemId)
         : null
-      if (!item || !validIds.has(item.itemId) || !Number.isFinite(qty) || qty < 0 || qty > Number(sourceItem && sourceItem.order_qty)) {
-        return { code: -1, msg: '审核数量无效，请检查后重试' }
+      // qty <= 0 拒绝：0 通过会把该行静默改成 0 量，审批数量必须为正数
+      if (!item || !validIds.has(item.itemId) || !Number.isFinite(qty) || qty <= 0 || qty > Number(sourceItem && sourceItem.order_qty)) {
+        return { code: -1, msg: '审批数量必须大于 0 且不超过下单数量，请检查后重试' }
       }
     }
   }
@@ -525,7 +526,7 @@ async function auditOrder(event) {
     }
     for (const item of itemResult.data) {
       const approvedQty = qtyMap[item.item_id]
-      if (event.status === 'approved' && Number.isFinite(approvedQty) && approvedQty >= 0) {
+      if (event.status === 'approved' && Number.isFinite(approvedQty) && approvedQty > 0) {
         await transaction.collection('purchase_order_item').doc(item._id).update({
           data: { order_qty: approvedQty, approved_qty: approvedQty, updated_at: db.serverDate() }
         })
