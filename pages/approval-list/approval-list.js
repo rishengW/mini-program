@@ -9,6 +9,13 @@ Page({
 
   async onShow() {
     if (!authGuard.requireLogin()) return
+    // 清单 #12：审核仅管理员（超管/采购员），其他角色直达页面时拦截
+    const me = (getApp().globalData.userInfo || {}).role
+    if (!['super_admin', 'purchaser'].includes(me)) {
+      util.showToast('仅管理员可审核采购申请')
+      setTimeout(() => wx.navigateBack(), 800)
+      return
+    }
     const app = getApp()
     const user = app.globalData.userInfo || {}
     const store = app.globalData.currentStore || {}

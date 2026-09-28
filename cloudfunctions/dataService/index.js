@@ -490,6 +490,12 @@ async function auditOrder(event) {
     .get()
   const order = orderResult.data[0]
   if (!order) return { code: -1, msg: '采购订单不存在' }
+  // 清单 #12：禁止自单自审——下单人（含采购员/超管本人）不能审核自己的单，
+  // 由其他管理员审核；created_by 双值兼容（user_id 或 _id）
+  const auditorId = auth.user.user_id || auth.user._id
+  if (order.created_by && [order.created_by, auth.user._id].includes(auditorId)) {
+    return { code: -1, msg: '不能审核自己下的单，请由其他管理员审核' }
+  }
   if (!['submitted', 'pending_approval'].includes(order.order_status)) {
     return { code: -1, msg: '该订单已经审核，请勿重复操作' }
   }
