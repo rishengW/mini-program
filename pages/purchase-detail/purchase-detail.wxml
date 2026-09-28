@@ -112,6 +112,11 @@
     <button class="btn btn-danger btn-block" bindtap="cancelOrder">作废</button>
   </view>
 
+  <!-- #12-③：等待审核时下单人/店长可催办 -->
+  <view wx:if="{{canRemindAudit}}" class="bottom-actions">
+    <button class="btn btn-outline btn-block" bindtap="remindAudit">🔔 催促审核</button>
+  </view>
+
   <view wx:if="{{canRequestCancel || canForceCancel}}" class="bottom-actions">
     <button wx:if="{{canRequestCancel}}" class="btn btn-outline btn-block" bindtap="requestCancel">申请取消</button>
     <button wx:if="{{canForceCancel}}" class="btn btn-danger btn-block" bindtap="cancelOrder">管理员作废</button>

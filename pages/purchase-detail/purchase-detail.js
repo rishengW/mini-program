@@ -83,6 +83,8 @@ Page({
     const cancelEligible = ['approved', 'report_generated', 'partial_received', 'to_receive'].includes(order.orderStatus)
     const canRequestCancel = cancelEligible && ['purchaser', 'super_admin'].includes(currentUser.role) && !order.cancelRequested
     const canForceCancel = cancelEligible && currentUser.role === 'super_admin'
+    // #12-③：submitted 单等待审核时，下单人/店长可发催审消息（管理员本人不需要催自己）
+    const canRemindAudit = order.orderStatus === 'submitted' && !['purchaser', 'super_admin'].includes(currentUser.role)
     // S9（2026-09-22）：手动商品专用单凭证核销
     // 提交凭证：店长/采购员/管理员，#22 拍板：须收齐（received）才可提交；核销裁决：仅管理员
     const isManualOrder = !!order.isManual
@@ -108,6 +110,7 @@ Page({
       canCancel,
       canRequestCancel,
       canForceCancel,
+      canRemindAudit,
       isManualOrder,
       verifyStatus,
       canSubmitVoucher,
@@ -166,6 +169,25 @@ Page({
       urls: this.data.voucherImages,
       current: this.data.voucherImages[idx]
     })
+  },
+
+  // #12-③：催审——向管理员发催办消息（后端 1 小时限频）
+  async remindAudit() {
+    if (this._submitting) return
+    this._submitting = true
+    try {
+      const result = await cloud.callFunction('dataService', {
+        action: 'remindAudit',
+        orderId: this.orderId
+      })
+      if (result && result.code === 0) {
+        util.showToast('已提醒管理员审核')
+      } else {
+        util.showToast((result && result.msg) || '催办失败')
+      }
+    } finally {
+      this._submitting = false
+    }
   },
 
   // S9：管理员核销——通过回填实付金额 / 驳回重传

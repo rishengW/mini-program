@@ -1367,6 +1367,58 @@ async function requestCancel(event) {
   return { code: 0 }
 }
 
+// ===== #12-③ 审核催办：下单人/店长可对 submitted 单发催办消息提醒管理员 =====
+async function remindAudit(event) {
+  const auth = await requireUser(event, ['chef', 'store_manager', 'purchaser', 'super_admin'])
+  if (auth.error) return auth.error
+  if (!event.orderId) return { code: -1, msg: '缺少订单号' }
+
+  const orderResult = await db.collection('purchase_order')
+    .where({ purchase_order_id: event.orderId })
+    .limit(1)
+    .get()
+  const order = orderResult.data[0]
+  if (!order) return { code: -1, msg: '采购订单不存在' }
+  if (order.order_status !== 'submitted') {
+    return { code: -1, msg: '该订单当前无需催审' }
+  }
+  // 门店归属校验：全局角色可跨门店，门店角色仅可催办本门店订单
+  if (!GLOBAL_ROLES.includes(auth.user.role) && order.store_id !== (auth.user.default_store_id || '')) {
+    return { code: -403, msg: '当前账号无权催办该门店订单' }
+  }
+
+  // 限频：同一单两次催审间隔至少 1 小时，防止刷屏
+  const ONE_HOUR = 60 * 60 * 1000
+  const lastRemindAt = order.audit_reminded_at
+  if (lastRemindAt && Date.now() - new Date(lastRemindAt).getTime() < ONE_HOUR) {
+    return { code: -1, msg: '已催办过，请 1 小时后再试' }
+  }
+
+  // 条件更新兜底防并发重复催办
+  const remindRes = await db.collection('purchase_order')
+    .where({
+      _id: order._id,
+      order_status: 'submitted',
+      $or: [
+        { audit_reminded_at: _.exists(false) },
+        { audit_reminded_at: _.lt(new Date(Date.now() - ONE_HOUR)) }
+      ]
+    })
+    .update({ data: { audit_reminded_at: db.serverDate(), updated_at: db.serverDate() } })
+  if (!remindRes.stats || remindRes.stats.updated === 0) {
+    return { code: -1, msg: '已催办过，请 1 小时后再试' }
+  }
+
+  await createMessage({
+    type: 'approval',
+    title: '采购单催审提醒',
+    content: `${auth.user.name} 催促审核采购单 ${order.order_no || event.orderId}（${order.store_name || ''}，已等待审核），请尽快处理`,
+    bizId: event.orderId,
+    storeId: order.store_id
+  })
+  return { code: 0 }
+}
+
 // ===== S9 拍板（2026-09-22）：手动商品专用单凭证核销 =====
 // 手动单（is_manual）收货后进入待核销（verify_status='pending'），管理员上传/登记
 // 付款凭证并回填实付金额（verify_amount）后核销通过，单据闭环。金额唯一可信来源
@@ -1484,6 +1536,7 @@ exports.main = async (event = {}) => {
       case 'regenerateOrderReports': return await regenerateOrderReports(event)
       case 'cancelOrder': return await cancelOrder(event)
       case 'requestCancel': return await requestCancel(event)
+      case 'remindAudit': return await remindAudit(event)
       case 'verifyManualOrder': return await verifyManualOrder(event)
       default: return { code: -1, msg: '不支持的数据操作' }
     }
