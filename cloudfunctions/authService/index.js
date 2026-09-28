@@ -542,6 +542,74 @@ async function createStore(event) {
   return { code: 0, data: { storeId, storeName, storeCode: finalCode } }
 }
 
+// 编辑门店（仅超管）。编号创建后不允许修改，避免历史单据追溯断链。
+async function updateStore(event) {
+  const auth = await requireSuperAdmin(event)
+  if (auth.error) return auth.error
+  if (!event.storeId) return { code: -1, msg: '门店信息缺失' }
+
+  const storeName = String(event.storeName || '').trim()
+  if (!storeName) return { code: -1, msg: '请输入门店名称' }
+  if (storeName.length > 30) return { code: -1, msg: '门店名称不能超过30个字' }
+
+  const targetResult = await db.collection(STORE_COLLECTION)
+    .where({ store_id: event.storeId })
+    .limit(1)
+    .get()
+  const target = targetResult.data[0]
+  if (!target) return { code: -1, msg: '门店不存在' }
+
+  const duplicate = await db.collection(STORE_COLLECTION)
+    .where({ store_name: storeName })
+    .limit(2)
+    .get()
+  if (duplicate.data.some(s => s._id !== target._id)) {
+    return { code: -1, msg: '该门店名称已存在' }
+  }
+
+  await db.collection(STORE_COLLECTION).doc(target._id).update({
+    data: { store_name: storeName, updated_at: db.serverDate() }
+  })
+  return { code: 0, data: publicStore({ ...target, store_name: storeName }) }
+}
+
+// 门店停用/启用（软删除口径，与账号管理一致）：停用后不可被下单选择，
+// 但历史单据、账号的 default_store_id 追溯链全部保留，可随时恢复。
+async function setStoreStatus(event) {
+  const auth = await requireSuperAdmin(event)
+  if (auth.error) return auth.error
+  if (!event.storeId) return { code: -1, msg: '门店信息缺失' }
+  const status = Number(event.status)
+  if (![0, 1].includes(status)) return { code: -1, msg: '门店状态无效' }
+
+  const targetResult = await db.collection(STORE_COLLECTION)
+    .where({ store_id: event.storeId })
+    .limit(1)
+    .get()
+  const target = targetResult.data[0]
+  if (!target) return { code: -1, msg: '门店不存在' }
+  if ((target.status === undefined ? 1 : target.status) === status) {
+    return { code: -1, msg: status === 0 ? '该门店已是停用状态' : '该门店已是正常状态' }
+  }
+
+  // 停用前检查：还有未完结采购单的门店不允许停用，引导先走完采购流程
+  if (status === 0) {
+    const _ = db.command
+    const ACTIVE_ORDER_STATUS = ['draft', 'submitted', 'pending_approval', 'approved', 'report_generated', 'partial_received', 'to_receive']
+    const orderRes = await db.collection('purchase_order')
+      .where({ store_id: event.storeId, order_status: _.in(ACTIVE_ORDER_STATUS) })
+      .count()
+    if (orderRes.total > 0) {
+      return { code: -1, msg: `该门店还有 ${orderRes.total} 张未完结采购单，请先处理完再停用` }
+    }
+  }
+
+  await db.collection(STORE_COLLECTION).doc(target._id).update({
+    data: { status, updated_at: db.serverDate() }
+  })
+  return { code: 0, data: { storeId: event.storeId, status } }
+}
+
 exports.main = async (event = {}) => {
   try {
     switch (event.action) {
@@ -550,6 +618,8 @@ exports.main = async (event = {}) => {
       case 'changePassword': return await changePassword(event)
       case 'getStores': return await getStores(event)
       case 'createStore': return await createStore(event)
+      case 'updateStore': return await updateStore(event)
+      case 'setStoreStatus': return await setStoreStatus(event)
       case 'listUsers': return await listUsers(event)
       case 'createUser': return await createUser(event)
       case 'updateUser': return await updateUser(event)

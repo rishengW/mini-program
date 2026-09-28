@@ -101,3 +101,62 @@
 .report-mini-info { flex: 1; }
 .report-mini-title { font-size: 28rpx; font-weight: 500; color: #262626; }
 .report-mini-arrow { color: #BFBFBF; font-size: 24rpx; }
+
+/* 新增门店弹窗 */
+.modal-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-content {
+  width: 600rpx;
+  background: #ffffff;
+  border-radius: 20rpx;
+  padding: 40rpx 32rpx;
+}
+.modal-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #262626;
+  text-align: center;
+  margin-bottom: 32rpx;
+}
+.form-field { margin-bottom: 24rpx; }
+.form-label {
+  font-size: 26rpx;
+  color: #595959;
+  display: block;
+  margin-bottom: 12rpx;
+}
+.form-input {
+  border: 2rpx solid #D9D9D9;
+  border-radius: 12rpx;
+  padding: 16rpx 20rpx;
+  font-size: 28rpx;
+}
+.form-hint {
+  font-size: 24rpx;
+  color: #8C8C8C;
+  margin-bottom: 24rpx;
+}
+.modal-actions {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 8rpx;
+}
+.modal-btn {
+  flex: 1;
+  text-align: center;
+  padding: 18rpx 0;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+}
+.modal-btn-secondary { background: #F5F5F5; color: #595959; }
+.modal-btn-primary { background: #1890FF; color: #ffffff; }

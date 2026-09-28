@@ -20,6 +20,7 @@
     "pages/price-manage/price-manage",
     "pages/report-history/report-history",
     "pages/user-manage/user-manage",
+    "pages/store-manage/store-manage",
     "pages/supplier-home/supplier-home",
     "pages/supplier-orders/supplier-orders",
     "pages/supplier-receipts/supplier-receipts",

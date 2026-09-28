@@ -109,6 +109,13 @@ Page({
 
   goStore() { wx.navigateTo({ url: '/pages/store-switch/store-switch' }) },
 
+  // 门店管理（仅超管可见入口，后端各 store 操作同样校验超管身份）
+  openStoreManage() {
+    wx.navigateTo({ url: '/pages/store-manage/store-manage' })
+  },
+
+  stopBubble() {},
+
   // 顶部铃铛入口：进消息中心（tabBar 页面需用 switchTab）
   goMessages() {
     wx.switchTab({ url: '/pages/message/message' })

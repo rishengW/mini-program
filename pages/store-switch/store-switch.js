@@ -3,7 +3,7 @@ const util = require('../../utils/util')
 const cloud = require('../../utils/cloud')
 
 Page({
-  data: { stores: [], currentStoreId: '', canAdd: false, showAddForm: false, storeName: '' },
+  data: { stores: [], currentStoreId: '' },
 
   async onLoad() {
     const app = getApp()
@@ -23,8 +23,7 @@ Page({
     }
     this.setData({
       stores: result.data || [],
-      currentStoreId: currentStore ? (currentStore.storeId || currentStore.id) : '',
-      canAdd: user.role === 'super_admin'
+      currentStoreId: currentStore ? (currentStore.storeId || currentStore.id) : ''
     })
   },
 
@@ -38,40 +37,6 @@ Page({
       this.setData({ currentStoreId: storeId })
       util.showSuccess('已切换到 ' + store.storeName)
       setTimeout(() => wx.navigateBack(), 800)
-    }
-  },
-
-  openAddForm() {
-    this.setData({ showAddForm: true, storeName: '' })
-  },
-
-  closeAddForm() {
-    this.setData({ showAddForm: false })
-  },
-
-  onStoreNameInput(e) {
-    this.setData({ storeName: e.detail.value })
-  },
-
-  stopBubble() {},
-
-  async saveStore() {
-    const storeName = this.data.storeName.trim()
-    if (!storeName) return util.showToast('请输入门店名称')
-
-    util.showLoading()
-    const res = await cloud.callFunction('authService', {
-      action: 'createStore',
-      storeName
-    })
-    util.hideLoading()
-
-    if (res && res.code === 0) {
-      util.showSuccess('门店已创建')
-      this.setData({ showAddForm: false, storeName: '' })
-      this.onLoad()
-    } else {
-      util.showToast((res && res.msg) || '创建失败，请稍后重试')
     }
   }
 })

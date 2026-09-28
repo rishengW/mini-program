@@ -49,6 +49,10 @@
         <view class="action-icon">👥</view>
         <view class="action-label">账号管理</view>
       </view>
+      <view wx:if="{{isSuperAdmin}}" class="action-item" bindtap="openStoreManage">
+        <view class="action-icon">🏬</view>
+        <view class="action-label">门店管理</view>
+      </view>
     </view>
   </view>
 

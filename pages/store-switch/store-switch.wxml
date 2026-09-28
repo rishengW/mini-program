@@ -13,22 +13,4 @@
     </view>
     <view class="store-card-code text-sm text-tertiary">编号: {{item.storeCode}}</view>
   </view>
-
-  <view wx:if="{{canAdd}}" class="add-store-btn" bindtap="openAddForm">+ 新增门店</view>
-
-  <view wx:if="{{showAddForm}}" class="modal-mask" bindtap="closeAddForm">
-    <view class="modal-content" catchtap="stopBubble">
-      <view class="modal-title">新增门店</view>
-      <view class="form-field">
-        <text class="form-label">门店名称</text>
-        <input class="form-input" placeholder="请输入门店名称" value="{{storeName}}"
-               bindinput="onStoreNameInput" maxlength="30" />
-      </view>
-      <view class="form-hint">编号将自动生成，创建后即可在下单时选择</view>
-      <view class="modal-actions">
-        <view class="modal-btn modal-btn-secondary" bindtap="closeAddForm">取消</view>
-        <view class="modal-btn modal-btn-primary" bindtap="saveStore">创建</view>
-      </view>
-    </view>
-  </view>
 </view>
