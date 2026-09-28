@@ -118,6 +118,8 @@ exports.main = async (event = {}) => {
     // 业务日期按 UTC+8（项目用户全部在中国时区），避免凌晨 0-8 点落到前一天
     const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10)
     const actualDate = orderDate || today
+    // 清单 #16 拍板（2026-09-28）：允许补录历史日期，但打 backfilled 标记供对账区分
+    const isBackfilled = actualDate < today
     // delivery_date was added after the initial schema. Keep orderDate as a
     // backwards-compatible fallback for old callers and old records.
     const actualDeliveryDate = deliveryDate || orderDate || today
@@ -274,6 +276,8 @@ exports.main = async (event = {}) => {
       order_date: actualDate,
       delivery_date: actualDeliveryDate,
       order_status: orderStatus,
+      // 清单 #16：业务日期早于服务端今天即为补录，打标供对账区分
+      backfilled: isBackfilled,
       // S9 拍板（2026-09-22）：手动商品专用单标记（整单只有手动商品才有值，混单已在上方拦截）
       is_manual: manualCount > 0,
       // 凭证核销状态：手动单收货后进入待核销，管理员核销回填实付金额后闭环（B 方案）

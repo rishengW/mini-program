@@ -784,6 +784,16 @@ async function resolveAbnormal(event) {
     recipientUserId: await getStoreManagerId(record.store_id),
     storeId: record.store_id
   })
+
+  // 清单 #15 拍板（2026-09-28）：异常解决后补结算仍由管理员手动触发，
+  // 但发「待补结算」提醒，防止管理员忘记导致供应商账单缺一笔
+  await createMessage({
+    type: 'abnormal',
+    title: '待补结算提醒',
+    content: `收货单 ${record.receipt_id || ''} 关联异常已解决，请管理员尽快执行补结算（settleReceipt），避免供应商账单缺漏`,
+    bizId: record.receipt_id || record.abnormal_id || event.id,
+    storeId: record.store_id
+  })
   return { code: 0 }
 }
 

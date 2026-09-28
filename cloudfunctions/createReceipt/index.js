@@ -430,7 +430,10 @@ exports.main = async (event = {}) => {
         data: {
           receipt_id: receiptId, purchase_order_id: purchaseOrderId,
           store_id: storeId, store_name: storeName,
-          receipt_date: receiptDate, received_by: receivedBy,
+          receipt_date: receiptDate,
+          // 清单 #16 拍板（2026-09-28）：补录历史收货日期打 backfilled 标记供对账区分
+          backfilled: isReceiptDate(event.receiptDate) && receiptDate < new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10),
+          received_by: receivedBy,
           receipt_status: hasAbnormal ? 'abnormal' : 'completed', overall_remark: overallRemark,
           photo_file_ids: photoFileIds.filter(Boolean),
           batch_no: txBatchNo,
