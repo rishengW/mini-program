@@ -50,23 +50,23 @@
   box-sizing: border-box;
 }
 
-/* 数据概览 */
+/* 数据概览：2×3 网格（厨师角色 4 卡时为 2×2），卡片更大方便阅读 */
 .stats-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 16rpx;
   margin-bottom: 20rpx;
 }
 .stat-card {
-  flex: 1;
   background: #ffffff;
   border-radius: 16rpx;
-  padding: 24rpx 16rpx;
+  padding: 28rpx 16rpx;
   text-align: center;
   box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.04);
 }
-.stat-icon { font-size: 36rpx; }
-.stat-value { font-size: 36rpx; font-weight: 700; color: #262626; margin: 4rpx 0; }
-.stat-label { font-size: 22rpx; color: #8C8C8C; }
+.stat-icon { font-size: 48rpx; }
+.stat-value { font-size: 44rpx; font-weight: 700; color: #262626; margin: 6rpx 0; }
+.stat-label { font-size: 26rpx; color: #8C8C8C; }
 
 /* 快捷操作 */
 .action-grid {
@@ -78,10 +78,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 20rpx 0;
+  padding: 24rpx 0;
 }
-.action-icon { font-size: 44rpx; }
-.action-label { font-size: 24rpx; color: #595959; margin-top: 8rpx; }
+.action-icon { font-size: 68rpx; }
+.action-label { font-size: 26rpx; color: #595959; margin-top: 10rpx; }
 
 /* 列表 */
 .item-meta { margin-top: 8rpx; font-size: 24rpx; color: #8C8C8C; }

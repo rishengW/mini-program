@@ -110,18 +110,18 @@
 }
 
 .stat-icon {
-  font-size: 40rpx;
+  font-size: 48rpx;
   margin-bottom: 8rpx;
 }
 
 .stat-value {
-  font-size: 40rpx;
+  font-size: 44rpx;
   font-weight: 700;
   color: var(--color-text-primary);
 }
 
 .stat-label {
-  font-size: 22rpx;
+  font-size: 26rpx;
   color: var(--color-text-tertiary);
   margin-top: 4rpx;
 }
@@ -142,7 +142,7 @@
 }
 
 .entry-icon {
-  font-size: 44rpx;
+  font-size: 56rpx;
   margin-right: 20rpx;
 }
 
