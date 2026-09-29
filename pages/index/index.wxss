@@ -27,6 +27,9 @@
 }
 .store-action + .store-action { margin-top: 12rpx; }
 
+/* 退出登录：页底大按钮 */
+.logout-btn { margin-top: 12rpx; }
+
 /* 未读消息铃铛入口 */
 .bell-entry {
   position: relative;
