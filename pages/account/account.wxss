@@ -13,8 +13,8 @@
   width: 88rpx;
   height: 88rpx;
   border-radius: 44rpx;
-  background: #E6F4FF;
-  color: #1890FF;
+  background: #E9F7EF;
+  color: #00873E;
   display: flex;
   align-items: center;
   justify-content: center;

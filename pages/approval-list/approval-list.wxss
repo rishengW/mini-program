@@ -19,8 +19,8 @@
 
 .requester-badge {
   display: inline-block;
-  background: #E6F7FF;
-  color: #1890FF;
+  background: #E9F7EF;
+  color: #00873E;
   padding: 2rpx 12rpx;
   border-radius: 6rpx;
   font-size: 24rpx;

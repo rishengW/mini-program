@@ -46,7 +46,7 @@
   box-shadow: var(--shadow-card);
   border-left: 4rpx solid transparent;
 }
-.product-card-active { border-left-color: var(--color-primary); background: rgba(24,144,255,0.03); }
+.product-card-active { border-left-color: var(--color-primary); background: rgba(0, 135, 62, 0.03); }
 
 .product-top { margin-bottom: 8rpx; }
 .product-name-row { display: flex; align-items: baseline; gap: 8rpx; }
@@ -159,6 +159,6 @@
   background: #F5F7FA; color: #595959; border: 2rpx solid transparent;
 }
 .manual-cat-active {
-  border-color: var(--color-primary); background: rgba(24,144,255,0.06);
+  border-color: var(--color-primary); background: rgba(0, 135, 62, 0.06);
   color: var(--color-primary); font-weight: 600;
 }

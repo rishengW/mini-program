@@ -17,7 +17,7 @@ Page({
     stats: [
       { key: 'pending', label: '待确认', icon: '⏰', color: '#FAAD14', value: 0 },
       { key: 'confirmed', label: '已确认', icon: '✅', color: '#52C41A', value: 0 },
-      { key: 'shipped', label: '已发货', icon: '🚚', color: '#1890FF', value: 0 }
+      { key: 'shipped', label: '已发货', icon: '🚚', color: '#00873E', value: 0 }
     ]
   },
 

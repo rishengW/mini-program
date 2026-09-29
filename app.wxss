@@ -2,13 +2,13 @@
 
 /* ========== CSS Variables ========== */
 page {
-  --color-primary: #1890FF;
-  --color-primary-light: #40A9FF;
-  --color-primary-dark: #096DD9;
+  --color-primary: #00873E;
+  --color-primary-light: #33A862;
+  --color-primary-dark: #006B33;
   --color-success: #52C41A;
   --color-warning: #FAAD14;
   --color-danger: #FF4D4F;
-  --color-info: #1890FF;
+  --color-info: #00873E;
 
   --color-text-primary: #262626;
   --color-text-secondary: #595959;
@@ -98,7 +98,7 @@ page {
 }
 
 .tag-primary {
-  background: rgba(24, 144, 255, 0.1);
+  background: rgba(0, 135, 62, 0.1);
   color: var(--color-primary);
 }
 
@@ -113,7 +113,7 @@ page {
 }
 
 .tag-info {
-  background: rgba(22, 119, 255, 0.1);
+  background: rgba(0, 135, 62, 0.1);
   color: var(--color-primary);
 }
 

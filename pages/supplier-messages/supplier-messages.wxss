@@ -10,7 +10,7 @@
 
 .mark-all-read {
   font-size: 24rpx;
-  color: #1890FF;
+  color: #00873E;
 }
 
 .msg-item {
@@ -23,7 +23,7 @@
 }
 
 .msg-unread {
-  background: #F0F8FF;
+  background: #E9F7EF;
 }
 
 .msg-icon-wrap {

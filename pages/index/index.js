@@ -79,7 +79,7 @@ Page({
 
     const stats = [
       { label: '待处理', value: pendingOrders, icon: '📋', color: '#FAAD14', status: 'submitted' },
-      { label: '待收货', value: pendingReceive, icon: '📦', color: '#1890FF', status: 'receivable' },
+      { label: '待收货', value: pendingReceive, icon: '📦', color: '#00873E', status: 'receivable' },
       { label: '已完成', value: completedOrders, icon: '✅', color: '#52C41A', status: 'received' },
       { label: '需关注', value: unreadMsg, icon: '⚠️', color: '#FF4D4F', status: 'message' }
     ]

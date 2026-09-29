@@ -11,7 +11,7 @@
 }
 
 .status-bg-grey { background: linear-gradient(135deg, #8C8C8C, #595959); }
-.status-bg-primary { background: linear-gradient(135deg, #40A9FF, #1890FF); }
+.status-bg-primary { background: linear-gradient(135deg, #33A862, #00873E); }
 .status-bg-warning { background: linear-gradient(135deg, #FFC53D, #FAAD14); }
 .status-bg-success { background: linear-gradient(135deg, #73D13D, #52C41A); }
 .status-bg-danger { background: linear-gradient(135deg, #FF7875, #FF4D4F); }

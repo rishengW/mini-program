@@ -58,7 +58,7 @@
 
 .action-btn {
   font-size: 24rpx;
-  color: #1890FF;
+  color: #00873E;
   padding: 8rpx 0;
   white-space: nowrap;
 }
@@ -80,13 +80,13 @@
   width: 100rpx;
   height: 100rpx;
   border-radius: 50%;
-  background: linear-gradient(135deg, #40A9FF, #1890FF);
+  background: linear-gradient(135deg, #33A862, #00873E);
   color: #ffffff;
   font-size: 52rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 6rpx 24rpx rgba(24, 144, 255, 0.4);
+  box-shadow: 0 6rpx 24rpx rgba(0, 135, 62, 0.4);
 }
 .fab:active {
   transform: scale(0.92);

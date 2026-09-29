@@ -16,8 +16,8 @@
 }
 
 .store-card-active {
-  border-color: #1890FF;
-  background: rgba(24, 144, 255, 0.03);
+  border-color: #00873E;
+  background: rgba(0, 135, 62, 0.03);
 }
 
 .store-card-header {
@@ -48,7 +48,7 @@
 }
 
 .current-badge {
-  background: #1890FF;
+  background: #00873E;
   color: #ffffff;
   font-size: 22rpx;
   padding: 4rpx 16rpx;

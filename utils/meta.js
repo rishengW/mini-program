@@ -29,7 +29,7 @@ const supplierConfirmMap = {
 }
 
 const reportTypeMap = {
-  store_order_report: { label: '门店下单报表', icon: '📋', color: '#1890FF' },
+  store_order_report: { label: '门店下单报表', icon: '📋', color: '#00873E' },
   store_receipt_report: { label: '门店收货报表', icon: '📦', color: '#52C41A' },
   store_receipt_price_report: { label: '门店带价格收货报表', icon: '💰', color: '#FAAD14' },
   supplier_order_report: { label: '供应商订货汇总', icon: '🏭', color: '#722ED1' },

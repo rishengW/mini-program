@@ -4,7 +4,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: linear-gradient(135deg, #1890FF, #096DD9);
+  background: linear-gradient(135deg, #00873E, #006B33);
   padding: 32rpx;
   border-radius: 16rpx;
   color: #ffffff;
@@ -90,7 +90,7 @@
 .item-meta { margin-top: 8rpx; font-size: 24rpx; color: #8C8C8C; }
 .dot { margin: 0 8rpx; }
 .empty-hint { text-align: center; padding: 32rpx 0; color: #BFBFBF; font-size: 26rpx; }
-.more-link { font-size: 24rpx; color: #1890FF; }
+.more-link { font-size: 24rpx; color: #00873E; }
 
 /* 报表迷你条目 */
 .report-mini-item {
@@ -162,4 +162,4 @@
   font-size: 28rpx;
 }
 .modal-btn-secondary { background: #F5F5F5; color: #595959; }
-.modal-btn-primary { background: #1890FF; color: #ffffff; }
+.modal-btn-primary { background: #00873E; color: #ffffff; }
