@@ -89,7 +89,7 @@
       </view>
 
       <view class="form-group" wx:if="{{form.role === 'chef' || form.role === 'store_manager'}}">
-        <view class="form-label">关联门店</view>
+        <view class="form-label">关联门店 *</view>
         <picker mode="selector" value="{{form.storeIndex || 0}}" range="{{stores}}" range-key="storeName" bindchange="onStoreChange">
           <view class="form-input picker-display">
             {{form.storeName || '请选择所属门店'}} ▾
