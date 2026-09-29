@@ -16,6 +16,22 @@
         "type": "folder"
       },
       {
+        "value": "scripts",
+        "type": "folder"
+      },
+      {
+        "value": "cloud-shared",
+        "type": "folder"
+      },
+      {
+        "value": "log.md",
+        "type": "file"
+      },
+      {
+        "value": "review.md",
+        "type": "file"
+      },
+      {
         "value": ".claude",
         "type": "folder"
       },
