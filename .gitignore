@@ -1,0 +1,15 @@
+# 依赖
+node_modules/
+
+# 临时测试脚本（含硬编码测试口令，严禁入库）
+_tmp_test/
+
+# 本地种子/敏感数据
+seed-data/
+
+# 工具本地配置
+.claude/
+
+# 系统文件
+.DS_Store
+Thumbs.db

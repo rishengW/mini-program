@@ -3,9 +3,11 @@ const cloud = require('wx-server-sdk')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
+const _ = db.command
 
 const USER_COLLECTION = 'app_user'
 const STORE_COLLECTION = 'store'
+const SUPPLIER_COLLECTION = 'supplier'
 const PASSWORD_ITERATIONS = 120000
 const PASSWORD_KEY_LENGTH = 32
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000
@@ -13,9 +15,11 @@ const ROLE_LABELS = {
   chef: '门店下单人员',
   store_manager: '店长',
   purchaser: '管理员',
-  super_admin: '超级管理员'
+  super_admin: '超级管理员',
+  supplier: '供货商'
 }
 const STORE_ROLES = ['chef', 'store_manager']
+const SUPPLIER_ROLE = 'supplier'
 
 function normalizeUsername(value) {
   return String(value || '').trim().toLowerCase()
@@ -52,6 +56,7 @@ function publicUser(user) {
     role: user.role,
     roleLabel: user.role_label || ROLE_LABELS[user.role] || user.role,
     defaultStoreId: user.default_store_id || null,
+    defaultSupplierId: user.default_supplier_id || null,
     status: user.status === undefined ? 1 : user.status
   }
 }
@@ -76,6 +81,15 @@ async function findStore(storeId) {
   return result.data[0] || null
 }
 
+async function findSupplier(supplierId) {
+  if (!supplierId) return null
+  const result = await db.collection(SUPPLIER_COLLECTION)
+    .where({ supplier_id: supplierId, status: 1 })
+    .limit(1)
+    .get()
+  return result.data[0] || null
+}
+
 async function getDefaultStore(user) {
   const assignedStore = await findStore(user.default_store_id)
   if (assignedStore) return assignedStore
@@ -91,14 +105,27 @@ async function getDefaultStore(user) {
 
 async function getSessionUser(authToken) {
   if (!authToken) return null
+  const tokenHash = hashToken(authToken)
   const result = await db.collection(USER_COLLECTION)
-    .where({ session_token_hash: hashToken(authToken), status: 1 })
+    .where({ status: 1, sessions: { token_hash: tokenHash } })
     .limit(1)
     .get()
-  const user = result.data[0]
-  if (!user || !user.session_expires_at) return null
-
-  const expiresAt = new Date(user.session_expires_at).getTime()
+  let user = result.data[0]
+  if (!user) {
+    // 兼容旧单会话字段（未重新登录的历史设备）
+    const legacy = await db.collection(USER_COLLECTION)
+      .where({ session_token_hash: tokenHash, status: 1 })
+      .limit(1)
+      .get()
+    user = legacy.data[0]
+    if (!user || !user.session_expires_at) return null
+    const legacyExpires = new Date(user.session_expires_at).getTime()
+    if (!Number.isFinite(legacyExpires) || legacyExpires <= Date.now()) return null
+    return user
+  }
+  const session = (user.sessions || []).find(s => s && s.token_hash === tokenHash)
+  if (!session || !session.expires_at) return null
+  const expiresAt = new Date(session.expires_at).getTime()
   if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return null
   return user
 }
@@ -119,6 +146,9 @@ function validateUserInput(data, requirePassword) {
   }
   if (STORE_ROLES.includes(role) && !data.defaultStoreId) {
     return { error: '该角色必须关联门店' }
+  }
+  if (role === SUPPLIER_ROLE && !data.defaultSupplierId) {
+    return { error: '该角色必须关联供货商' }
   }
   return { username, name, password, role }
 }
@@ -143,13 +173,21 @@ async function login(event) {
   }
   if (!user || !verifyPassword(password, user)) {
     if (user) {
-      const failCount = (Number(user.login_fail_count) || 0) + 1
-      const updateData = { login_fail_count: failCount, updated_at: db.serverDate() }
-      if (failCount >= 5) {
-        updateData.login_locked_until = new Date(Date.now() + 10 * 60 * 1000)
-        updateData.login_fail_count = 0
-      }
-      await db.collection(USER_COLLECTION).doc(user._id).update({ data: updateData })
+      // 原子自增失败计数，避免并发请求各自读到相同旧值绕过锁定
+      await db.collection(USER_COLLECTION).where({ _id: user._id }).update({
+        data: { login_fail_count: _.inc(1), updated_at: db.serverDate() }
+      })
+      // 条件更新锁定：仅当计数仍 >=5 时写锁并归零。并发下第一个请求把计数清零后，
+      // 其余请求的 where 不再匹配，不会重复写 locked_until 顺延锁定期。
+      await db.collection(USER_COLLECTION)
+        .where({ _id: user._id, login_fail_count: _.gte(5) })
+        .update({
+          data: {
+            login_locked_until: new Date(Date.now() + 10 * 60 * 1000),
+            login_fail_count: 0,
+            updated_at: db.serverDate()
+          }
+        })
     }
     return { code: -1, msg: '账号或密码错误' }
   }
@@ -158,29 +196,72 @@ async function login(event) {
     return { code: -1, msg: '账号与所选登录角色不匹配' }
   }
 
-  const store = await getDefaultStore(user)
-  if (!store) return { code: -1, msg: '账号未关联有效门店，请联系管理员' }
+  // 供货商角色不关联门店，改为校验并加载其供货商档案
+  let store = null
+  let supplier = null
+  if (user.role === SUPPLIER_ROLE) {
+    supplier = await findSupplier(user.default_supplier_id)
+    if (!supplier) return { code: -1, msg: '账号关联的供货商档案不存在或已停用，请联系管理员' }
+  } else {
+    store = await getDefaultStore(user)
+    if (!store) return { code: -1, msg: '账号未关联有效门店，请联系管理员' }
+  }
 
   const sessionToken = crypto.randomBytes(32).toString('hex')
   const sessionExpiresAt = new Date(Date.now() + SESSION_TTL_MS)
-  await db.collection(USER_COLLECTION).doc(user._id).update({
-    data: {
-      session_token_hash: hashToken(sessionToken),
-      session_expires_at: sessionExpiresAt,
-      login_fail_count: 0,
-      login_locked_until: null,
-      last_login_at: db.serverDate(),
-      updated_at: db.serverDate()
-    }
-  })
+  // B12 多设备会话：每台设备一条会话记录，最多保留 5 条（挤出最旧的）
+  const sessions = (Array.isArray(user.sessions) ? user.sessions : [])
+    .filter(s => s && new Date(s.expires_at).getTime() > Date.now())
+  sessions.push({ token_hash: hashToken(sessionToken), expires_at: sessionExpiresAt })
+  while (sessions.length > 5) sessions.shift()
+  // 记录当前设备 openid（微信订阅消息推送的 touser 需要）；同一微信号多账号登录时以后登录者为准
+  const wxContext = cloud.getWXContext()
+  const loginUpdate = {
+    // session_token_hash 兼容保留（指向最新会话），旧版云函数未重部署时仍可用
+    session_token_hash: hashToken(sessionToken),
+    session_expires_at: sessionExpiresAt,
+    sessions,
+    login_fail_count: 0,
+    login_locked_until: null,
+    last_login_at: db.serverDate(),
+    updated_at: db.serverDate()
+  }
+  if (wxContext && wxContext.OPENID) loginUpdate.openid = wxContext.OPENID
+  await db.collection(USER_COLLECTION).doc(user._id).update({ data: loginUpdate })
 
   return {
     code: 0,
     data: {
       user: publicUser(user),
       store: publicStore(store),
+      supplier: supplier ? {
+        supplierId: supplier.supplier_id,
+        supplierName: supplier.supplier_name,
+        contactName: supplier.contact_name || '',
+        contactPhone: supplier.contact_phone || ''
+      } : null,
       sessionToken,
       sessionExpiresAt: sessionExpiresAt.toISOString()
+    }
+  }
+}
+
+// 会话有效性校验（服务端裁决）：客户端启动时异步调用，
+// 防止仅凭本地存储伪造 sessionExpiresAt 维持"永久登录"。
+async function validateSession(event) {
+  const user = await getSessionUser(event.authToken)
+  if (!user) return { code: -401, msg: '登录已过期，请重新登录' }
+  return {
+    code: 0,
+    data: {
+      user: publicUser(user),
+      sessionExpiresAt: (() => {
+        const tokenHash = hashToken(event.authToken || '')
+        const session = (user.sessions || []).find(s => s && s.token_hash === tokenHash)
+        const raw = (session && session.expires_at) || user.session_expires_at
+        const d = raw ? new Date(raw) : null
+        return d && !Number.isNaN(d.getTime()) ? d.toISOString() : ''
+      })()
     }
   }
 }
@@ -188,8 +269,17 @@ async function login(event) {
 async function logout(event) {
   const user = await getSessionUser(event.authToken)
   if (user) {
+    // 仅移除当前设备的会话，其他设备不受影响
+    const tokenHash = hashToken(event.authToken || '')
+    const sessions = (Array.isArray(user.sessions) ? user.sessions : [])
+      .filter(s => s && s.token_hash !== tokenHash)
     await db.collection(USER_COLLECTION).doc(user._id).update({
-      data: { session_token_hash: '', session_expires_at: null, updated_at: db.serverDate() }
+      data: {
+        sessions,
+        session_token_hash: '',
+        session_expires_at: null,
+        updated_at: db.serverDate()
+      }
     })
   }
   return { code: 0 }
@@ -212,6 +302,7 @@ async function changePassword(event) {
       password_salt: salt,
       password_hash: hashPassword(newPassword, salt),
       password_iterations: PASSWORD_ITERATIONS,
+      sessions: [],
       session_token_hash: '',
       session_expires_at: null,
       updated_at: db.serverDate()
@@ -268,9 +359,12 @@ async function createUser(event) {
   if (STORE_ROLES.includes(input.role) && !(await findStore(event.defaultStoreId))) {
     return { code: -1, msg: '关联门店不存在或已停用' }
   }
+  if (input.role === SUPPLIER_ROLE && !(await findSupplier(event.defaultSupplierId))) {
+    return { code: -1, msg: '关联供货商不存在或已停用' }
+  }
 
   const salt = crypto.randomBytes(16).toString('hex')
-  const userId = 'U' + Date.now()
+  const userId = 'U' + Date.now() + crypto.randomBytes(3).toString('hex')
   const addResult = await db.collection(USER_COLLECTION).add({
     data: {
       user_id: userId,
@@ -280,6 +374,7 @@ async function createUser(event) {
       role: input.role,
       role_label: ROLE_LABELS[input.role],
       default_store_id: STORE_ROLES.includes(input.role) ? event.defaultStoreId : '',
+      default_supplier_id: input.role === SUPPLIER_ROLE ? event.defaultSupplierId : '',
       status: 1,
       password_salt: salt,
       password_hash: hashPassword(input.password, salt),
@@ -312,6 +407,9 @@ async function updateUser(event) {
   if (STORE_ROLES.includes(input.role) && !(await findStore(event.defaultStoreId))) {
     return { code: -1, msg: '关联门店不存在或已停用' }
   }
+  if (input.role === SUPPLIER_ROLE && !(await findSupplier(event.defaultSupplierId))) {
+    return { code: -1, msg: '关联供货商不存在或已停用' }
+  }
 
   const effectiveRole = target.username === 'admin' ? 'super_admin' : input.role
   const updateData = {
@@ -321,6 +419,7 @@ async function updateUser(event) {
     role: effectiveRole,
     role_label: ROLE_LABELS[effectiveRole],
     default_store_id: STORE_ROLES.includes(effectiveRole) ? event.defaultStoreId : '',
+    default_supplier_id: effectiveRole === SUPPLIER_ROLE ? event.defaultSupplierId : '',
     updated_at: db.serverDate()
   }
   if (input.password) {
@@ -328,6 +427,7 @@ async function updateUser(event) {
     updateData.password_salt = salt
     updateData.password_hash = hashPassword(input.password, salt)
     updateData.password_iterations = PASSWORD_ITERATIONS
+    updateData.sessions = []
     updateData.session_token_hash = ''
     updateData.session_expires_at = null
   }
@@ -355,6 +455,7 @@ async function resetPassword(event) {
       password_salt: salt,
       password_hash: hashPassword(newPassword, salt),
       password_iterations: PASSWORD_ITERATIONS,
+      sessions: [],
       session_token_hash: '',
       session_expires_at: null,
       updated_at: db.serverDate()
@@ -391,48 +492,166 @@ async function setUserStatus(event) {
   return { code: 0, data: { status } }
 }
 
-// 物理删除仅保留给"建错从未使用的账号"。名下还有未完结单据或处理中
-// 异常时拒绝删除，引导改用停用（软删除）。
+// 软删除：删除请求一律落到停用（status: 0），记录保留以维持历史单据的
+// created_by 追溯链；恢复入口是 setUserStatus(status: 1)。
 async function deleteUser(event) {
+  return await setUserStatus({ ...event, status: 0 })
+}
+
+// 新增门店仅超管可操作。store_id 自动生成（S+序号），store_code 默认取
+// store_id，保持与 seed 数据 S001/S002 的既有口径一致。
+async function createStore(event) {
   const auth = await requireSuperAdmin(event)
   if (auth.error) return auth.error
-  if (!event.id) return { code: -1, msg: '用户信息缺失' }
-  if (event.id === auth.user._id) return { code: -1, msg: '不能删除当前登录账号' }
 
-  const targetResult = await db.collection(USER_COLLECTION).doc(event.id).get()
-  const target = targetResult.data
-  if (!target) return { code: -1, msg: '用户不存在' }
-  if (target.username === 'admin') return { code: -1, msg: '无法删除默认系统超管' }
+  const storeName = String(event.storeName || '').trim()
+  const storeCode = String(event.storeCode || '').trim()
+  if (!storeName) return { code: -1, msg: '请输入门店名称' }
+  if (storeName.length > 30) return { code: -1, msg: '门店名称不能超过30个字' }
 
-  const _ = db.command
-  const identities = [target.user_id, target._id, target.name].filter(Boolean)
-  const ACTIVE_ORDER_STATUS = ['draft', 'submitted', 'pending_approval', 'approved', 'report_generated', 'partial_received', 'to_receive']
-  const [orderRes, abnormalRes] = await Promise.all([
-    db.collection('purchase_order')
-      .where({ created_by: _.in(identities), order_status: _.in(ACTIVE_ORDER_STATUS) })
-      .count(),
-    db.collection('abnormal_record')
-      .where({ handled_by: target.name, status: _.in(['pending', 'processing']) })
+  // 查重改条件查询：原 orderBy+limit(100) 在门店超过 100 家后查不到老门店的重名/重编号
+  const dupName = await db.collection(STORE_COLLECTION)
+    .where({ store_name: storeName })
+    .limit(1)
+    .get()
+  if (dupName.data.length > 0) {
+    return { code: -1, msg: '该门店名称已存在' }
+  }
+  if (storeCode) {
+    const dupCode = await db.collection(STORE_COLLECTION)
+      .where({ store_code: storeCode })
+      .limit(1)
+      .get()
+    if (dupCode.data.length > 0) {
+      return { code: -1, msg: '该门店编号已存在' }
+    }
+  }
+
+  // 序号取现有最大序号+1（仅取 store_id 字段，全量遍历而非采样），插入撞号靠下方重试兜底
+  const seqRes = await db.collection(STORE_COLLECTION)
+    .field({ store_id: true })
+    .limit(1000)
+    .get()
+  let maxSeq = 0
+  seqRes.data.forEach(s => {
+    const m = /^S(\d+)$/.exec(s.store_id || '')
+    if (m) maxSeq = Math.max(maxSeq, parseInt(m[1], 10))
+  })
+  // 门店创建是低频操作：序号取最大+1，插入时若并发撞号则递增重试（最多 3 次）
+  let seq = maxSeq + 1
+  let storeId = 'S' + String(seq).padStart(3, '0')
+  const finalCodeBase = storeCode || storeId
+  let finalCode = finalCodeBase
+
+  // 并发创建时 store_id 可能撞号：递增重试（store_code 冲突则报错由用户改编号）
+  let added = false
+  let lastErr = null
+  for (let attempt = 0; attempt < 3 && !added; attempt++) {
+    try {
+      await db.collection(STORE_COLLECTION).add({
+        data: {
+          store_id: storeId,
+          store_name: storeName,
+          store_code: finalCode,
+          status: 1,
+          created_at: db.serverDate(),
+          updated_at: db.serverDate()
+        }
+      })
+      added = true
+    } catch (err) {
+      lastErr = err
+      seq++
+      storeId = 'S' + String(seq).padStart(3, '0')
+      if (!storeCode) finalCode = storeId
+    }
+  }
+  if (!added) {
+    console.error('[authService] 门店创建失败:', lastErr)
+    return { code: -1, msg: '门店创建失败，请稍后重试' }
+  }
+  return { code: 0, data: { storeId, storeName, storeCode: finalCode } }
+}
+
+// 编辑门店（仅超管）。编号创建后不允许修改，避免历史单据追溯断链。
+async function updateStore(event) {
+  const auth = await requireSuperAdmin(event)
+  if (auth.error) return auth.error
+  if (!event.storeId) return { code: -1, msg: '门店信息缺失' }
+
+  const storeName = String(event.storeName || '').trim()
+  if (!storeName) return { code: -1, msg: '请输入门店名称' }
+  if (storeName.length > 30) return { code: -1, msg: '门店名称不能超过30个字' }
+
+  const targetResult = await db.collection(STORE_COLLECTION)
+    .where({ store_id: event.storeId })
+    .limit(1)
+    .get()
+  const target = targetResult.data[0]
+  if (!target) return { code: -1, msg: '门店不存在' }
+
+  const duplicate = await db.collection(STORE_COLLECTION)
+    .where({ store_name: storeName })
+    .limit(2)
+    .get()
+  if (duplicate.data.some(s => s._id !== target._id)) {
+    return { code: -1, msg: '该门店名称已存在' }
+  }
+
+  await db.collection(STORE_COLLECTION).doc(target._id).update({
+    data: { store_name: storeName, updated_at: db.serverDate() }
+  })
+  return { code: 0, data: publicStore({ ...target, store_name: storeName }) }
+}
+
+// 门店停用/启用（软删除口径，与账号管理一致）：停用后不可被下单选择，
+// 但历史单据、账号的 default_store_id 追溯链全部保留，可随时恢复。
+async function setStoreStatus(event) {
+  const auth = await requireSuperAdmin(event)
+  if (auth.error) return auth.error
+  if (!event.storeId) return { code: -1, msg: '门店信息缺失' }
+  const status = Number(event.status)
+  if (![0, 1].includes(status)) return { code: -1, msg: '门店状态无效' }
+
+  const targetResult = await db.collection(STORE_COLLECTION)
+    .where({ store_id: event.storeId })
+    .limit(1)
+    .get()
+  const target = targetResult.data[0]
+  if (!target) return { code: -1, msg: '门店不存在' }
+  if ((target.status === undefined ? 1 : target.status) === status) {
+    return { code: -1, msg: status === 0 ? '该门店已是停用状态' : '该门店已是正常状态' }
+  }
+
+  // 停用前检查：还有未完结采购单的门店不允许停用，引导先走完采购流程
+  if (status === 0) {
+    const _ = db.command
+    const ACTIVE_ORDER_STATUS = ['draft', 'submitted', 'pending_approval', 'approved', 'report_generated', 'partial_received', 'to_receive']
+    const orderRes = await db.collection('purchase_order')
+      .where({ store_id: event.storeId, order_status: _.in(ACTIVE_ORDER_STATUS) })
       .count()
-  ])
-  if (orderRes.total > 0) {
-    return { code: -1, msg: `该账号名下还有 ${orderRes.total} 张未完结采购单，离职请改用「停用」` }
-  }
-  if (abnormalRes.total > 0) {
-    return { code: -1, msg: `该账号还有 ${abnormalRes.total} 条处理中的异常记录，离职请改用「停用」` }
+    if (orderRes.total > 0) {
+      return { code: -1, msg: `该门店还有 ${orderRes.total} 张未完结采购单，请先处理完再停用` }
+    }
   }
 
-  await db.collection(USER_COLLECTION).doc(target._id).remove()
-  return { code: 0 }
+  await db.collection(STORE_COLLECTION).doc(target._id).update({
+    data: { status, updated_at: db.serverDate() }
+  })
+  return { code: 0, data: { storeId: event.storeId, status } }
 }
 
 exports.main = async (event = {}) => {
   try {
     switch (event.action) {
       case 'login': return await login(event)
+      case 'validate': return await validateSession(event)
       case 'logout': return await logout(event)
       case 'changePassword': return await changePassword(event)
       case 'getStores': return await getStores(event)
+      case 'createStore': return await createStore(event)
+      case 'updateStore': return await updateStore(event)
+      case 'setStoreStatus': return await setStoreStatus(event)
       case 'listUsers': return await listUsers(event)
       case 'createUser': return await createUser(event)
       case 'updateUser': return await updateUser(event)

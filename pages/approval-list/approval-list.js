@@ -2,11 +2,20 @@
 const util = require('../../utils/util')
 const cloud = require('../../utils/cloud')
 const meta = require('../../utils/meta')
+const authGuard = require('../../utils/auth-guard')
 
 Page({
   data: { list: [] },
 
   async onShow() {
+    if (!authGuard.requireLogin()) return
+    // 清单 #12：审核仅管理员（超管/采购员），其他角色直达页面时拦截
+    const me = (getApp().globalData.userInfo || {}).role
+    if (!['super_admin', 'purchaser'].includes(me)) {
+      util.showToast('仅管理员可审核采购申请')
+      setTimeout(() => wx.navigateBack(), 800)
+      return
+    }
     const app = getApp()
     const user = app.globalData.userInfo || {}
     const store = app.globalData.currentStore || {}
@@ -14,8 +23,7 @@ Page({
       role: user.role || 'purchaser',
       storeId: store.storeId || '',
       createdBy: '',
-      pageSize: 100,
-      authToken: app.globalData.authToken || wx.getStorageSync('authToken')
+      pageSize: 100
     })
     if (!result || result.code !== 0) {
       util.showToast((result && result.msg) || '审核列表加载失败')
@@ -31,7 +39,9 @@ Page({
           requesterName: o.createdBy,
           expectedDeliveryDate: o.deliveryDate || o.orderDate,
           submittedAt: o.submittedAt,
-          statusText: statusInfo.text
+          statusText: statusInfo.text,
+          // 清单 #21：手动单显式标识（特殊审批：不核协议价，核销走凭证回填）
+          isManual: o.isManual
         }
       })
     this.setData({ list })

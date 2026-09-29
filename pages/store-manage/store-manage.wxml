@@ -1,0 +1,62 @@
+<!-- pages/store-manage/store-manage.wxml -->
+<view class="container">
+  <view class="page-header flex-between">
+    <view>
+      <view class="page-title">门店管理</view>
+      <view class="page-subtitle">共 {{stores.length}} 家门店</view>
+    </view>
+  </view>
+
+  <!-- 门店列表 -->
+  <view class="list">
+    <view wx:for="{{stores}}" wx:key="storeId" class="list-item">
+      <view class="flex-between">
+        <view class="flex-1">
+          <view class="item-name">
+            {{item.storeName}}
+            <text wx:if="{{item.status !== 1}}" class="tag tag-disabled" style="margin-left:12rpx;">已停用</text>
+          </view>
+          <view class="item-meta">编　号：{{item.storeCode}}</view>
+          <view class="item-meta">状　态：{{item.status === 1 ? '正常' : '停用'}}</view>
+        </view>
+        <view class="item-actions">
+          <view class="action-btn" bindtap="showEditForm" data-item="{{item}}">✏️ 编辑</view>
+          <view class="action-btn action-delete" bindtap="toggleStoreStatus" data-item="{{item}}">{{item.status === 1 ? '🚫 停用' : '✅ 启用'}}</view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 空状态 -->
+  <view wx:if="{{stores.length === 0}}" class="empty-state">
+    <view class="empty-state-icon">🏬</view>
+    <view class="empty-state-text">暂无门店</view>
+  </view>
+
+  <view class="fab" bindtap="showAddForm">＋</view>
+
+  <!-- 新增/编辑门店弹窗 -->
+  <view wx:if="{{showForm}}" class="modal-mask" bindtap="closeForm">
+    <view class="modal-body" catchtap="stopBubble">
+      <view class="modal-title">{{editItem ? '编辑门店' : '新增门店'}}</view>
+
+      <view class="form-group">
+        <view class="form-label">门店名称 *</view>
+        <input class="form-input" placeholder="请输入门店名称" maxlength="30"
+               value="{{form.storeName}}" bindinput="onStoreNameInput" />
+      </view>
+
+      <view wx:if="{{editItem}}" class="form-group">
+        <view class="form-label">门店编号</view>
+        <view class="form-input form-static">{{editItem.storeCode}}</view>
+        <view class="form-hint">编号创建后不可修改</view>
+      </view>
+      <view wx:else class="form-hint">编号将自动生成，创建后即可在下单时选择</view>
+
+      <view class="btn-group" style="margin-top:40rpx;">
+        <button class="btn btn-outline flex-1" bindtap="closeForm">取消</button>
+        <button class="btn btn-primary flex-1" bindtap="saveStore">保存</button>
+      </view>
+    </view>
+  </view>
+</view>

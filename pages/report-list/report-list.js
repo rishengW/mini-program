@@ -2,6 +2,7 @@
 const meta = require('../../utils/meta')
 const cloud = require('../../utils/cloud')
 const util = require('../../utils/util')
+const authGuard = require('../../utils/auth-guard')
 
 const PAGE_SIZE = 20
 
@@ -17,6 +18,7 @@ Page({
   },
 
   onShow() {
+    if (!authGuard.requireLogin()) return
     this.initTabs()
     this.reload()
   },
@@ -117,6 +119,34 @@ Page({
 
   goHistory() {
     wx.navigateTo({ url: '/pages/report-history/report-history' })
+  },
+
+  // B11 生成汇总报表入口（日/月）
+  async generateSummary() {
+    const that = this
+    wx.showActionSheet({
+      itemList: ['生成今日日汇总', '生成本月月汇总'],
+      success: async res => {
+        const today = new Date()
+        const pad = n => String(n).padStart(2, '0')
+        const date = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
+        const period = res.tapIndex === 0 ? 'daily' : 'monthly'
+        const app = getApp()
+        util.showLoading('生成中...')
+        const result = await cloud.callFunction('generateSummaryReport', {
+          period,
+          date,
+          storeId: app.globalData.currentStore?.storeId || ''
+        })
+        wx.hideLoading()
+        if (!result || result.code !== 0) {
+          util.showToast((result && result.msg) || '汇总报表生成失败')
+          return
+        }
+        util.showSuccess('汇总报表已生成')
+        that.reload()
+      }
+    })
   },
 
   goDetail(e) {

@@ -3,45 +3,31 @@
 const meta = require('../../utils/meta')
 const util = require('../../utils/util')
 const cloud = require('../../utils/cloud')
+const authGuard = require('../../utils/auth-guard')
 
 const PAGE_SIZE = 20
-const TO_RECEIVE_STATUS = ['submitted', 'approved', 'report_generated', 'partial_received', 'to_receive']
 
 Page({
   data: {
     activeFilter: 'all',
-    filterTabs: [
-      { label: '全部', value: 'all', count: 0 },
-      { label: '草稿', value: 'draft', count: 0 },
-      { label: '已提交', value: 'submitted', count: 0 },
-      { label: '待收货', value: 'to_receive', count: 0 },
-      { label: '已收货', value: 'received', count: 0 },
-      { label: '收货异常', value: 'receipt_abnormal', count: 0 }
-    ],
+    filterTabs: [],
     filteredList: [],
     orders: [],
     isLoading: false,
     isLoadingMore: false,
-    hasMore: false,
+    hasMore: true,
     page: 1
   },
 
-  onLoad() {
-    this._requestSeq = 0
+  onLoad(options) {
+    if (!authGuard.requireLogin()) return
+    // 支持从首页带状态参数跳转
+    if (options.status) {
+      this.setData({ activeFilter: options.status })
+    }
   },
 
-  onShow() {
-    // 消费首页带过来的筛选状态（switchTab 无法传参，避免与普通展示重复加载）
-    const app = getApp()
-    const pendingStatus = app.globalData.pendingPurchaseStatus
-    if (pendingStatus) {
-      app.globalData.pendingPurchaseStatus = ''
-      if (pendingStatus !== this.data.activeFilter) {
-        this.setData({ activeFilter: pendingStatus })
-      }
-    }
-    this.reload()
-  },
+  onShow() { this.reload() },
 
   onPullDownRefresh() {
     this.reload().finally(() => wx.stopPullDownRefresh())
@@ -49,83 +35,91 @@ Page({
 
   onReachBottom() {
     if (this.data.isLoading || this.data.isLoadingMore || !this.data.hasMore) return
-    this.loadOrders(this.data.page + 1, true)
+    this.loadData(this.data.page + 1, true)
   },
 
   reload() {
     this.setData({ page: 1, hasMore: true })
-    return this.loadOrders(1, false)
+    return this.loadData(1, false)
   },
 
-  buildQueryParams(page) {
-    const params = { page, pageSize: PAGE_SIZE }
-    const filter = this.data.activeFilter
-    if (filter === 'to_receive') {
-      params.orderStatusList = TO_RECEIVE_STATUS
-    } else if (filter !== 'all') {
-      params.orderStatus = filter
-    }
-    // 'all'：不传状态条件；角色/门店范围由服务端按登录身份推导
-    return params
-  },
-
-  async loadOrders(page, append = false) {
-    const requestId = ++this._requestSeq
+  async loadData(page, append) {
+    const app = getApp()
+    const user = app.globalData.userInfo || {}
+    const store = app.globalData.currentStore || {}
     this.setData(page === 1 ? { isLoading: true } : { isLoadingMore: true })
-    const result = await cloud.callFunction('getPurchaseOrders', this.buildQueryParams(page))
-    if (requestId !== this._requestSeq) return // 已有更新的请求，丢弃过期响应
 
+    const params = {
+      role: user.role || 'purchaser',
+      storeId: store.storeId || store.id || '',
+      createdBy: user.role === 'chef' ? (user.userId || user.id || user.name || '') : '',
+      page,
+      pageSize: PAGE_SIZE
+    }
+    // 状态过滤下推到服务端，翻页时口径一致
+    if (this.data.activeFilter !== 'all') params.orderStatus = this.data.activeFilter
+
+    const result = await cloud.callFunction('getPurchaseOrders', params)
     if (!result || result.code !== 0) {
       this.setData({ isLoading: false, isLoadingMore: false })
       util.showToast((result && result.msg) || '采购订单加载失败，请稍后重试')
       return
     }
 
-    const currentUser = getApp().globalData.userInfo || {}
-    const canReceiveRole = currentUser.role !== 'chef'
-    const incoming = (result.data || []).map(cloud.normalizePurchaseOrder).map(order => this.decorateOrder(order, canReceiveRole))
-    const orders = append ? this.data.orders.concat(incoming) : incoming
-    // tab 徽标使用服务端统计（契约：{ all, draft, submitted, to_receive, received, receiptAbnormal }）
-    const counts = { all: 0, draft: 0, submitted: 0, to_receive: 0, received: 0, receiptAbnormal: 0, ...(result.statusCounts || {}) }
-    if (!result.statusCounts && typeof result.total === 'number') counts.all = result.total
-    const filterTabs = this.data.filterTabs.map(tab => ({
-      ...tab,
-      count: counts[tab.value === 'receipt_abnormal' ? 'receiptAbnormal' : tab.value] || 0
-    }))
-    const total = typeof result.total === 'number' ? result.total : orders.length
-
+    const newOrders = (result.data || []).map(cloud.normalizePurchaseOrder)
+    const orders = append ? this.data.orders.concat(newOrders) : newOrders
+    const total = Number(result.total) || 0
+    // tab 计数来自服务端 statusCounts，不受分页截断影响
+    const counts = result.statusCounts || {}
+    const isGlobal = ['super_admin', 'purchaser'].includes((getApp().globalData.userInfo || {}).role)
+    const filterTabs = [
+      { label: '全部', value: 'all', count: counts.all || 0 },
+      { label: '草稿', value: 'draft', count: counts.draft || 0 },
+      { label: '已提交', value: 'submitted', count: counts.submitted || 0 },
+      { label: '部分收货', value: 'partial_received', count: counts.partialReceived || 0 },
+      { label: '已收货', value: 'received', count: counts.received || 0 },
+      { label: '收货异常', value: 'receipt_abnormal', count: counts.receiptAbnormal || 0 },
+      { label: '已作废', value: 'cancelled', count: counts.cancelled || 0 }
+    ]
+    // 待核销 tab 仅管理员可见（清单 #20 催办入口）
+    if (isGlobal) {
+      filterTabs.push({ label: '待核销', value: 'to_verify', count: counts.toVerify || 0 })
+    }
     this.setData({
-      orders,
-      filteredList: orders, // 筛选已在服务端完成
       filterTabs,
+      orders,
       page,
       hasMore: orders.length < total,
       isLoading: false,
       isLoadingMore: false
     })
-  },
-
-  decorateOrder(order, canReceiveRole) {
-    const statusInfo = meta.getStatusInfo(order.orderStatus)
-    const manualCount = order.items.filter(i => i.isManual).length
-    // 判断是否可直接收货（chef 无收货权限）
-    const canReceive = canReceiveRole && TO_RECEIVE_STATUS.includes(order.orderStatus)
-    return {
-      ...order,
-      statusText: statusInfo.text,
-      statusType: statusInfo.type,
-      itemCount: order.items.length,
-      manualCount,
-      canReceive,
-      timeAgo: util.getRelativeTime(order.createdAt)
-    }
+    this.renderList()
   },
 
   switchFilter(e) {
-    const value = e.currentTarget.dataset.value
-    if (value === this.data.activeFilter) return
-    this.setData({ activeFilter: value, orders: [], filteredList: [] })
+    this.setData({ activeFilter: e.currentTarget.dataset.value })
     this.reload()
+  },
+
+  renderList() {
+    const currentUser = getApp().globalData.userInfo || {}
+    const canReceiveRole = currentUser.role !== 'chef'
+    const filteredList = this.data.orders.map(o => {
+      const statusInfo = meta.getStatusInfo(o.orderStatus)
+      const manualCount = o.items.filter(i => i.isManual).length
+      // 判断是否可直接收货
+      const canReceive = canReceiveRole && ['approved', 'report_generated', 'partial_received', 'to_receive'].includes(o.orderStatus)
+      return {
+        ...o,
+        statusText: statusInfo.text,
+        statusType: statusInfo.type,
+        itemCount: o.items.length,
+        manualCount,
+        canReceive,
+        timeAgo: util.getRelativeTime(o.createdAt)
+      }
+    })
+    this.setData({ filteredList })
   },
 
   goDetail(e) {

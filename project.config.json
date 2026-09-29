@@ -8,23 +8,19 @@
         "type": "folder"
       },
       {
+        "value": "_tmp_test",
+        "type": "folder"
+      },
+      {
         "value": "seed-data",
         "type": "folder"
       },
       {
-        "value": "scripts",
+        "value": ".claude",
         "type": "folder"
       },
       {
-        "value": "cloud-shared",
-        "type": "folder"
-      },
-      {
-        "value": "log.md",
-        "type": "file"
-      },
-      {
-        "value": "review.md",
+        "value": "采购流程图.png",
         "type": "file"
       }
     ],
@@ -65,10 +61,12 @@
     "localPlugins": false,
     "disableUseStrict": false,
     "useCompilerPlugins": false,
-    "condition": false
+    "condition": false,
+    "swc": false,
+    "disableSWC": true
   },
   "compileType": "miniprogram",
-  "libVersion": "3.3.4",
+  "libVersion": "3.17.1",
   "appid": "wxf2fbd366421bdcf7",
   "projectname": "restaurant-ordering",
   "condition": {},
@@ -76,5 +74,6 @@
     "tabIndent": "insertSpaces",
     "tabSize": 2
   },
-  "simulatorPluginLibVersion": {}
+  "simulatorPluginLibVersion": {},
+  "cloudfunctionTemplateRoot": "cloudfunctionTemplate/"
 }

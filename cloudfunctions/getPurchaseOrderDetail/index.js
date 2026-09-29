@@ -1,16 +1,46 @@
 // 云函数 getPurchaseOrderDetail - 获取采购单详情
 const cloud = require('wx-server-sdk')
-const auth = require('./auth')
-
+const crypto = require('crypto')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
+const _ = db.command
+
+function hashToken(token) {
+  return crypto.createHash('sha256').update(String(token || '')).digest('hex')
+}
+
+async function getSessionUser(authToken) {
+  if (!authToken) return null
+  const tokenHash = hashToken(authToken)
+  // B12 多设备会话：先查 sessions 数组（每设备一条），兼容旧单会话字段
+  const result = await db.collection('app_user')
+    .where({ status: 1, sessions: { token_hash: tokenHash } })
+    .limit(1)
+    .get()
+  let user = result.data[0]
+  if (!user) {
+    const legacy = await db.collection('app_user')
+      .where({ session_token_hash: tokenHash, status: 1 })
+      .limit(1)
+      .get()
+    user = legacy.data[0]
+  }
+  if (!user) return null
+  if (Array.isArray(user.sessions) && user.sessions.length) {
+    const session = user.sessions.find(s => s && s.token_hash === tokenHash)
+    if (!session || !session.expires_at) return null
+    const expiresAt = new Date(session.expires_at).getTime()
+    return Number.isFinite(expiresAt) && expiresAt > Date.now() ? user : null
+  }
+  if (!user.session_expires_at) return null
+  const legacyExpires = new Date(user.session_expires_at).getTime()
+  return Number.isFinite(legacyExpires) && legacyExpires > Date.now() ? user : null
+}
 
 exports.main = async (event = {}) => {
   try {
-    const check = await auth.requireUser(event)
-    if (check.error) return check.error
-    const user = check.user
-
+    const user = await getSessionUser(event.authToken)
+    if (!user) return { code: -401, msg: '登录已过期，请重新登录' }
     const { orderId } = event || {}
     if (!orderId) return { code: -1, msg: '订单信息缺失，请返回后重试' }
 
@@ -25,19 +55,14 @@ exports.main = async (event = {}) => {
     }
 
     const order = orderRes.data[0]
-
     const isGlobal = ['super_admin', 'purchaser'].includes(user.role)
     if (!isGlobal) {
       if (!['chef', 'store_manager'].includes(user.role)) return { code: -403, msg: '当前账号无权查看采购订单' }
       if (!user.default_store_id || order.store_id !== user.default_store_id) {
         return { code: -403, msg: '无权查看其他门店订单' }
       }
-      if (user.role === 'chef') {
-        // 历史数据 created_by 可能存 user_id / _id / 姓名，三者兼容
-        const identities = [user.user_id, user._id, user.name].filter(Boolean)
-        if (!identities.includes(order.created_by)) {
-          return { code: -403, msg: '无权查看其他人员创建的订单' }
-        }
+      if (user.role === 'chef' && order.created_by !== (user.user_id || user._id)) {
+        return { code: -403, msg: '无权查看其他人员创建的订单' }
       }
     }
     let createdByName = order.created_by_name || order.created_by || ''
@@ -54,6 +79,22 @@ exports.main = async (event = {}) => {
       .where({ purchase_order_id: orderId })
       .limit(1000)
       .get()
+
+    // S6：明细补充供货商名称，供详情页按供货商分组展示确认状态。
+    // chef 不下发（与下方报表过滤同一信息边界：chef 不见供应商身份）
+    let items = itemsRes.data
+    if (user.role !== 'chef' && items.length) {
+      const supplierIds = [...new Set(items.map(item => item.supplier_id).filter(Boolean))]
+      const supplierNames = {}
+      for (let i = 0; i < supplierIds.length; i += 20) {
+        const supRes = await db.collection('supplier')
+          .where({ supplier_id: _.in(supplierIds.slice(i, i + 20)) })
+          .limit(100)
+          .get()
+        supRes.data.forEach(s => { supplierNames[s.supplier_id] = s.supplier_name })
+      }
+      items = items.map(item => ({ ...item, supplier_name: supplierNames[item.supplier_id] || '' }))
+    }
 
     // 查关联收货记录
     const receiptRes = await db.collection('receipt')
@@ -76,7 +117,7 @@ exports.main = async (event = {}) => {
       data: {
         ...order,
         created_by_name: createdByName,
-        items: itemsRes.data,
+        items,
         receipts: receiptRes.data,
         reports
       }

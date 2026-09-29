@@ -27,23 +27,46 @@
 }
 .store-action + .store-action { margin-top: 12rpx; }
 
-/* 数据概览 */
+/* 未读消息铃铛入口 */
+.bell-entry {
+  position: relative;
+  margin-bottom: 12rpx;
+  align-self: flex-end;
+}
+.bell-icon { width: 48rpx; height: 48rpx; display: block; }
+.bell-badge {
+  position: absolute;
+  top: -10rpx;
+  right: -14rpx;
+  min-width: 30rpx;
+  height: 30rpx;
+  padding: 0 8rpx;
+  border-radius: 15rpx;
+  background: #FF4D4F;
+  color: #ffffff;
+  font-size: 20rpx;
+  line-height: 30rpx;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+/* 数据概览：2×3 网格（厨师角色 4 卡时为 2×2），卡片更大方便阅读 */
 .stats-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 16rpx;
   margin-bottom: 20rpx;
 }
 .stat-card {
-  flex: 1;
   background: #ffffff;
   border-radius: 16rpx;
-  padding: 24rpx 16rpx;
+  padding: 28rpx 16rpx;
   text-align: center;
   box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.04);
 }
-.stat-icon { font-size: 36rpx; }
-.stat-value { font-size: 36rpx; font-weight: 700; color: #262626; margin: 4rpx 0; }
-.stat-label { font-size: 22rpx; color: #8C8C8C; }
+.stat-icon { font-size: 48rpx; }
+.stat-value { font-size: 44rpx; font-weight: 700; color: #262626; margin: 6rpx 0; }
+.stat-label { font-size: 26rpx; color: #8C8C8C; }
 
 /* 快捷操作 */
 .action-grid {
@@ -55,10 +78,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 20rpx 0;
+  padding: 24rpx 0;
 }
-.action-icon { font-size: 44rpx; }
-.action-label { font-size: 24rpx; color: #595959; margin-top: 8rpx; }
+.action-icon { font-size: 68rpx; }
+.action-label { font-size: 26rpx; color: #595959; margin-top: 10rpx; }
 
 /* 列表 */
 .item-meta { margin-top: 8rpx; font-size: 24rpx; color: #8C8C8C; }
@@ -78,3 +101,62 @@
 .report-mini-info { flex: 1; }
 .report-mini-title { font-size: 28rpx; font-weight: 500; color: #262626; }
 .report-mini-arrow { color: #BFBFBF; font-size: 24rpx; }
+
+/* 新增门店弹窗 */
+.modal-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-content {
+  width: 600rpx;
+  background: #ffffff;
+  border-radius: 20rpx;
+  padding: 40rpx 32rpx;
+}
+.modal-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #262626;
+  text-align: center;
+  margin-bottom: 32rpx;
+}
+.form-field { margin-bottom: 24rpx; }
+.form-label {
+  font-size: 26rpx;
+  color: #595959;
+  display: block;
+  margin-bottom: 12rpx;
+}
+.form-input {
+  border: 2rpx solid #D9D9D9;
+  border-radius: 12rpx;
+  padding: 16rpx 20rpx;
+  font-size: 28rpx;
+}
+.form-hint {
+  font-size: 24rpx;
+  color: #8C8C8C;
+  margin-bottom: 24rpx;
+}
+.modal-actions {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 8rpx;
+}
+.modal-btn {
+  flex: 1;
+  text-align: center;
+  padding: 18rpx 0;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+}
+.modal-btn-secondary { background: #F5F5F5; color: #595959; }
+.modal-btn-primary { background: #1890FF; color: #ffffff; }

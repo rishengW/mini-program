@@ -1,20 +1,74 @@
 // 云函数 updateProductPrice - 更新供应商商品价格
-// 修复：接入服务端鉴权（仅采购员/超管）+ effective_date 兜底改用东八区日期
 const cloud = require('wx-server-sdk')
-const { requireUser } = require('./auth')
-
+const crypto = require('crypto')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
+const _ = db.command
+
+function hashToken(token) {
+  return crypto.createHash('sha256').update(String(token || '')).digest('hex')
+}
+
+async function getSessionUser(authToken) {
+  if (!authToken) return null
+  const tokenHash = hashToken(authToken)
+  // B12 多设备会话：先查 sessions 数组（每设备一条），兼容旧单会话字段
+  const result = await db.collection('app_user')
+    .where({ status: 1, sessions: { token_hash: tokenHash } })
+    .limit(1)
+    .get()
+  let user = result.data[0]
+  if (!user) {
+    const legacy = await db.collection('app_user')
+      .where({ session_token_hash: tokenHash, status: 1 })
+      .limit(1)
+      .get()
+    user = legacy.data[0]
+  }
+  if (!user) return null
+  if (Array.isArray(user.sessions) && user.sessions.length) {
+    const session = user.sessions.find(s => s && s.token_hash === tokenHash)
+    if (!session || !session.expires_at) return null
+    const expiresAt = new Date(session.expires_at).getTime()
+    return Number.isFinite(expiresAt) && expiresAt > Date.now() ? user : null
+  }
+  if (!user.session_expires_at) return null
+  const legacyExpires = new Date(user.session_expires_at).getTime()
+  return Number.isFinite(legacyExpires) && legacyExpires > Date.now() ? user : null
+}
+
+// #10 拍板（2026-09-24）：结算仍取收货日现价（不锁价），但调价波及面要可见——
+// 统计含此「供应商+商品」的在途订单数，供前端在调价前提示。
+// 在途 = 已提交且未收完（草稿未提交不算；已收货单价格快照已固化，不受影响）。
+const INFLIGHT_ORDER_STATUS = ['submitted', 'pending_approval', 'approved', 'report_generated', 'partial_received', 'to_receive']
+async function countInflightOrders(supplierId, productId) {
+  try {
+    const itemRes = await db.collection('purchase_order_item')
+      .where({ supplier_id: supplierId, product_id: productId })
+      .limit(1000)
+      .get()
+    const orderIds = [...new Set(itemRes.data.map(item => item.purchase_order_id).filter(Boolean))]
+    let total = 0
+    for (let i = 0; i < orderIds.length; i += 20) {
+      const chunk = orderIds.slice(i, i + 20)
+      const countRes = await db.collection('purchase_order')
+        .where({ purchase_order_id: _.in(chunk), order_status: _.in(INFLIGHT_ORDER_STATUS) })
+        .count()
+      total += countRes.total
+    }
+    return total
+  } catch (err) {
+    console.warn('[updateProductPrice] 在途单波及计数失败，按 0 处理:', err)
+    return 0
+  }
+}
 
 exports.main = async (event = {}) => {
-  // 入口先鉴权：仅采购员/超管可改价
-  const auth = await requireUser(event, ['purchaser', 'super_admin'])
-  if (auth.error) return auth.error
-  const user = auth.user
-
   try {
-    const { supplierId, productId, newPrice, effectiveDate } = event
-    const updatedBy = user.name || user.username || 'system'
+    const user = await getSessionUser(event.authToken)
+    if (!user) return { code: -401, msg: '登录已过期，请重新登录' }
+    if (!['super_admin', 'purchaser'].includes(user.role)) return { code: -403, msg: '当前账号无权修改供应商价格' }
+    const { supplierId, productId, newPrice, effectiveDate, updatedBy } = event
 
     if (!supplierId || !productId || newPrice === undefined) {
       return { code: -1, msg: '缺少必要参数(supplierId, productId, newPrice)' }
@@ -23,8 +77,12 @@ exports.main = async (event = {}) => {
     if (!Number.isFinite(numericPrice) || numericPrice <= 0) {
       return { code: -1, msg: '价格必须是大于0的数字' }
     }
-    // 生效日期缺省值按 UTC+8 取，避免凌晨 0-8 点落到前一天
-    const priceDate = effectiveDate || new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10)
+    // S5 拍板：不支持预约调价，仅允许当天生效（新价即刻 is_current:1，未来日期会立即生效造成口径混乱）
+    const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10)
+    const priceDate = effectiveDate || today
+    if (priceDate !== today) {
+      return { code: -1, msg: '生效日期仅支持当天，暂不支持预约调价' }
+    }
     const parsedDate = new Date(`${priceDate}T00:00:00Z`)
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(priceDate)) || Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== String(priceDate)) {
       return { code: -1, msg: '生效日期格式无效' }
@@ -35,6 +93,12 @@ exports.main = async (event = {}) => {
     ])
     if (!supplierRes.data.length) return { code: -1, msg: '供应商不存在或已停用' }
     if (!productRes.data.length) return { code: -1, msg: '商品不存在或已停用' }
+
+    // #10：调价波及面计数。dryRun=true 只校验+计数不落库，供前端先弹确认框。
+    const affectedOrders = await countInflightOrders(supplierId, productId)
+    if (event.dryRun === true) {
+      return { code: 0, data: { dryRun: true, affectedOrders } }
+    }
 
     const priceId = 'PRC_' + Date.now()
     // Switching the current price and inserting the replacement must be one
@@ -66,7 +130,7 @@ exports.main = async (event = {}) => {
       })
     })
 
-    return { code: 0, data: { priceId, message: '价格已更新' } }
+    return { code: 0, data: { priceId, affectedOrders, message: '价格已更新' } }
   } catch (err) {
     console.error('[updateProductPrice] 价格更新失败:', err)
     return { code: -1, msg: '价格更新失败，请稍后重试' }

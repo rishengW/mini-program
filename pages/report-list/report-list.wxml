@@ -2,7 +2,10 @@
 <view class="container">
   <view class="report-page-header flex-between">
     <view class="page-title">报表中心</view>
-    <view class="more-link" bindtap="goHistory">历史报表 ▸</view>
+    <view class="more-link">
+      <text bindtap="generateSummary">生成汇总 ▸</text>
+      <text style="margin-left:16rpx;" bindtap="goHistory">历史报表 ▸</text>
+    </view>
   </view>
   <!-- 报表类型筛选 -->
   <view class="filter-section">

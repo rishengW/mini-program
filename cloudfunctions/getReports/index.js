@@ -1,39 +1,74 @@
-// 云函数 getReports - 按登录角色查询报表列表（不信任客户端传参）
+// 云函数 getReports - 按角色查询报表列表
 const cloud = require('wx-server-sdk')
-const auth = require('./auth')
-
+const crypto = require('crypto')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
+function hashToken(token) {
+  return crypto.createHash('sha256').update(String(token || '')).digest('hex')
+}
+
+async function getSessionUser(authToken) {
+  if (!authToken) return null
+  const tokenHash = hashToken(authToken)
+  // B12 多设备会话：先查 sessions 数组（每设备一条），兼容旧单会话字段
+  const result = await db.collection('app_user')
+    .where({ status: 1, sessions: { token_hash: tokenHash } })
+    .limit(1)
+    .get()
+  let user = result.data[0]
+  if (!user) {
+    const legacy = await db.collection('app_user')
+      .where({ session_token_hash: tokenHash, status: 1 })
+      .limit(1)
+      .get()
+    user = legacy.data[0]
+  }
+  if (!user) return null
+  if (Array.isArray(user.sessions) && user.sessions.length) {
+    const session = user.sessions.find(s => s && s.token_hash === tokenHash)
+    if (!session || !session.expires_at) return null
+    const expiresAt = new Date(session.expires_at).getTime()
+    return Number.isFinite(expiresAt) && expiresAt > Date.now() ? user : null
+  }
+  if (!user.session_expires_at) return null
+  const legacyExpires = new Date(user.session_expires_at).getTime()
+  return Number.isFinite(legacyExpires) && legacyExpires > Date.now() ? user : null
+}
+
 exports.main = async (event = {}) => {
   try {
-    const check = await auth.requireUser(event)
-    if (check.error) return check.error
-    const user = check.user
-
-    // 客户端传的 role 一律忽略；storeId 仅对全局角色作为查询过滤条件
-    const { storeId, reportScope, reportType, relatedDate } = event || {}
+    const user = await getSessionUser(event.authToken)
+    if (!user) return { code: -401, msg: '登录已过期，请重新登录' }
+    const { role, storeId, reportScope, reportType, relatedDate } = event || {}
+    const _ = db.command
     let query = {}
     if (reportScope && !['store', 'supplier'].includes(reportScope)) return { code: -1, msg: '报表范围无效' }
     if (relatedDate && !/^\d{4}-\d{2}-\d{2}$/.test(String(relatedDate))) return { code: -1, msg: '日期格式无效' }
 
-    if (!auth.GLOBAL_ROLES.includes(user.role)) {
-      if (!['chef', 'store_manager'].includes(user.role)) return { code: -403, msg: '当前账号无权查看报表' }
-      // 门店角色：强制只看本店报表（厨师仅看门店下单报表）
-      if (!user.default_store_id) return { code: 0, data: [] }
+    // 按角色过滤
+    if (user.role === 'chef') {
+      // 厨师/下单人员：只看门店下单报表
       query.report_scope = 'store'
-      if (user.role === 'chef') query.report_type = 'store_order_report'
+      query.report_type = 'store_order_report'
+      if (!user.default_store_id) return { code: -403, msg: '账号未关联有效门店' }
       query.scope_id = user.default_store_id
-    } else {
-      // 全局角色：看全部，可按报表维度过滤
+    } else if (user.role === 'store_manager') {
+      // 店长：看门店所有报表
+      query.report_scope = 'store'
+      if (!user.default_store_id) return { code: -403, msg: '账号未关联有效门店' }
+      query.scope_id = user.default_store_id
+    } else if (user.role === 'purchaser' || user.role === 'super_admin') {
+      // 管理员：看全部
       if (reportScope) query.report_scope = reportScope
-      // 客户端门店过滤仅在明确查看门店维度报表时生效，避免误伤供应商维度报表
-      if (storeId && reportScope === 'store') query.scope_id = storeId
+    } else {
+      return { code: -403, msg: '当前账号无权查看报表' }
     }
 
     const allowedReportTypes = [
       'store_order_report', 'store_receipt_report', 'store_receipt_price_report',
-      'supplier_order_report', 'supplier_receipt_report', 'supplier_receipt_price_report'
+      'supplier_order_report', 'supplier_receipt_report', 'supplier_receipt_price_report',
+      'store_daily_summary_report', 'store_monthly_summary_report'
     ]
     if (reportType) {
       if (!allowedReportTypes.includes(reportType)) return { code: -1, msg: '报表类型无效' }

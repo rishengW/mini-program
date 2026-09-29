@@ -112,6 +112,11 @@ page {
   color: var(--color-warning);
 }
 
+.tag-info {
+  background: rgba(22, 119, 255, 0.1);
+  color: var(--color-primary);
+}
+
 .tag-danger {
   background: rgba(255, 77, 79, 0.1);
   color: var(--color-danger);

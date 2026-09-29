@@ -10,6 +10,7 @@
       <view class="item-title">
         <text class="requester-badge">{{item.requesterName}}</text>
         <text>{{item.expectedDeliveryDate}} 采购申请</text>
+        <text wx:if="{{item.isManual}}" class="manual-badge">线下采购·凭证核销</text>
       </view>
     </view>
     <view class="item-products">

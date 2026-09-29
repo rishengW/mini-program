@@ -4,7 +4,10 @@
   <view class="card">
     <view class="flex-between">
       <view class="card-title">采购申请</view>
-      <view class="tag tag-warning">待审核</view>
+      <view class="flex-between">
+        <text wx:if="{{detail.isManual}}" class="tag tag-warning">线下采购·凭证核销（不核协议价）</text>
+        <view class="tag tag-warning">待审核</view>
+      </view>
     </view>
     <view class="info-grid">
       <view class="info-item">

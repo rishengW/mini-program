@@ -1,0 +1,17 @@
+/* pages/supplier-prices/supplier-prices.wxss */
+
+.hint-card {
+  padding: 20rpx 28rpx;
+}
+
+.price-product {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.price-value {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: var(--color-primary);
+}

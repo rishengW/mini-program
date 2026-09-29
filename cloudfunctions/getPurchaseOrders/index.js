@@ -1,67 +1,107 @@
-// 云函数 getPurchaseOrders - 获取采购单列表（登录态鉴权 + 服务端角色/门店过滤）
+// 云函数 getPurchaseOrders - 获取采购单列表（按角色+门店过滤）
 const cloud = require('wx-server-sdk')
-const auth = require('./auth')
-
+const crypto = require('crypto')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
-const TO_RECEIVE_STATUS = ['submitted', 'approved', 'report_generated', 'partial_received', 'to_receive']
+function hashToken(token) {
+  return crypto.createHash('sha256').update(String(token || '')).digest('hex')
+}
+
+async function getSessionUser(authToken) {
+  if (!authToken) return null
+  const tokenHash = hashToken(authToken)
+  // B12 多设备会话：先查 sessions 数组（每设备一条），兼容旧单会话字段
+  const result = await db.collection('app_user')
+    .where({ status: 1, sessions: { token_hash: tokenHash } })
+    .limit(1)
+    .get()
+  let user = result.data[0]
+  if (!user) {
+    const legacy = await db.collection('app_user')
+      .where({ session_token_hash: tokenHash, status: 1 })
+      .limit(1)
+      .get()
+    user = legacy.data[0]
+  }
+  if (!user) return null
+  if (Array.isArray(user.sessions) && user.sessions.length) {
+    const session = user.sessions.find(s => s && s.token_hash === tokenHash)
+    if (!session || !session.expires_at) return null
+    const expiresAt = new Date(session.expires_at).getTime()
+    return Number.isFinite(expiresAt) && expiresAt > Date.now() ? user : null
+  }
+  if (!user.session_expires_at) return null
+  const legacyExpires = new Date(user.session_expires_at).getTime()
+  return Number.isFinite(legacyExpires) && legacyExpires > Date.now() ? user : null
+}
 
 exports.main = async (event = {}) => {
   try {
-    const check = await auth.requireUser(event)
-    if (check.error) return check.error
-    const user = check.user
-
-    // 客户端传的 role/createdBy 一律忽略；storeId 仅对全局角色作为查询过滤条件
-    const { storeId, orderStatus, orderStatusList, orderDate, page = 1, pageSize = 20 } = event || {}
+    const user = await getSessionUser(event.authToken)
+    if (!user) return { code: -401, msg: '登录已过期，请重新登录' }
+    const { role, storeId, orderStatus, orderDate, createdBy } = event || {}
+    const page = Math.max(1, Math.min(1000, Math.floor(Number(event.page) || 1)))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(event.pageSize) || 20)))
     const _ = db.command
+    let query = {}
 
-    const scope = auth.buildOrderScope(user)
-    if (scope._no_access) {
-      return {
-        code: 0,
-        data: [],
-        total: 0,
-        page,
-        pageSize,
-        statusCounts: { all: 0, draft: 0, submitted: 0, to_receive: 0, received: 0, receiptAbnormal: 0 }
-      }
+    // 角色权限过滤
+    const isGlobal = ['super_admin', 'purchaser'].includes(user.role)
+    if (user.role === 'chef') {
+      // 下单人员：只看本店+自己创建的
+      if (!user.default_store_id) return { code: -403, msg: '账号未关联有效门店' }
+      query.store_id = user.default_store_id
+      query.created_by = user.user_id || user._id
+    } else if (user.role === 'store_manager') {
+      // 店长：看本店全部
+      if (!user.default_store_id) return { code: -403, msg: '账号未关联有效门店' }
+      query.store_id = user.default_store_id
+    } else if (isGlobal) {
+      // 管理员/采购员可按门店、创建人筛选
+      if (storeId) query.store_id = storeId
+      if (createdBy) query.created_by = createdBy
+    } else {
+      return { code: -403, msg: '当前账号无权查看采购订单' }
     }
 
-    // 基础条件 = 服务端角色范围（+ 全局角色可选门店过滤），统计与列表共用
-    const baseQuery = { ...scope }
-    if (auth.GLOBAL_ROLES.includes(user.role) && storeId) baseQuery.store_id = storeId
-
-    // 状态筛选：orderStatusList 优先，其次单个 orderStatus
-    const query = { ...baseQuery }
-    if (Array.isArray(orderStatusList) && orderStatusList.length > 0) {
-      query.order_status = _.in(orderStatusList)
+    // to_verify 是虚拟筛选：按核销状态而非订单状态过滤（仅对能核销的全局角色有意义，清单 #20）
+    // receivable 同样是虚拟筛选：与首页「待收货」卡片、getOrderStats 口径一致
+    if (orderStatus === 'to_verify') {
+      if (!isGlobal) return { code: -403, msg: '当前账号无权查看待核销订单' }
+      query.verify_status = 'pending'
+    } else if (orderStatus === 'receivable') {
+      query.order_status = _.in(['approved', 'report_generated', 'partial_received', 'to_receive'])
     } else if (orderStatus) {
       query.order_status = orderStatus
     }
     if (orderDate) query.order_date = orderDate
 
     // 各状态数量用于前端筛选 tab：在角色约束的基准条件上统计，不受当前 orderStatus 过滤影响
-    const [allRes, draftRes, submittedRes, toReceiveRes, receivedRes, abnormalRes] = await Promise.all([
+    const baseQuery = { ...query }
+    delete baseQuery.order_status
+    const [allRes, draftRes, submittedRes, receivedRes, abnormalRes, cancelledRes, partialRes, toVerifyRes] = await Promise.all([
       db.collection('purchase_order').where(baseQuery).count(),
       db.collection('purchase_order').where({ ...baseQuery, order_status: 'draft' }).count(),
       db.collection('purchase_order').where({ ...baseQuery, order_status: 'submitted' }).count(),
-      db.collection('purchase_order').where({ ...baseQuery, order_status: _.in(TO_RECEIVE_STATUS) }).count(),
       db.collection('purchase_order').where({ ...baseQuery, order_status: 'received' }).count(),
-      db.collection('purchase_order').where({ ...baseQuery, order_status: 'receipt_abnormal' }).count()
+      db.collection('purchase_order').where({ ...baseQuery, order_status: 'receipt_abnormal' }).count(),
+      db.collection('purchase_order').where({ ...baseQuery, order_status: 'cancelled' }).count(),
+      db.collection('purchase_order').where({ ...baseQuery, order_status: 'partial_received' }).count(),
+      db.collection('purchase_order').where({ ...baseQuery, verify_status: 'pending' }).count()
     ])
     const statusCounts = {
       all: allRes.total,
       draft: draftRes.total,
       submitted: submittedRes.total,
-      to_receive: toReceiveRes.total,
       received: receivedRes.total,
-      receiptAbnormal: abnormalRes.total
+      receiptAbnormal: abnormalRes.total,
+      cancelled: cancelledRes.total,
+      partialReceived: partialRes.total,
+      toVerify: toVerifyRes.total
     }
 
     const countRes = await db.collection('purchase_order').where(query).count()
-
     const res = await db.collection('purchase_order')
       .where(query)
       .orderBy('created_at', 'desc')

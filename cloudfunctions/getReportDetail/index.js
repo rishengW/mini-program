@@ -1,10 +1,13 @@
 // 云函数 getReportDetail - 获取报表详情（含行数据）
 const cloud = require('wx-server-sdk')
-const auth = require('./auth')
-
+const crypto = require('crypto')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 const _ = db.command
+
+function hashToken(token) {
+  return crypto.createHash('sha256').update(String(token || '')).digest('hex')
+}
 
 const ABNORMAL_TYPE_NAMES = {
   shortage: '少货/缺货',
@@ -20,12 +23,38 @@ function getAbnormalTypeNames(item = {}) {
   return types.map(type => ABNORMAL_TYPE_NAMES[type] || type)
 }
 
+async function getSessionUser(authToken) {
+  if (!authToken) return null
+  const tokenHash = hashToken(authToken)
+  // B12 多设备会话：先查 sessions 数组（每设备一条），兼容旧单会话字段
+  const result = await db.collection('app_user')
+    .where({ status: 1, sessions: { token_hash: tokenHash } })
+    .limit(1)
+    .get()
+  let user = result.data[0]
+  if (!user) {
+    const legacy = await db.collection('app_user')
+      .where({ session_token_hash: tokenHash, status: 1 })
+      .limit(1)
+      .get()
+    user = legacy.data[0]
+  }
+  if (!user) return null
+  if (Array.isArray(user.sessions) && user.sessions.length) {
+    const session = user.sessions.find(s => s && s.token_hash === tokenHash)
+    if (!session || !session.expires_at) return null
+    const expiresAt = new Date(session.expires_at).getTime()
+    return Number.isFinite(expiresAt) && expiresAt > Date.now() ? user : null
+  }
+  if (!user.session_expires_at) return null
+  const legacyExpires = new Date(user.session_expires_at).getTime()
+  return Number.isFinite(legacyExpires) && legacyExpires > Date.now() ? user : null
+}
+
 exports.main = async (event = {}) => {
   try {
-    const check = await auth.requireUser(event)
-    if (check.error) return check.error
-    const user = check.user
-
+    const user = await getSessionUser(event.authToken)
+    if (!user) return { code: -401, msg: '登录已过期，请重新登录' }
     const { reportId } = event || {}
     if (!reportId) return { code: -1, msg: '缺少reportId' }
 
@@ -40,7 +69,6 @@ exports.main = async (event = {}) => {
     }
 
     const report = reportRes.data[0]
-
     const isGlobal = ['super_admin', 'purchaser'].includes(user.role)
     if (!isGlobal) {
       if (!['chef', 'store_manager'].includes(user.role)) return { code: -403, msg: '当前账号无权查看报表' }
@@ -119,6 +147,7 @@ exports.main = async (event = {}) => {
           const order = orderMap[item.purchase_order_id]
           if (!order) return
           rows.push({
+            purchaseOrderId: item.purchase_order_id,
             storeName: order.store_name,
             productName: item.product_name_snapshot,
             orderQty: item.order_qty,
@@ -150,6 +179,7 @@ exports.main = async (event = {}) => {
           if (!receipt) return
           const abnormalTypeNames = getAbnormalTypeNames(item)
           rows.push({
+            purchaseOrderId: receipt.purchase_order_id,
             storeName: receipt.store_name,
             productName: item.product_name,
             receivedQty: item.received_qty,
