@@ -1,7 +1,7 @@
 <!-- pages/login/login.wxml -->
 <view class="login-page">
   <view class="login-header">
-    <view class="login-logo">🍽️</view>
+    <image class="login-logo" src="/assets/icons/login-logo.jpg" mode="aspectFit" />
     <view class="login-title">门店采购系统</view>
     <view class="login-subtitle">账号密码登录</view>
   </view>

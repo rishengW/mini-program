@@ -15,7 +15,11 @@
 }
 
 .login-logo {
-  font-size: 100rpx;
+  width: 280rpx;
+  height: 165rpx;
+  border-radius: 16rpx;
+  background: #ffffff;
+  padding: 8rpx;
   margin-bottom: 20rpx;
 }
 
