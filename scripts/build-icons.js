@@ -156,8 +156,7 @@ const VARIANTS = [
   ['utensils', 'grey'],
   ['utensils', 'white'],
   ['brush', 'grey'],
-  ['brush', 'white'],
-  ['package', 'white']
+  ['brush', 'white']
 ]
 
 function kebab(name) {

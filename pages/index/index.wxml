@@ -5,7 +5,7 @@
   <view class="store-header">
     <view class="store-info" bindtap="goStore">
       <view class="store-name"><view class="icon icon-sm icon-pin-white store-pin"></view>{{storeName}} <text style="font-size: 24rpx; color: rgba(255,255,255,0.8);">切换 ▸</text></view>
-      <view class="user-info text-sm text-tertiary">
+      <view class="user-info text-sm">
         {{userName}} · {{roleLabel}}
       </view>
     </view>
@@ -26,7 +26,7 @@
     <view class="flex-between">
       <view class="card-title">管理工作台</view>
     </view>
-    <view class="action-grid" style="grid-template-columns: repeat(4, 1fr);">
+    <view class="action-grid">
       <view class="action-item" bindtap="goAction" data-url="/pages/approval-list/approval-list">
         <view class="action-icon"><view class="icon icon-lg icon-approval-primary"></view></view>
         <view class="action-label">采购审核</view>
