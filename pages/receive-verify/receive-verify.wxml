@@ -69,7 +69,7 @@
         <view class="photo-del" catchtap="deletePhoto" data-index="{{index}}">✕</view>
       </view>
       <view wx:if="{{photos.length < 9}}" class="photo-add" bindtap="choosePhoto">
-        <text class="photo-add-icon">📷</text>
+        <view class="photo-add-icon icon icon-camera-grey"></view>
         <text class="photo-add-text">拍照/上传</text>
       </view>
     </view>

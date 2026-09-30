@@ -73,7 +73,7 @@ Page({
         return {
           ...cloud.normalizeReport(r),
           typeLabel: typeInfo.label,
-          typeIcon: typeInfo.icon,
+          typeIconClass: typeInfo.iconClass,
           typeColor: typeInfo.color
         }
       })

@@ -20,17 +20,17 @@
         <view class="item-sub">供应 {{item.productCount}} 个商品</view>
       </view>
       <view class="item-actions">
-        <view class="action-btn" bindtap="goProducts" data-id="{{item.supplierId}}">💰</view>
-        <view class="action-btn" bindtap="showEditForm" data-id="{{item.supplierId}}">✏️</view>
+        <view class="action-btn" bindtap="goProducts" data-id="{{item.supplierId}}"><view class="icon icon-tag-grey"></view></view>
+        <view class="action-btn" bindtap="showEditForm" data-id="{{item.supplierId}}"><view class="icon icon-edit-grey"></view></view>
         <view class="action-btn" bindtap="toggleStatus" data-id="{{item.supplierId}}">
-          {{item.status === 1 ? '⏸️' : '▶️'}}
+          <view class="icon {{item.status === 1 ? 'icon-pause-grey' : 'icon-play-success'}}"></view>
         </view>
       </view>
     </view>
   </view>
 
   <view wx:if="{{suppliers.length === 0}}" class="empty-state">
-    <view class="empty-state-icon">🏭</view>
+    <view class="empty-state-icon icon icon-xxl icon-factory-grey"></view>
     <view class="empty-state-text">暂无供应商</view>
   </view>
 

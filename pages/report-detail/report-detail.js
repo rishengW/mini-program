@@ -10,7 +10,7 @@ Page({
     rows: [],
     totalAmount: '0.00',
     typeLabel: '',
-    typeIcon: '',
+    typeIconClass: '',
     typeColor: '',
     scopeLabel: ''
   },
@@ -60,7 +60,7 @@ Page({
         rows,
         totalAmount,
         typeLabel: typeInfo.label,
-        typeIcon: typeInfo.icon,
+        typeIconClass: typeInfo.iconClass,
         typeColor: typeInfo.color,
         scopeLabel: rpt.reportScope === 'store' ? '门店' : '供应商'
       })

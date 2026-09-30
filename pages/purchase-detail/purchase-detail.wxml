@@ -2,10 +2,10 @@
 <view class="container">
   <view class="status-card status-bg-{{detail.statusType}}">
     <view class="status-icon">
-      <text wx:if="{{detail.orderStatus === 'draft'}}">📝</text>
-      <text wx:elif="{{detail.orderStatus === 'submitted'}}">📤</text>
-      <text wx:elif="{{detail.orderStatus === 'received'}}">✅</text>
-      <text wx:else>📋</text>
+      <view wx:if="{{detail.orderStatus === 'draft'}}" class="icon icon-xl icon-edit-white"></view>
+      <view wx:elif="{{detail.orderStatus === 'submitted'}}" class="icon icon-xl icon-upload-white"></view>
+      <view wx:elif="{{detail.orderStatus === 'received'}}" class="icon icon-xl icon-check-white"></view>
+      <view wx:else class="icon icon-xl icon-clipboard-white"></view>
     </view>
     <view class="status-text">{{detail.statusText}}</view>
   </view>
@@ -46,7 +46,7 @@
     <block wx:if="{{supplierGroups}}">
       <block wx:for="{{supplierGroups}}" wx:for-item="group" wx:key="supplierId">
         <view class="supplier-group-header">
-          <text class="supplier-group-name">🏭 {{group.supplierName}}</text>
+          <view class="supplier-group-name"><view class="icon icon-sm icon-inline icon-factory-grey"></view>{{group.supplierName}}</view>
           <text wx:if="{{group.confirmText}}" class="tag tag-{{group.confirmType}}">{{group.confirmText}}</text>
         </view>
         <view wx:for="{{group.items}}" wx:key="itemId" class="goods-row {{item.isManual ? 'manual-goods-row' : ''}}">
@@ -105,7 +105,7 @@
   </view>
 
   <view wx:if="{{canCopy}}" class="bottom-actions">
-    <button class="btn btn-outline btn-block" bindtap="copyToDraft">📄 复制为新草稿</button>
+    <button class="btn btn-outline btn-block" bindtap="copyToDraft"><view class="icon icon-sm icon-inline icon-file-primary"></view>复制为新草稿</button>
   </view>
 
   <view wx:if="{{canCancel}}" class="bottom-actions">
@@ -114,7 +114,7 @@
 
   <!-- #12-③：等待审核时下单人/店长可催办 -->
   <view wx:if="{{canRemindAudit}}" class="bottom-actions">
-    <button class="btn btn-outline btn-block" bindtap="remindAudit">🔔 催促审核</button>
+    <button class="btn btn-outline btn-block" bindtap="remindAudit"><view class="icon icon-sm icon-inline icon-bell-primary"></view>催促审核</button>
   </view>
 
   <view wx:if="{{canRequestCancel || canForceCancel}}" class="bottom-actions">
@@ -123,12 +123,12 @@
   </view>
 
   <view wx:if="{{canReceive}}" class="bottom-actions">
-    <button class="btn btn-success btn-block" bindtap="goReceive">📦 去收货</button>
+    <button class="btn btn-success btn-block" bindtap="goReceive"><view class="icon icon-sm icon-inline icon-package-white"></view>去收货</button>
   </view>
 
   <!-- S9：手动单凭证操作 -->
   <view wx:if="{{canSubmitVoucher}}" class="bottom-actions">
-    <button class="btn btn-primary btn-block" bindtap="submitVoucher">🧾 上传付款凭证</button>
+    <button class="btn btn-primary btn-block" bindtap="submitVoucher"><view class="icon icon-sm icon-inline icon-receipt-white"></view>上传付款凭证</button>
   </view>
   <view wx:if="{{canVerify}}" class="bottom-actions">
     <button class="btn btn-outline flex-1" bindtap="verifyDecide" data-approve="false">驳回凭证</button>

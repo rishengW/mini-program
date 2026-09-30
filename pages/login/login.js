@@ -8,10 +8,10 @@ Page({
     password: '',
     isSuperAdminLogin: false,
     roles: [
-      { key: 'chef', label: '下单人员', icon: '🍳' },
-      { key: 'store_manager', label: '店长', icon: '👨‍💼' },
-      { key: 'purchaser', label: '管理员', icon: '📊' },
-      { key: 'supplier', label: '供货商', icon: '🚚' }
+      { key: 'chef', label: '下单人员', iconClass: 'icon-chef-primary' },
+      { key: 'store_manager', label: '店长', iconClass: 'icon-briefcase-primary' },
+      { key: 'purchaser', label: '管理员', iconClass: 'icon-chart-primary' },
+      { key: 'supplier', label: '供货商', iconClass: 'icon-truck-primary' }
     ],
     selectedRole: 'chef'
   },

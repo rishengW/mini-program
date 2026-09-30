@@ -80,7 +80,6 @@
 }
 
 .role-icon {
-  font-size: 52rpx;
   margin-bottom: 12rpx;
 }
 

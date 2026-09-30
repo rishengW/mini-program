@@ -9,15 +9,15 @@
   <view class="filter-section">
     <view class="filter-row">
       <picker range="{{scopeOptions}}" range-key="label" bindchange="onScopeChange" style="flex:1;">
-        <view class="filter-picker">📂 {{scopeOptions[filterScope === 'all' ? 0 : (filterScope === 'store' ? 1 : 2)].label}} ▾</view>
+        <view class="filter-picker"><view class="icon icon-sm icon-inline icon-folder-grey"></view>{{scopeOptions[filterScope === 'all' ? 0 : (filterScope === 'store' ? 1 : 2)].label}} ▾</view>
       </picker>
       <picker range="{{reportTypeOptions}}" range-key="label" bindchange="onTypeChange" style="flex:1;">
-        <view class="filter-picker">📋 {{filterTypeLabel}} ▾</view>
+        <view class="filter-picker"><view class="icon icon-sm icon-inline icon-clipboard-grey"></view>{{filterTypeLabel}} ▾</view>
       </picker>
     </view>
     <view class="filter-row">
       <picker mode="date" bindchange="onDateChange" value="{{filterDate}}" style="flex:1;">
-        <view class="filter-picker">📅 {{filterDate || '选择日期'}} ▾</view>
+        <view class="filter-picker"><view class="icon icon-sm icon-inline icon-calendar-grey"></view>{{filterDate || '选择日期'}} ▾</view>
       </picker>
       <view wx:if="{{filterDate}}" class="clear-btn" bindtap="clearDate">清除日期</view>
     </view>
@@ -26,7 +26,7 @@
   <!-- 报表列表 -->
   <view wx:for="{{reports}}" wx:key="reportId" class="list-item" bindtap="goDetail" data-id="{{item.reportId}}">
     <view class="report-row">
-      <view class="report-icon" style="background:{{item.typeColor}}20; color:{{item.typeColor}};">{{item.typeIcon}}</view>
+      <view class="report-icon" style="background:{{item.typeColor}}20;"><view class="icon {{item.typeIconClass}}"></view></view>
       <view class="report-info">
         <view class="report-name">{{item.typeLabel}}<text wx:if="{{item.status === 'superseded'}}" class="tag tag-grey" style="margin-left:12rpx;">已作废</text></view>
         <view class="report-meta">{{item.scopeName}} · {{item.relatedDate}}</view>
@@ -37,7 +37,7 @@
   </view>
 
   <view wx:if="{{reports.length === 0}}" class="empty-state">
-    <view class="empty-state-icon">📊</view>
+    <view class="empty-state-icon icon icon-xxl icon-chart-grey"></view>
     <view class="empty-state-text">暂无报表</view>
   </view>
 </view>

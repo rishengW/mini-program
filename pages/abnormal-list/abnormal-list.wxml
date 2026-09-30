@@ -17,13 +17,7 @@
     <!-- 头部 -->
     <view class="flex-between">
       <view class="abnormal-type">
-        <text class="type-icon">
-          <text wx:if="{{item.type === 'quality'}}">🔴</text>
-          <text wx:elif="{{item.type === 'shortage'}}">🟡</text>
-          <text wx:elif="{{item.type === 'delay'}}">🟠</text>
-          <text wx:elif="{{item.type === 'wrong_item'}}">🔵</text>
-          <text wx:else>⚪</text>
-        </text>
+        <view class="type-dot type-dot-{{item.type}}"></view>
         <text class="type-name">{{item.typeName}}</text>
       </view>
       <view class="tag tag-{{item.statusColor}}">{{item.statusName}}</view>
@@ -57,7 +51,7 @@
   </view>
 
   <view wx:if="{{filteredList.length === 0}}" class="empty-state">
-    <view class="empty-state-icon">✅</view>
+    <view class="empty-state-icon icon icon-xxl icon-check-success"></view>
     <view class="empty-state-text">暂无异常记录</view>
   </view>
 </view>

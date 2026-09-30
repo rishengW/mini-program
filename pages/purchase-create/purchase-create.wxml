@@ -12,7 +12,7 @@
     <view wx:for="{{categoryL1List}}" wx:key="id"
           class="l1-tab {{activeL1 === item.id ? 'l1-tab-active' : ''}}"
           bindtap="switchL1" data-id="{{item.id}}">
-      {{item.icon}} {{item.name}}
+      <view wx:if="{{item.iconClass}}" class="icon icon-sm icon-inline {{activeL1 === item.id ? item.iconClassActive : item.iconClass}}"></view>{{item.name}}
     </view>
   </view>
 
@@ -26,7 +26,7 @@
     <view wx:for="{{filteredCategories}}" wx:key="id"
           class="cat2-item {{activeCategoryId === item.id ? 'cat2-item-active' : ''}}"
           bindtap="selectCategory" data-id="{{item.id}}">
-      {{item.icon}} {{item.name}}
+      <view wx:if="{{item.iconClass}}" class="icon icon-sm icon-inline {{activeCategoryId === item.id ? item.iconClassActive : item.iconClass}}"></view>{{item.name}}
     </view>
   </scroll-view>
 
@@ -124,8 +124,8 @@
         <view class="form-group">
           <view class="form-label">分类 <text class="text-danger">*</text></view>
           <view class="manual-category-tabs">
-            <view class="manual-cat-tab {{manualForm.categoryL1 === 'kitchen' ? 'manual-cat-active' : ''}}" bindtap="setManualCategory" data-cat="kitchen">🍳 后厨</view>
-            <view class="manual-cat-tab {{manualForm.categoryL1 === 'front' ? 'manual-cat-active' : ''}}" bindtap="setManualCategory" data-cat="front">🪑 前厅</view>
+            <view class="manual-cat-tab {{manualForm.categoryL1 === 'kitchen' ? 'manual-cat-active' : ''}}" bindtap="setManualCategory" data-cat="kitchen"><view class="icon icon-sm icon-inline {{manualForm.categoryL1 === 'kitchen' ? 'icon-chef-primary' : 'icon-chef-grey'}}"></view>后厨</view>
+            <view class="manual-cat-tab {{manualForm.categoryL1 === 'front' ? 'manual-cat-active' : ''}}" bindtap="setManualCategory" data-cat="front"><view class="icon icon-sm icon-inline {{manualForm.categoryL1 === 'front' ? 'icon-armchair-primary' : 'icon-armchair-grey'}}"></view>前厅</view>
           </view>
         </view>
         <view class="form-group">

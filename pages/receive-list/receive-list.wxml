@@ -25,7 +25,7 @@
   </view>
 
   <view wx:if="{{orders.length === 0}}" class="empty-state">
-    <view class="empty-state-icon">📦</view>
+    <view class="empty-state-icon icon icon-xxl icon-package-grey"></view>
     <view class="empty-state-text">暂无待收货订单</view>
   </view>
 

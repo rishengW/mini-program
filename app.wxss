@@ -1,4 +1,5 @@
 /* app.wxss - 全局样式 */
+@import "./styles/icons.wxss";
 
 /* ========== CSS Variables ========== */
 page {

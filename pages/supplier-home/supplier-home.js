@@ -15,9 +15,9 @@ Page({
     unreadCount: 0,
     latestMessage: null,
     stats: [
-      { key: 'pending', label: '待确认', icon: '⏰', color: '#FAAD14', value: 0 },
-      { key: 'confirmed', label: '已确认', icon: '✅', color: '#52C41A', value: 0 },
-      { key: 'shipped', label: '已发货', icon: '🚚', color: '#00873E', value: 0 }
+      { key: 'pending', label: '待确认', iconClass: 'icon-clock-warning', value: 0 },
+      { key: 'confirmed', label: '已确认', iconClass: 'icon-check-success', value: 0 },
+      { key: 'shipped', label: '已发货', iconClass: 'icon-truck-primary', value: 0 }
     ]
   },
 

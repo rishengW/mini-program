@@ -8,7 +8,7 @@
   <!-- 供应商筛选 -->
   <view class="filter-row">
     <picker range="{{supplierOptions}}" range-key="supplierName" bindchange="onSupplierFilter" style="flex:1;">
-      <view class="filter-picker">🏭 {{selectedSupplierName}} ▾</view>
+      <view class="filter-picker"><view class="icon icon-sm icon-inline icon-factory-grey"></view>{{selectedSupplierName}} ▾</view>
     </picker>
   </view>
 
@@ -34,7 +34,7 @@
   </view>
 
   <view wx:if="{{priceList.length === 0}}" class="empty-state">
-    <view class="empty-state-icon">💰</view>
+    <view class="empty-state-icon icon icon-xxl icon-tag-grey"></view>
     <view class="empty-state-text">暂无价格数据</view>
   </view>
 
@@ -55,7 +55,7 @@
       </view>
 
       <view class="price-tip">
-        <text class="text-tertiary text-sm">💡 修改后旧价格自动标记为历史记录，不会被删除</text>
+        <text class="text-tertiary text-sm"><view class="icon icon-sm icon-inline icon-bulb-grey"></view>修改后旧价格自动标记为历史记录，不会被删除</text>
       </view>
 
       <view class="btn-group" style="margin-top:32rpx;">
@@ -90,7 +90,7 @@
       </view>
 
       <view class="price-tip">
-        <text class="text-tertiary text-sm">💡 为没有协议价的「供应商 × 商品」组合首次定价，当天生效</text>
+        <text class="text-tertiary text-sm"><view class="icon icon-sm icon-inline icon-bulb-grey"></view>为没有协议价的「供应商 × 商品」组合首次定价，当天生效</text>
       </view>
 
       <view class="btn-group" style="margin-top:32rpx;">

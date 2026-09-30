@@ -40,25 +40,25 @@ Page({
   initTabs() {
     const app = getApp()
     const role = app.globalData.userInfo?.role || 'purchaser'
-    let tabs = [{ value: 'all', label: '全部', icon: '📊' }]
+    let tabs = [{ value: 'all', label: '全部', iconBase: 'chart' }]
 
     if (role === 'chef') {
-      tabs.push({ value: 'store_order_report', label: '下单报表', icon: '📋' })
+      tabs.push({ value: 'store_order_report', label: '下单报表', iconBase: 'clipboard' })
     } else if (role === 'store_manager') {
       tabs.push(
-        { value: 'store_order_report', label: '下单报表', icon: '📋' },
-        { value: 'store_receipt_report', label: '收货报表', icon: '📦' },
-        { value: 'store_receipt_price_report', label: '带价格收货', icon: '💰' }
+        { value: 'store_order_report', label: '下单报表', iconBase: 'clipboard' },
+        { value: 'store_receipt_report', label: '收货报表', iconBase: 'package' },
+        { value: 'store_receipt_price_report', label: '带价格收货', iconBase: 'tag' }
       )
     } else {
       // 管理员看全部
       tabs.push(
-        { value: 'store_order_report', label: '下单报表', icon: '📋' },
-        { value: 'store_receipt_report', label: '收货报表', icon: '📦' },
-        { value: 'store_receipt_price_report', label: '带价格收货', icon: '💰' },
-        { value: 'supplier_order_report', label: '供应商订货', icon: '🏭' },
-        { value: 'supplier_receipt_report', label: '供应商到货', icon: '🚛' },
-        { value: 'supplier_receipt_price_report', label: '供应商账单', icon: '📊' }
+        { value: 'store_order_report', label: '下单报表', iconBase: 'clipboard' },
+        { value: 'store_receipt_report', label: '收货报表', iconBase: 'package' },
+        { value: 'store_receipt_price_report', label: '带价格收货', iconBase: 'tag' },
+        { value: 'supplier_order_report', label: '供应商订货', iconBase: 'factory' },
+        { value: 'supplier_receipt_report', label: '供应商到货', iconBase: 'truck' },
+        { value: 'supplier_receipt_price_report', label: '供应商账单', iconBase: 'chart' }
       )
     }
     this.setData({ typeTabs: tabs })
@@ -89,7 +89,7 @@ Page({
           abnormalSummary,
           abnormalLabel: `收货异常${abnormalSummary ? ` · ${abnormalSummary}` : ''}`,
           typeLabel: typeInfo.label,
-          typeIcon: typeInfo.icon,
+          typeIconClass: typeInfo.iconClass,
           typeColor: typeInfo.color
         }
       })

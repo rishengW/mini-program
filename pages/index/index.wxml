@@ -4,7 +4,7 @@
   <!-- 门店 & 用户 -->
   <view class="store-header">
     <view class="store-info" bindtap="goStore">
-      <view class="store-name">📍 {{storeName}} <text style="font-size: 24rpx; color: rgba(255,255,255,0.8);">切换 ▸</text></view>
+      <view class="store-name"><view class="icon icon-sm icon-pin-white store-pin"></view>{{storeName}} <text style="font-size: 24rpx; color: rgba(255,255,255,0.8);">切换 ▸</text></view>
       <view class="user-info text-sm text-tertiary">
         {{userName}} · {{roleLabel}}
       </view>
@@ -14,8 +14,9 @@
         <image class="bell-icon" src="/assets/icons/{{unreadMsg > 0 ? 'bell-active' : 'bell'}}.png" mode="aspectFit" />
         <view wx:if="{{unreadMsg > 0}}" class="bell-badge">{{unreadMsg > 99 ? '99+' : unreadMsg}}</view>
       </view>
-      <view class="store-action" bindtap="goAccount">
-        <text>🔒 密码设置</text>
+      <view class="store-action flex-row" bindtap="goAccount">
+        <view class="icon icon-xs icon-lock-white store-action-icon"></view>
+        <text>密码设置</text>
       </view>
     </view>
   </view>
@@ -27,27 +28,27 @@
     </view>
     <view class="action-grid" style="grid-template-columns: repeat(4, 1fr);">
       <view class="action-item" bindtap="goAction" data-url="/pages/approval-list/approval-list">
-        <view class="action-icon">📝</view>
+        <view class="action-icon"><view class="icon icon-lg icon-approval-primary"></view></view>
         <view class="action-label">采购审核</view>
       </view>
       <view class="action-item" bindtap="goAction" data-url="/pages/product-manage/product-manage">
-        <view class="action-icon">🥬</view>
+        <view class="action-icon"><view class="icon icon-lg icon-leaf-primary"></view></view>
         <view class="action-label">商品管理</view>
       </view>
       <view class="action-item" bindtap="goAction" data-url="/pages/supplier-manage/supplier-manage">
-        <view class="action-icon">🏭</view>
+        <view class="action-icon"><view class="icon icon-lg icon-factory-primary"></view></view>
         <view class="action-label">供应商</view>
       </view>
       <view class="action-item" bindtap="goAction" data-url="/pages/price-manage/price-manage">
-        <view class="action-icon">💰</view>
+        <view class="action-icon"><view class="icon icon-lg icon-tag-primary"></view></view>
         <view class="action-label">价格管理</view>
       </view>
       <view wx:if="{{isSuperAdmin}}" class="action-item" bindtap="goAction" data-url="/pages/user-manage/user-manage">
-        <view class="action-icon">👥</view>
+        <view class="action-icon"><view class="icon icon-lg icon-users-primary"></view></view>
         <view class="action-label">账号管理</view>
       </view>
       <view wx:if="{{isSuperAdmin}}" class="action-item" bindtap="openStoreManage">
-        <view class="action-icon">🏬</view>
+        <view class="action-icon"><view class="icon icon-lg icon-store-primary"></view></view>
         <view class="action-label">门店管理</view>
       </view>
     </view>
@@ -56,7 +57,7 @@
   <!-- 数据概览（全部可点击） -->
   <view class="stats-row">
     <view wx:for="{{stats}}" wx:key="label" class="stat-card" bindtap="goStatPage" data-status="{{item.status}}">
-      <view class="stat-icon" style="color:{{item.color}};">{{item.icon}}</view>
+      <view class="stat-icon icon icon-lg {{item.iconClass}}"></view>
       <view class="stat-value">{{item.value}}</view>
       <view class="stat-label">{{item.label}}</view>
     </view>
@@ -93,7 +94,7 @@
       <view class="more-link" bindtap="goAction" data-taburl="/pages/report-list/report-list">查看全部 ▸</view>
     </view>
     <view wx:for="{{recentReports}}" wx:key="reportId" class="report-mini-item" bindtap="goReportDetail" data-id="{{item.reportId}}">
-      <view class="report-mini-icon" style="color:{{item.typeColor}};">{{item.typeIcon}}</view>
+      <view class="report-mini-icon icon {{item.typeIconClass}}"></view>
       <view class="report-mini-info">
         <view class="report-mini-title">{{item.typeLabel}}</view>
         <view class="text-sm text-tertiary">{{item.scopeName}} · {{item.relatedDate}}</view>

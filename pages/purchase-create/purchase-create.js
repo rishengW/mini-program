@@ -3,6 +3,7 @@
 const util = require('../../utils/util')
 const cloud = require('../../utils/cloud')
 const authGuard = require('../../utils/auth-guard')
+const meta = require('../../utils/meta')
 
 Page({
   data: {
@@ -108,8 +109,13 @@ Page({
       return
     }
     const categoryData = categoryResult.data || {}
-    const categoryL1List = categoryData.level1 || []
-    const categories = categoryData.categories || []
+    // 分类图标：数据库里是 emoji，这里映射成矢量图标类名（灰/白双态供激活切换）
+    const decorate = c => {
+      const base = meta.getCategoryIconBase(c.icon || '')
+      return { ...c, iconClass: base ? `icon-${base}-grey` : '', iconClassActive: base ? `icon-${base}-white` : '' }
+    }
+    const categoryL1List = (categoryData.level1 || []).map(decorate)
+    const categories = (categoryData.categories || []).map(decorate)
     const activeL1 = categoryL1List.some(item => item.id === this.data.activeL1)
       ? this.data.activeL1
       : (categoryL1List[0] && categoryL1List[0].id) || ''

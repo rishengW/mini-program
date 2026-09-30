@@ -20,8 +20,8 @@
           <view class="item-meta">状　态：{{item.status === 1 ? '正常' : '停用'}}</view>
         </view>
         <view class="item-actions">
-          <view class="action-btn" bindtap="showEditForm" data-item="{{item}}">✏️ 编辑</view>
-          <view class="action-btn action-delete" bindtap="toggleStoreStatus" data-item="{{item}}">{{item.status === 1 ? '🚫 停用' : '✅ 启用'}}</view>
+          <view class="action-btn" bindtap="showEditForm" data-item="{{item}}"><view class="icon icon-sm icon-inline icon-edit-grey"></view>编辑</view>
+          <view class="action-btn action-delete" bindtap="toggleStoreStatus" data-item="{{item}}"><view class="icon icon-sm icon-inline {{item.status === 1 ? 'icon-ban-danger' : 'icon-check-success'}}"></view>{{item.status === 1 ? '停用' : '启用'}}</view>
         </view>
       </view>
     </view>
@@ -29,7 +29,7 @@
 
   <!-- 空状态 -->
   <view wx:if="{{stores.length === 0}}" class="empty-state">
-    <view class="empty-state-icon">🏬</view>
+    <view class="empty-state-icon icon icon-xxl icon-store-grey"></view>
     <view class="empty-state-text">暂无门店</view>
   </view>
 

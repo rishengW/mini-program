@@ -26,7 +26,7 @@
   </view>
 
   <view wx:if="{{list.length === 0}}" class="empty-state">
-    <view class="empty-state-icon">✅</view>
+    <view class="empty-state-icon icon icon-xxl icon-check-success"></view>
     <view class="empty-state-text">暂无待审核申请</view>
   </view>
 </view>

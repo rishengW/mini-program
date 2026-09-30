@@ -28,7 +28,18 @@
   gap: 8rpx;
 }
 
-.type-icon { font-size: 24rpx; }
+/* 异常类型小圆点：替代彩色 emoji，跨端一致 */
+.type-dot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  background: #BFBFBF;
+  flex-shrink: 0;
+}
+.type-dot-quality { background: #FF4D4F; }
+.type-dot-shortage { background: #FAAD14; }
+.type-dot-delay { background: #FA8C16; }
+.type-dot-wrong_item { background: #5B8FF9; }
 .type-name { font-size: 28rpx; font-weight: 600; }
 
 .abnormal-desc {

@@ -17,7 +17,7 @@
           <view wx:for="{{roles}}" wx:key="key"
             class="role-item {{selectedRole === item.key ? 'role-item-active' : ''}}"
             bindtap="selectRole" data-role="{{item.key}}">
-            <view class="role-icon">{{item.icon}}</view>
+            <view class="role-icon icon icon-lg {{item.iconClass}}"></view>
             <view class="role-name">{{item.label}}</view>
           </view>
         </view>

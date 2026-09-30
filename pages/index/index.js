@@ -78,13 +78,13 @@ Page({
     const unreadMsg = messages.filter(m => !m.read).length
 
     const stats = [
-      { label: '待处理', value: pendingOrders, icon: '📋', color: '#FAAD14', status: 'submitted' },
-      { label: '待收货', value: pendingReceive, icon: '📦', color: '#00873E', status: 'receivable' },
-      { label: '已完成', value: completedOrders, icon: '✅', color: '#52C41A', status: 'received' },
-      { label: '需关注', value: unreadMsg, icon: '⚠️', color: '#FF4D4F', status: 'message' }
+      { label: '待处理', value: pendingOrders, iconClass: 'icon-clipboard-warning', status: 'submitted' },
+      { label: '待收货', value: pendingReceive, iconClass: 'icon-package-primary', status: 'receivable' },
+      { label: '已完成', value: completedOrders, iconClass: 'icon-check-success', status: 'received' },
+      { label: '需关注', value: unreadMsg, iconClass: 'icon-alert-danger', status: 'message' }
     ]
     if (['super_admin', 'purchaser'].includes(user.role)) {
-      stats.push({ label: '待核销', value: toVerify, icon: '🧾', color: '#FA8C16', status: 'to_verify' })
+      stats.push({ label: '待核销', value: toVerify, iconClass: 'icon-receipt-orange', status: 'to_verify' })
     }
 
     // 最近采购单
@@ -102,7 +102,7 @@ Page({
     // 最近报表
     const recentReports = myReports.slice(0, 3).map(r => {
       const typeInfo = meta.getReportTypeInfo(r.reportType)
-      return { ...r, typeLabel: typeInfo.label, typeIcon: typeInfo.icon, typeColor: typeInfo.color }
+      return { ...r, typeLabel: typeInfo.label, typeIconClass: typeInfo.iconClass }
     })
 
     this.setData({

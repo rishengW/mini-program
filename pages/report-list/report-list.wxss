@@ -30,8 +30,6 @@
   color: #ffffff;
 }
 
-.type-tab-icon { font-size: 28rpx; }
-
 .date-filter {
   display: flex;
   align-items: center;
@@ -73,6 +71,9 @@
 }
 
 .report-type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8rpx;
   padding: 6rpx 16rpx;
   border-radius: 8rpx;
   font-size: 24rpx;

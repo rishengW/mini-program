@@ -3,7 +3,7 @@
   <!-- 报表头 -->
   <view class="report-header-card">
     <view class="report-type-icon" style="background:{{typeColor}}22;">
-      <text style="font-size:48rpx;">{{typeIcon}}</text>
+      <view class="icon icon-lg {{typeIconClass}}"></view>
     </view>
     <view class="report-header-info">
       <view class="report-type-name">{{typeLabel}}</view>
@@ -120,7 +120,7 @@
   <!-- 导出按钮 -->
   <view class="export-section">
     <button class="btn btn-primary btn-block" bindtap="exportReport">
-      📤 导出报表文件
+      <view class="icon icon-sm icon-inline icon-upload-white"></view>导出报表文件
     </button>
     <view class="export-hint text-sm text-tertiary">
       生成时间: {{report.generatedAt}}

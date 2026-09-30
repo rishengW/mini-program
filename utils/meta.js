@@ -28,27 +28,40 @@ const supplierConfirmMap = {
   cancelled: { text: '已作废', type: 'grey' }
 }
 
+// iconClass 对应 styles/icons.wxss 中生成的类名；emoji 图标已全面下线
 const reportTypeMap = {
-  store_order_report: { label: '门店下单报表', icon: '📋', color: '#00873E' },
-  store_receipt_report: { label: '门店收货报表', icon: '📦', color: '#52C41A' },
-  store_receipt_price_report: { label: '门店带价格收货报表', icon: '💰', color: '#FAAD14' },
-  supplier_order_report: { label: '供应商订货汇总', icon: '🏭', color: '#722ED1' },
-  supplier_receipt_report: { label: '供应商到货汇总', icon: '🚛', color: '#13C2C2' },
-  supplier_receipt_price_report: { label: '供应商带价格账单', icon: '📊', color: '#EB2F96' },
-  store_daily_summary_report: { label: '门店日汇总', icon: '📅', color: '#5B8FF9' },
-  store_monthly_summary_report: { label: '门店月汇总', icon: '🗓️', color: '#5AD8A6' }
+  store_order_report: { label: '门店下单报表', iconClass: 'icon-clipboard-primary', color: '#00873E' },
+  store_receipt_report: { label: '门店收货报表', iconClass: 'icon-package-success', color: '#52C41A' },
+  store_receipt_price_report: { label: '门店带价格收货报表', iconClass: 'icon-tag-warning', color: '#FAAD14' },
+  supplier_order_report: { label: '供应商订货汇总', iconClass: 'icon-factory-purple', color: '#722ED1' },
+  supplier_receipt_report: { label: '供应商到货汇总', iconClass: 'icon-truck-teal', color: '#13C2C2' },
+  supplier_receipt_price_report: { label: '供应商带价格账单', iconClass: 'icon-chart-magenta', color: '#EB2F96' },
+  store_daily_summary_report: { label: '门店日汇总', iconClass: 'icon-calendar-blue', color: '#5B8FF9' },
+  store_monthly_summary_report: { label: '门店月汇总', iconClass: 'icon-calendar-days-mint', color: '#5AD8A6' }
 }
 
 function getStatusInfo(status) {
   return statusMap[status] || { text: status || '未知', type: 'grey' }
 }
 
+// 分类 emoji（存于数据库）→ styles/icons.wxss 图标基础名
+// 页面按激活态拼接：icon-{base}-grey / icon-{base}-white；空串表示无图标
+const categoryIconMap = {
+  '🍳': 'chef', '🪑': 'armchair', '🥬': 'leaf', '🥩': 'drumstick',
+  '🦐': 'fish', '🧂': 'shaker', '🍚': 'bowl', '🍺': 'beer',
+  '🧊': 'snowflake', '🍽️': 'utensils', '🧹': 'brush', '📦': 'package'
+}
+
+function getCategoryIconBase(emoji) {
+  return categoryIconMap[emoji] || ''
+}
+
 function getReportTypeInfo(type) {
-  return reportTypeMap[type] || { label: type || '未知报表', icon: '📄', color: '#999999' }
+  return reportTypeMap[type] || { label: type || '未知报表', iconClass: 'icon-file-grey', color: '#999999' }
 }
 
 function getSupplierConfirmInfo(status) {
   return supplierConfirmMap[status] || { text: status || '未知', type: 'grey' }
 }
 
-module.exports = { statusMap, reportTypeMap, supplierConfirmMap, getStatusInfo, getReportTypeInfo, getSupplierConfirmInfo }
+module.exports = { statusMap, reportTypeMap, supplierConfirmMap, getStatusInfo, getReportTypeInfo, getSupplierConfirmInfo, getCategoryIconBase }

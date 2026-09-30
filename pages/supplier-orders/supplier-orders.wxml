@@ -41,7 +41,7 @@
   </view>
 
   <view wx:if="{{orders.length === 0 && !loading}}" class="empty-state">
-    <view class="empty-state-icon">📋</view>
+    <view class="empty-state-icon icon icon-xxl icon-clipboard-grey"></view>
     <view class="empty-state-text">暂无相关订单</view>
   </view>
 

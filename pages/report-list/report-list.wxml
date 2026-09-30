@@ -13,7 +13,7 @@
       <view wx:for="{{typeTabs}}" wx:key="value"
             class="type-tab {{activeType === item.value ? 'type-tab-active' : ''}}"
             bindtap="switchType" data-value="{{item.value}}">
-        <text class="type-tab-icon">{{item.icon}}</text>
+        <view class="icon icon-sm {{activeType === item.value ? 'icon-' + item.iconBase + '-white' : 'icon-' + item.iconBase + '-grey'}}"></view>
         <text>{{item.label}}</text>
       </view>
     </scroll-view>
@@ -23,7 +23,7 @@
   <view class="date-filter">
     <picker mode="date" value="{{filterDate}}" bindchange="onDateFilter">
       <view class="date-picker-btn">
-        <text>📅 {{filterDate || '全部日期'}}</text>
+        <text><view class="icon icon-sm icon-inline icon-calendar-grey"></view>{{filterDate || '全部日期'}}</text>
         <text class="picker-arrow">▾</text>
       </view>
     </picker>
@@ -34,7 +34,8 @@
   <view wx:for="{{reports}}" wx:key="reportId" class="report-card" bindtap="goDetail" data-id="{{item.reportId}}">
     <view class="report-header">
       <view class="report-type-badge" style="background:{{item.typeColor}}22; color:{{item.typeColor}};">
-        <text>{{item.typeIcon}} {{item.typeLabel}}</text>
+        <view class="icon icon-sm {{item.typeIconClass}}"></view>
+        <text>{{item.typeLabel}}</text>
       </view>
       <view wx:if="{{item.hasAbnormal}}" class="tag tag-danger">{{item.abnormalLabel}}</view>
       <view wx:if="{{item.status === 'superseded'}}" class="tag tag-grey">已作废</view>
@@ -56,7 +57,7 @@
   </view>
 
   <view wx:if="{{reports.length === 0}}" class="empty-state">
-    <view class="empty-state-icon">📊</view>
+    <view class="empty-state-icon icon icon-xxl icon-chart-grey"></view>
     <view class="empty-state-text">暂无报表</view>
   </view>
 </view>

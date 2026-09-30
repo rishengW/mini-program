@@ -29,12 +29,12 @@
     </view>
     <!-- 直接收货按钮 -->
     <view wx:if="{{item.canReceive}}" class="receive-btn-row">
-      <button class="btn btn-success btn-sm receive-btn" catchtap="goReceive" data-id="{{item.purchaseOrderId}}">📦 去收货</button>
+      <button class="btn btn-success btn-sm receive-btn" catchtap="goReceive" data-id="{{item.purchaseOrderId}}"><view class="icon icon-sm icon-inline icon-package-white"></view>去收货</button>
     </view>
   </view>
 
   <view wx:if="{{filteredList.length === 0}}" class="empty-state">
-    <view class="empty-state-icon">📋</view>
+    <view class="empty-state-icon icon icon-xxl icon-clipboard-grey"></view>
     <view class="empty-state-text">暂无采购申请</view>
   </view>
 
