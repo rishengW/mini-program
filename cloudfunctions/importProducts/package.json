@@ -1,0 +1,10 @@
+{
+  "name": "importProducts",
+  "version": "1.0.0",
+  "description": "商品基础资料 Excel 批量导入（固定模板，SheetJS 解析）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3",
+    "xlsx": "^0.18.5"
+  }
+}

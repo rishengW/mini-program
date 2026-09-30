@@ -10,13 +10,19 @@
     <input class="search-input" placeholder="搜索商品名称" bindinput="onSearch" value="{{keyword}}" />
   </view>
 
+  <!-- 导入按钮 -->
+  <view class="import-bar">
+    <view class="import-btn" bindtap="chooseImportFile"><text class="import-btn-arrow">↑</text> Excel 导入</view>
+    <view class="import-tip" bindtap="showTemplateInfo">模板说明</view>
+  </view>
+
   <!-- L1分类Tab -->
   <view class="filter-bar">
     <view class="filter-tab {{activeL1 === 'all' ? 'filter-tab-active' : ''}}" bindtap="switchL1" data-value="all">全部</view>
     <view wx:for="{{categoryL1List}}" wx:key="id"
           class="filter-tab {{activeL1 === item.id ? 'filter-tab-active' : ''}}"
           bindtap="switchL1" data-value="{{item.id}}">
-      {{item.icon}} {{item.name}}
+      <view wx:if="{{item.iconClass}}" class="icon icon-sm icon-inline {{activeL1 === item.id ? item.iconClassActive : item.iconClass}}"></view>{{item.name}}
     </view>
   </view>
 
@@ -32,9 +38,9 @@
         <view class="item-sub">厂家：{{item.manufacturerName || '默认'}} · 供应商：{{item.supplierName}}</view>
       </view>
       <view class="item-actions">
-        <view class="action-btn" bindtap="showEditForm" data-id="{{item.productId}}">✏️</view>
+        <view class="action-btn" bindtap="showEditForm" data-id="{{item.productId}}"><view class="icon icon-edit-grey"></view></view>
         <view class="action-btn" bindtap="toggleStatus" data-id="{{item.productId}}">
-          {{item.status === 1 ? '⏸️' : '▶️'}}
+          <view class="icon {{item.status === 1 ? 'icon-pause-grey' : 'icon-play-success'}}"></view>
         </view>
       </view>
     </view>
@@ -42,12 +48,26 @@
 
   <!-- 空状态 -->
   <view wx:if="{{filteredProducts.length === 0}}" class="empty-state">
-    <view class="empty-state-icon">📦</view>
+    <view class="empty-state-icon icon icon-xxl icon-package-grey"></view>
     <view class="empty-state-text">暂无商品</view>
   </view>
 
   <!-- 添加按钮 -->
   <view class="fab" bindtap="showAddForm">＋</view>
+
+  <!-- 导入结果弹窗 -->
+  <view wx:if="{{importResult.show}}" class="modal-mask" bindtap="closeImportResult">
+    <view class="modal-body" catchtap="stopBubble">
+      <view class="modal-title">导入结果</view>
+      <view class="import-summary">{{importResult.summary}}</view>
+      <scroll-view scroll-y class="import-lines">
+        <view wx:for="{{importResult.lines}}" wx:key="index" class="import-line">{{item}}</view>
+      </scroll-view>
+      <view class="btn-group" style="margin-top:32rpx;">
+        <button class="btn btn-primary flex-1" bindtap="closeImportResult">知道了</button>
+      </view>
+    </view>
+  </view>
 
   <!-- 添加/编辑弹窗 -->
   <view wx:if="{{showAdd}}" class="modal-mask" bindtap="closeForm">

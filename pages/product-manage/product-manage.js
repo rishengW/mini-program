@@ -2,6 +2,7 @@
 const cloud = require('../../utils/cloud')
 const util = require('../../utils/util')
 const authGuard = require('../../utils/auth-guard')
+const meta = require('../../utils/meta')
 
 Page({
   data: {
@@ -15,7 +16,8 @@ Page({
     categoryL1List: [],
     categories: [],
     filteredCategories: [],
-    suppliers: []
+    suppliers: [],
+    importResult: { show: false, summary: '', lines: [] }
   },
 
   onShow() {
@@ -34,8 +36,12 @@ Page({
       util.showToast((productResult.code !== 0 ? productResult : categoryResult.code !== 0 ? categoryResult : supplierResult).msg || '商品数据加载失败')
       return
     }
-    const categories = categoryResult.data && categoryResult.data.categories || []
-    const categoryL1List = categoryResult.data && categoryResult.data.level1 || []
+    const decorate = c => {
+      const base = meta.getCategoryIconBase(c.icon || '')
+      return { ...c, iconClass: base ? `icon-${base}-grey` : '', iconClassActive: base ? `icon-${base}-white` : '' }
+    }
+    const categories = (categoryResult.data && categoryResult.data.categories || []).map(decorate)
+    const categoryL1List = (categoryResult.data && categoryResult.data.level1 || []).map(decorate)
     const suppliers = (supplierResult.data || []).map(cloud.normalizeSupplier)
     const products = (productResult.data || []).map(cloud.normalizeProduct).map(p => {
       const cat = categories.find(c => c.id === p.categoryId)
@@ -99,6 +105,64 @@ Page({
   },
 
   closeForm() { this.setData({ showAdd: false }) },
+
+  // ===== Excel 批量导入 =====
+  chooseImportFile() {
+    wx.chooseMessageFile({
+      count: 1,
+      type: 'file',
+      success: res => {
+        const file = res.tempFiles && res.tempFiles[0]
+        if (!file) return
+        this.uploadImportFile(file)
+      },
+      fail: err => {
+        const msg = (err && err.errMsg) || ''
+        if (msg.includes('cancel')) return
+        // 开发者工具 / PC 端不支持从聊天记录选文件
+        wx.showModal({
+          title: '当前环境不支持',
+          content: 'Excel 导入需从微信聊天记录中选择文件，请在手机上打开小程序使用。可先把 .xlsx 文件发送到任意聊天（如文件传输助手），再在手机上操作。',
+          showCancel: false
+        })
+      }
+    })
+  },
+
+  async uploadImportFile(file) {
+    if (!/\.xlsx$/i.test(file.name)) return util.showToast('请选择 .xlsx 文件')
+    wx.showLoading({ title: '导入中...', mask: true })
+    try {
+      const up = await wx.cloud.uploadFile({
+        cloudPath: `imports/products/${Date.now()}_${Math.floor(Math.random() * 1e6)}.xlsx`,
+        filePath: file.path
+      })
+      const result = await cloud.callFunction('importProducts', { fileID: up.fileID })
+      wx.hideLoading()
+      if (result.code !== 0) return util.showToast(result.msg || '导入失败')
+      const d = result.data || {}
+      const lines = [`共 ${d.total} 行，成功 ${d.inserted} 条，失败 ${d.failed} 条`]
+        .concat((d.errors || []).slice(0, 10).map(e => `第${e.row}行：${e.msg}`))
+      if ((d.errors || []).length > 10) lines.push(`...等共 ${d.errors.length} 条问题`)
+      this.setData({
+        importResult: { show: true, summary: `成功 ${d.inserted} 条 / 失败 ${d.failed} 条`, lines }
+      })
+      await this.loadData()
+    } catch (e) {
+      wx.hideLoading()
+      util.showToast('导入失败：' + (e.message || '未知错误'))
+    }
+  },
+
+  closeImportResult() { this.setData({ 'importResult.show': false }) },
+
+  showTemplateInfo() {
+    wx.showModal({
+      title: '导入模板说明',
+      content: '首行列名：商品名称、一级分类、二级分类、单位、规格、厂家/品牌、默认供应商（顺序不限，名称/分类/单位必填）。分类和供应商按名称匹配系统已有数据。',
+      showCancel: false
+    })
+  },
 
   // Prevent clicks inside the modal (including picker controls) from closing it.
   stopBubble() {},
