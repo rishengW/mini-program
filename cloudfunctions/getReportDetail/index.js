@@ -196,6 +196,57 @@ exports.main = async (event = {}) => {
           })
         })
       }
+    } else if (type === 'store_daily_summary_report' || type === 'store_monthly_summary_report') {
+      // 日/月汇总：行数据已固化在生成的 CSV 文件里，下载后解析回结构化 rows。
+      // CSV 字段由 generateSummaryReport 用双引号包裹（"" 转义），按 RFC 4180 解析。
+      // 文件格式：第1行门店头，第2列表头，中间数据行，末行合计。
+      if (report.file_url) {
+        try {
+          const dlRes = await cloud.downloadFile({ fileID: report.file_url })
+          const text = dlRes.fileContent.toString('utf-8').replace(/^\uFEFF/, '')
+          const lines = text.split('\n').map(l => l.replace(/\r$/, ''))
+          const parseLine = (line) => {
+            const fields = []
+            let cur = ''
+            let inQuotes = false
+            for (let i = 0; i < line.length; i++) {
+              const ch = line[i]
+              if (inQuotes) {
+                if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++ }
+                else if (ch === '"') inQuotes = false
+                else cur += ch
+              } else if (ch === '"') {
+                inQuotes = true
+              } else if (ch === ',') {
+                fields.push(cur); cur = ''
+              } else {
+                cur += ch
+              }
+            }
+            fields.push(cur)
+            return fields
+          }
+          // 数据行从第3行（索引2）开始，末行为合计
+          for (let i = 2; i < lines.length; i++) {
+            if (!lines[i]) continue
+            const f = parseLine(lines[i])
+            if (f[0] === '合计') continue
+            rows.push({
+              productName: f[0],
+              supplierName: f[1],
+              category: f[2],
+              unit: f[3],
+              orderQty: Number(f[4]) || 0,
+              receivedQty: Number(f[5]) || 0,
+              subtotal: Number(f[6]) || 0
+            })
+          }
+        } catch (err) {
+          // 解析失败不能静默成"表头齐全的 ¥0.00 空表"，向上抛给外层返回错误
+          console.error('[getReportDetail] 汇总报表文件解析失败:', err)
+          throw new Error('汇总报表文件解析失败')
+        }
+      }
     }
 
     return { code: 0, data: { ...report, rows } }

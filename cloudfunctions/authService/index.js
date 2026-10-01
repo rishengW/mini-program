@@ -315,7 +315,10 @@ async function getStores(event) {
   const user = await getSessionUser(event.authToken)
   if (!user) return { code: -401, msg: '登录已过期，请重新登录' }
 
-  const query = { status: 1 }
+  // includeInactive=1 供门店管理页拉全量列表（含停用），否则停用门店在 UI 上无法恢复
+  const includeInactive = event.includeInactive === 1 || event.includeInactive === true
+  const query = {}
+  if (!includeInactive) query.status = 1
   if (STORE_ROLES.includes(user.role)) {
     if (!user.default_store_id) return { code: -1, msg: '账号未关联有效门店，请联系管理员' }
     query.store_id = user.default_store_id

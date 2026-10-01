@@ -683,7 +683,9 @@ async function markAllMessagesRead(event) {
 const ABNORMAL_TYPE_NAMES = {
   shortage: '少货/缺货',
   quality: '质量问题',
-  wrong_item: '错货'
+  wrong_item: '错货',
+  // 缺价待补（createReceipt 同名字典）：缺失时异常列表该行显示裸英文 type
+  missing_price: '缺价待补'
 }
 const ABNORMAL_STATUS_NAMES = {
   pending: '待处理',
@@ -840,8 +842,8 @@ async function getOrderStats(event) {
     return { code: -403, msg: '当前账号无权查看采购订单' }
   }
   const receivableStatuses = ['approved', 'report_generated', 'partial_received', 'to_receive']
-  // 待核销（verify_status=pending）的手动单不计入「已完成」（流程图 S9 口径，清单 #20）
-  const receivedQuery = { ...baseQuery, order_status: 'received', verify_status: _.neq('pending') }
+  // 已完成与列表「已收货」tab 同口径（全部 received）；待核销子集单独出 to_verify 卡片
+  const receivedQuery = { ...baseQuery, order_status: 'received' }
   const [submittedRes, receivableRes, receivedRes, toVerifyRes] = await Promise.all([
     db.collection('purchase_order').where({ ...baseQuery, order_status: 'submitted' }).count(),
     db.collection('purchase_order').where({ ...baseQuery, order_status: _.in(receivableStatuses) }).count(),

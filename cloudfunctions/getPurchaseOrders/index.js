@@ -80,7 +80,8 @@ exports.main = async (event = {}) => {
     // 各状态数量用于前端筛选 tab：在角色约束的基准条件上统计，不受当前 orderStatus 过滤影响
     const baseQuery = { ...query }
     delete baseQuery.order_status
-    const [allRes, draftRes, submittedRes, receivedRes, abnormalRes, cancelledRes, partialRes, toVerifyRes] = await Promise.all([
+    delete baseQuery.verify_status
+    const [allRes, draftRes, submittedRes, receivedRes, abnormalRes, cancelledRes, partialRes, toVerifyRes, receivableRes] = await Promise.all([
       db.collection('purchase_order').where(baseQuery).count(),
       db.collection('purchase_order').where({ ...baseQuery, order_status: 'draft' }).count(),
       db.collection('purchase_order').where({ ...baseQuery, order_status: 'submitted' }).count(),
@@ -88,7 +89,9 @@ exports.main = async (event = {}) => {
       db.collection('purchase_order').where({ ...baseQuery, order_status: 'receipt_abnormal' }).count(),
       db.collection('purchase_order').where({ ...baseQuery, order_status: 'cancelled' }).count(),
       db.collection('purchase_order').where({ ...baseQuery, order_status: 'partial_received' }).count(),
-      db.collection('purchase_order').where({ ...baseQuery, verify_status: 'pending' }).count()
+      db.collection('purchase_order').where({ ...baseQuery, verify_status: 'pending' }).count(),
+      // 待收货（虚拟筛选）：与首页「待收货」卡片、getOrderStats.receivable 同口径
+      db.collection('purchase_order').where({ ...baseQuery, order_status: _.in(['approved', 'report_generated', 'partial_received', 'to_receive']) }).count()
     ])
     const statusCounts = {
       all: allRes.total,
@@ -98,7 +101,8 @@ exports.main = async (event = {}) => {
       receiptAbnormal: abnormalRes.total,
       cancelled: cancelledRes.total,
       partialReceived: partialRes.total,
-      toVerify: toVerifyRes.total
+      toVerify: toVerifyRes.total,
+      receivable: receivableRes.total
     }
 
     const countRes = await db.collection('purchase_order').where(query).count()
