@@ -82,7 +82,9 @@
         <text class="col-amount">小计</text>
       </view>
       <view wx:for="{{rows}}" wx:key="index" class="table-row">
-        <text class="col-name link-text" bindtap="{{report.reportType === 'store_receipt_price_report' ? 'goSourceOrder' : 'goRowOrder'}}" data-order-id="{{item.purchaseOrderId}}">{{item.productName}} ›</text>
+        <!-- 动态 bindtap 在部分基础库不生效，按类型拆成静态绑定 -->
+        <text wx:if="{{report.reportType === 'store_receipt_price_report'}}" class="col-name link-text" bindtap="goSourceOrder" data-order-id="{{item.purchaseOrderId}}">{{item.productName}} ›</text>
+        <text wx:else class="col-name link-text" bindtap="goRowOrder" data-order-id="{{item.purchaseOrderId}}">{{item.productName}} ›</text>
         <text class="col-num">{{item.receivedQty || item.qty}}</text>
         <text class="col-num">¥{{item.unitPrice}}</text>
         <text class="col-amount text-bold">¥{{item.subtotal}}</text>
@@ -108,6 +110,31 @@
         <text class="col-store text-sm">{{item.storeName}}</text>
         <text class="col-num text-bold">{{item.orderQty || item.qty}}</text>
         <text class="col-unit">{{item.unit}}</text>
+      </view>
+    </block>
+
+    <!-- 门店日/月汇总 -->
+    <block wx:elif="{{report.reportType === 'store_daily_summary_report' || report.reportType === 'store_monthly_summary_report'}}">
+      <view class="table-header">
+        <text class="col-name">商品</text>
+        <text class="col-cat">供应商</text>
+        <text class="col-num">下单</text>
+        <text class="col-num">实收</text>
+        <text class="col-amount">金额</text>
+      </view>
+      <view wx:for="{{rows}}" wx:key="productName" class="table-row">
+        <text class="col-name">{{item.productName}}</text>
+        <text class="col-cat text-sm">{{item.supplierName}}</text>
+        <text class="col-num">{{item.orderQty}}</text>
+        <text class="col-num text-bold">{{item.receivedQty}}</text>
+        <text class="col-amount text-bold">¥{{item.subtotal}}</text>
+      </view>
+      <view class="table-total">
+        <text class="col-name text-bold">合计</text>
+        <text class="col-cat"></text>
+        <text class="col-num"></text>
+        <text class="col-num"></text>
+        <text class="col-amount text-bold text-primary">¥{{totalAmount}}</text>
       </view>
     </block>
 

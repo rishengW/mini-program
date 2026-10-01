@@ -160,7 +160,9 @@ Page({
     } else if (status === 'abnormal') {
       wx.navigateTo({ url: '/pages/abnormal-list/abnormal-list' })
     } else {
-      wx.navigateTo({ url: '/pages/purchase-list/purchase-list?status=' + status })
+      // purchase-list 是 tabBar 页面，switchTab 不支持 URL 传参，改经全局暂存传递筛选状态
+      getApp().globalData.pendingListFilter = status
+      wx.switchTab({ url: '/pages/purchase-list/purchase-list' })
     }
   },
 

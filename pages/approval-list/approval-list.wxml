@@ -25,7 +25,11 @@
     </view>
   </view>
 
-  <view wx:if="{{list.length === 0}}" class="empty-state">
+  <view wx:if="{{loadFailed}}" class="empty-state">
+    <view class="empty-state-icon icon icon-xxl icon-alert-danger"></view>
+    <view class="empty-state-text">加载失败，请下拉重试</view>
+  </view>
+  <view wx:elif="{{list.length === 0}}" class="empty-state">
     <view class="empty-state-icon icon icon-xxl icon-check-success"></view>
     <view class="empty-state-text">暂无待审核申请</view>
   </view>

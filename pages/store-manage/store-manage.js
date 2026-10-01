@@ -18,7 +18,8 @@ Page({
 
   async loadData() {
     util.showLoading()
-    const res = await cloud.callFunction('authService', { action: 'getStores' })
+    // 管理页需含停用门店，否则停用后 UI 上无法恢复
+    const res = await cloud.callFunction('authService', { action: 'getStores', includeInactive: 1 })
     util.hideLoading()
     if (res && res.code === 0) {
       this.setData({ stores: res.data || [] })
@@ -51,37 +52,44 @@ Page({
   stopBubble() {},
 
   async saveStore() {
+    if (this._submitting) return
     const { form, editItem } = this.data
     const storeName = form.storeName.trim()
     if (!storeName) return util.showToast('请输入门店名称')
 
-    util.showLoading()
-    let res
-    if (editItem) {
-      res = await cloud.callFunction('authService', {
-        action: 'updateStore',
-        storeId: editItem.storeId,
-        storeName
-      })
-    } else {
-      res = await cloud.callFunction('authService', {
-        action: 'createStore',
-        storeName
-      })
-    }
-    util.hideLoading()
+    this._submitting = true
+    try {
+      util.showLoading()
+      let res
+      if (editItem) {
+        res = await cloud.callFunction('authService', {
+          action: 'updateStore',
+          storeId: editItem.storeId,
+          storeName
+        })
+      } else {
+        res = await cloud.callFunction('authService', {
+          action: 'createStore',
+          storeName
+        })
+      }
+      util.hideLoading()
 
-    if (res && res.code === 0) {
-      util.showSuccess(editItem ? '保存成功' : '门店已创建')
-      this.closeForm()
-      this.loadData()
-    } else {
-      util.showToast((res && res.msg) || '保存失败，请稍后重试')
+      if (res && res.code === 0) {
+        util.showSuccess(editItem ? '保存成功' : '门店已创建')
+        this.closeForm()
+        this.loadData()
+      } else {
+        util.showToast((res && res.msg) || '保存失败，请稍后重试')
+      }
+    } finally {
+      this._submitting = false
     }
   },
 
   // 与账号管理一致：停用=软删除，历史单据与账号关联保留，可再启用
   async toggleStoreStatus(e) {
+    if (this._submitting) return
     const item = e.currentTarget.dataset.item
     const disabling = item.status === 1
     const confirmed = await util.showConfirm(disabling
@@ -89,19 +97,24 @@ Page({
       : `确认恢复门店「${item.storeName}」吗？恢复后可正常下单`)
     if (!confirmed) return
 
-    util.showLoading()
-    const res = await cloud.callFunction('authService', {
-      action: 'setStoreStatus',
-      storeId: item.storeId,
-      status: disabling ? 0 : 1
-    })
-    util.hideLoading()
+    this._submitting = true
+    try {
+      util.showLoading()
+      const res = await cloud.callFunction('authService', {
+        action: 'setStoreStatus',
+        storeId: item.storeId,
+        status: disabling ? 0 : 1
+      })
+      util.hideLoading()
 
-    if (res && res.code === 0) {
-      util.showSuccess(disabling ? '已停用' : '已启用')
-      this.loadData()
-    } else {
-      util.showToast((res && res.msg) || '操作失败')
+      if (res && res.code === 0) {
+        util.showSuccess(disabling ? '已停用' : '已启用')
+        this.loadData()
+      } else {
+        util.showToast((res && res.msg) || '操作失败')
+      }
+    } finally {
+      this._submitting = false
     }
   }
 })

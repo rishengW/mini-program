@@ -82,7 +82,9 @@ Page({
     this.setData({
       orders, receipts,
       canRegenerate: ['purchaser', 'super_admin'].includes(user.role),
-      canReprice: ['purchaser', 'super_admin'].includes(user.role)
+      canReprice: ['purchaser', 'super_admin'].includes(user.role),
+      // 补结算后端同为 GLOBAL_ROLES 校验，前端补对应标志避免店长看到点了必 403 的入口
+      canSettle: ['purchaser', 'super_admin'].includes(user.role)
     })
   },
 

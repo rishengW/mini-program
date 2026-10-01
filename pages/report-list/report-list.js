@@ -123,6 +123,12 @@ Page({
 
   // B11 生成汇总报表入口（日/月）
   async generateSummary() {
+    // 与云函数 GLOBAL_ROLES 口径一致：下单人员/店长点了必 403，前端直接拦截
+    const me = (getApp().globalData.userInfo || {}).role
+    if (!['super_admin', 'purchaser'].includes(me)) {
+      util.showToast('仅管理员可生成汇总报表')
+      return
+    }
     const that = this
     wx.showActionSheet({
       itemList: ['生成今日日汇总', '生成本月月汇总'],

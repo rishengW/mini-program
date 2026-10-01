@@ -5,7 +5,7 @@ const meta = require('../../utils/meta')
 const authGuard = require('../../utils/auth-guard')
 
 Page({
-  data: { list: [] },
+  data: { list: [], loadFailed: false },
 
   async onShow() {
     if (!authGuard.requireLogin()) return
@@ -26,9 +26,12 @@ Page({
       pageSize: 100
     })
     if (!result || result.code !== 0) {
+      // 失败态置位，避免页面渲染成"暂无待审核申请"误导无数据
+      this.setData({ loadFailed: true })
       util.showToast((result && result.msg) || '审核列表加载失败')
       return
     }
+    this.setData({ loadFailed: false })
     const list = (result.data || []).map(cloud.normalizePurchaseOrder)
       .filter(o => o.orderStatus === 'submitted' || o.orderStatus === 'pending_approval')
       .map(o => {
@@ -40,6 +43,12 @@ Page({
           expectedDeliveryDate: o.deliveryDate || o.orderDate,
           submittedAt: o.submittedAt,
           statusText: statusInfo.text,
+          // 与 approval-detail 一致：快照字段重命名为列表模板所用字段
+          items: (o.items || []).map(item => ({
+            ...item,
+            productName: item.productNameSnapshot,
+            requestedQty: item.orderQty
+          })),
           // 清单 #21：手动单显式标识（特殊审批：不核协议价，核销走凭证回填）
           isManual: o.isManual
         }

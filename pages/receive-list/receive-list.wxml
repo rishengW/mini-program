@@ -49,7 +49,7 @@
           <text wx:if="{{item.photoCount > 0}}" class="action-link" catchtap="previewReceiptPhotos" data-index="{{index}}">照片({{item.photoCount}})</text>
           <text wx:if="{{item.missingReports && canRegenerate}}" class="action-link" catchtap="regenerateReports" data-id="{{item.receiptId}}">补生成</text>
           <text wx:if="{{item.hasMissingPrice && canReprice}}" class="action-link" catchtap="repriceReceipt" data-id="{{item.receiptId}}">补价补账</text>
-          <text wx:if="{{item.hasAbnormal}}" class="action-link" catchtap="settleReceipt" data-id="{{item.receiptId}}">补结算</text>
+          <text wx:if="{{item.hasAbnormal && canSettle}}" class="action-link" catchtap="settleReceipt" data-id="{{item.receiptId}}">补结算</text>
         </view>
       </view>
     </view>

@@ -66,34 +66,52 @@ Page({
   },
 
   async saveSupplier() {
+    if (this._submitting) return
     const { form, editItem } = this.data
     if (!form.supplierName.trim()) return util.showToast('请输入供应商名称')
 
-    const app = getApp()
-    const result = await cloud.callFunction('dataService', {
-      action: 'saveSupplier',
-      supplierId: editItem && editItem.supplierId,
-      ...form,
-      supplierName: form.supplierName.trim()
-    })
-    if (result.code !== 0) return util.showToast(result.msg || '供应商保存失败')
-    util.showSuccess(editItem ? '供应商已更新' : '供应商已添加')
-    this.setData({ showAdd: false })
-    await this.loadData()
+    this._submitting = true
+    try {
+      const app = getApp()
+      const result = await cloud.callFunction('dataService', {
+        action: 'saveSupplier',
+        supplierId: editItem && editItem.supplierId,
+        ...form,
+        supplierName: form.supplierName.trim()
+      })
+      if (result.code !== 0) return util.showToast(result.msg || '供应商保存失败')
+      util.showSuccess(editItem ? '供应商已更新' : '供应商已添加')
+      this.setData({ showAdd: false })
+      await this.loadData()
+    } finally {
+      this._submitting = false
+    }
   },
 
   async toggleStatus(e) {
+    if (this._submitting) return
     const id = e.currentTarget.dataset.id
     const supplier = this.data.suppliers.find(s => s.supplierId === id)
     if (!supplier) return
-    const app = getApp()
-    const result = await cloud.callFunction('dataService', {
-      action: 'toggleSupplier',
-      supplierId: id
-    })
-    if (result.code !== 0) return util.showToast(result.msg || '供应商状态更新失败')
-    util.showSuccess(result.data && result.data.status === 1 ? '已启用' : '已停用')
-    await this.loadData()
+    // 启停影响下单可选范围，二次确认防误触
+    const disabling = supplier.status === 1
+    const confirmed = await util.showConfirm(disabling
+      ? `确认停用供应商「${supplier.supplierName}」吗？\n停用后下单不可再选择，历史单据保留`
+      : `确认启用供应商「${supplier.supplierName}」吗？`)
+    if (!confirmed) return
+    this._submitting = true
+    try {
+      const app = getApp()
+      const result = await cloud.callFunction('dataService', {
+        action: 'toggleSupplier',
+        supplierId: id
+      })
+      if (result.code !== 0) return util.showToast(result.msg || '供应商状态更新失败')
+      util.showSuccess(result.data && result.data.status === 1 ? '已启用' : '已停用')
+      await this.loadData()
+    } finally {
+      this._submitting = false
+    }
   },
 
   goProducts(e) {

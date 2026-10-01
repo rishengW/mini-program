@@ -1,5 +1,13 @@
 <!-- pages/approval-detail/approval-detail.wxml -->
 <view class="container">
+  <!-- 加载失败态 -->
+  <view wx:if="{{loadFailed}}" class="empty-state">
+    <view class="empty-state-icon icon icon-xxl icon-alert-danger"></view>
+    <view class="empty-state-text">采购申请加载失败</view>
+    <button class="btn btn-primary btn-sm" style="margin-top:24rpx;" bindtap="retryLoad">重试</button>
+  </view>
+
+  <block wx:else>
   <!-- 申请信息 -->
   <view class="card">
     <view class="flex-between">
@@ -58,4 +66,5 @@
       <button class="btn btn-success flex-1" bindtap="approveRequest">通过</button>
     </view>
   </view>
+  </block>
 </view>

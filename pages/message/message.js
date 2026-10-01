@@ -46,7 +46,7 @@ Page({
             })
         }
         // 按消息类型路由：订单类 bizId 是采购单号，跳采购单详情；
-        // 收货/异常类 bizId 是收货单号(RCP...)或异常编号，跳收货列表。
+        // 异常类跳异常处理列表；收货类 bizId 是收货单号(RCP...)，跳收货列表。
         // 旧消息可能缺 type，用 bizId 前缀兜底。
         if (message.bizId) {
             const role = (getApp().globalData.userInfo || {}).role
@@ -54,7 +54,11 @@ Page({
                 wx.navigateTo({ url: '/pages/supplier-orders/supplier-orders' })
                 return
             }
-            const isReceiptMsg = ['receive', 'abnormal'].includes(message.type)
+            if (message.type === 'abnormal') {
+                wx.navigateTo({ url: '/pages/abnormal-list/abnormal-list' })
+                return
+            }
+            const isReceiptMsg = message.type === 'receive'
                 || String(message.bizId).indexOf('RCP') === 0
             if (isReceiptMsg) {
                 wx.navigateTo({ url: '/pages/receive-list/receive-list' })

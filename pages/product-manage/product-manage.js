@@ -197,36 +197,54 @@ Page({
   },
 
   async saveProduct() {
+    if (this._submitting) return
     const { form, editItem } = this.data
     if (!form.name.trim()) return util.showToast('请输入商品名称')
     if (!form.categoryId) return util.showToast('请选择分类')
     if (!form.unit.trim()) return util.showToast('请输入单位')
 
-    const app = getApp()
-    const result = await cloud.callFunction('dataService', {
-      action: 'saveProduct',
-      productId: editItem && editItem.productId,
-      ...form,
-      name: form.name.trim(),
-      unit: form.unit.trim()
-    })
-    if (result.code !== 0) return util.showToast(result.msg || '商品保存失败')
-    util.showSuccess(editItem ? '商品已更新' : '商品已添加')
-    this.setData({ showAdd: false })
-    await this.loadData()
+    this._submitting = true
+    try {
+      const app = getApp()
+      const result = await cloud.callFunction('dataService', {
+        action: 'saveProduct',
+        productId: editItem && editItem.productId,
+        ...form,
+        name: form.name.trim(),
+        unit: form.unit.trim()
+      })
+      if (result.code !== 0) return util.showToast(result.msg || '商品保存失败')
+      util.showSuccess(editItem ? '商品已更新' : '商品已添加')
+      this.setData({ showAdd: false })
+      await this.loadData()
+    } finally {
+      this._submitting = false
+    }
   },
 
   async toggleStatus(e) {
+    if (this._submitting) return
     const id = e.currentTarget.dataset.id
     const product = this.data.products.find(p => p.productId === id)
     if (!product) return
-    const app = getApp()
-    const result = await cloud.callFunction('dataService', {
-      action: 'toggleProduct',
-      productId: id
-    })
-    if (result.code !== 0) return util.showToast(result.msg || '商品状态更新失败')
-    util.showSuccess(result.data && result.data.status === 1 ? '已启用' : '已停用')
-    await this.loadData()
+    // 启停影响下单可选范围，二次确认防误触
+    const disabling = product.status === 1
+    const confirmed = await util.showConfirm(disabling
+      ? `确认停用商品「${product.name || product.productName}」吗？\n停用后下单不可再选择，历史单据保留`
+      : `确认启用商品「${product.name || product.productName}」吗？`)
+    if (!confirmed) return
+    this._submitting = true
+    try {
+      const app = getApp()
+      const result = await cloud.callFunction('dataService', {
+        action: 'toggleProduct',
+        productId: id
+      })
+      if (result.code !== 0) return util.showToast(result.msg || '商品状态更新失败')
+      util.showSuccess(result.data && result.data.status === 1 ? '已启用' : '已停用')
+      await this.loadData()
+    } finally {
+      this._submitting = false
+    }
   }
 })

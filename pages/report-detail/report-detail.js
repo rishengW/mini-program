@@ -53,6 +53,9 @@ Page({
       if (rpt.reportType.includes('price')) {
         const sum = rows.reduce((s, r) => s + (r.subtotal || 0), 0)
         totalAmount = sum.toFixed(2)
+      } else if (rpt.reportType.includes('summary')) {
+        const sum = rows.reduce((s, r) => s + (r.subtotal || 0), 0)
+        totalAmount = sum.toFixed(2)
       }
 
       this.setData({

@@ -6,7 +6,8 @@ const authGuard = require('../../utils/auth-guard')
 Page({
   data: {
     detail: {},
-    auditRemark: ''
+    auditRemark: '',
+    loadFailed: false
   },
 
   async onLoad(options = {}) {
@@ -24,6 +25,7 @@ Page({
       orderId: this.orderId,
     })
     if (!result || result.code !== 0) {
+      this.setData({ loadFailed: true })
       util.showToast((result && result.msg) || '采购申请加载失败')
       return
     }
@@ -51,6 +53,12 @@ Page({
     this.setData({ [`detail.items[${index}].approveQty`]: val })
   },
 
+  // 加载失败后重试
+  async retryLoad() {
+    this.setData({ loadFailed: false })
+    await this.onLoad({ id: this.orderId, orderId: this.orderId })
+  },
+
   onAuditRemarkInput(e) {
     this.setData({ auditRemark: e.detail.value })
   },
@@ -70,7 +78,7 @@ Page({
       const app = getApp()
       const result = await cloud.callFunction('dataService', {
         action: 'auditOrder',
-        orderId: this.orderId, status: 'approved', items: this.data.detail.items.map(item => ({ itemId: item.itemId, approveQty: item.approveQty }))
+        orderId: this.orderId, status: 'approved', items: (this.data.detail.items || []).map(item => ({ itemId: item.itemId, approveQty: item.approveQty }))
       })
       if (result.code === 0) {
         const warning = result.data && result.data.reportWarning

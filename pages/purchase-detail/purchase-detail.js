@@ -80,7 +80,8 @@ Page({
     // B8：已提交待审核的订单，采购员/管理员可作废
     const canCancel = order.orderStatus === 'submitted' && ['purchaser', 'super_admin'].includes(currentUser.role)
     // B8（2026-09-28 口径）：审批后订单仅管理员可申请取消（super_admin 作废确认），下单人员/店长无取消权限
-    const cancelEligible = ['approved', 'report_generated', 'partial_received', 'to_receive'].includes(order.orderStatus)
+    // 口径与 dataService 作废校验对齐：partial_received/to_receive 及之后状态后端明确拒绝（已有收货走异常流程），前端不再放行
+    const cancelEligible = ['approved', 'report_generated'].includes(order.orderStatus)
     const canRequestCancel = cancelEligible && ['purchaser', 'super_admin'].includes(currentUser.role) && !order.cancelRequested
     const canForceCancel = cancelEligible && currentUser.role === 'super_admin'
     // #12-③：submitted 单等待审核时，下单人/店长可发催审消息（管理员本人不需要催自己）
@@ -150,7 +151,7 @@ Page({
       util.hideLoading()
       if (result && result.code === 0) {
         util.showSuccess('凭证已提交')
-        that.loadData()
+        this.loadData()
       } else {
         util.showToast((result && result.msg) || '凭证提交失败')
       }
