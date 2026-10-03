@@ -90,6 +90,8 @@ async function main(event) {
   let workbook
   try {
     const res = await cloud.downloadFile({ fileID })
+    // 文件已读入内存，尽快清理云存储，避免 imports/ 目录不断累积
+    try { await cloud.deleteFile({ fileList: [fileID] }) } catch (e) { console.error('清理导入文件失败:', e) }
     workbook = XLSX.read(res.fileContent, { type: 'buffer' })
   } catch (e) {
     return { code: -1, msg: '文件下载或解析失败，请确认为 .xlsx 格式' }
@@ -125,6 +127,7 @@ async function main(event) {
   const existingKeys = new Set(existingProducts.map(p => `${p.product_name}|${p.manufacturer_name || '默认'}`))
 
   const errors = []       // [{ row, msg }]
+  const warnings = []     // 不阻断入库的提示，如供应商名未匹配
   const toInsert = []
   const seenKeys = new Set()
 
@@ -165,7 +168,7 @@ async function main(event) {
     if (supplierName) {
       const sup = suppliers.find(s => s.supplier_name === supplierName)
       if (sup) defaultSupplierId = sup.supplier_id
-      else errors.push({ row: rowNo, msg: `${name}: 供应商「${supplierName}」不存在，已留空` })
+      else warnings.push({ row: rowNo, msg: `${name}: 供应商「${supplierName}」不存在，已留空` })
     }
 
     toInsert.push({
@@ -201,7 +204,8 @@ async function main(event) {
       total: rows.length - 1,
       inserted,
       failed: errors.length,
-      errors: errors.slice(0, 50)
+      errors,
+      warnings
     }
   }
 }

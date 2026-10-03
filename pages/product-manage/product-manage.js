@@ -142,8 +142,12 @@ Page({
       if (result.code !== 0) return util.showToast(result.msg || '导入失败')
       const d = result.data || {}
       const lines = [`共 ${d.total} 行，成功 ${d.inserted} 条，失败 ${d.failed} 条`]
-        .concat((d.errors || []).slice(0, 10).map(e => `第${e.row}行：${e.msg}`))
-      if ((d.errors || []).length > 10) lines.push(`...等共 ${d.errors.length} 条问题`)
+        .concat((d.errors || []).map(e => `第${e.row}行：${e.msg}`))
+      if ((d.warnings || []).length) {
+        lines.push('')
+        lines.push('以下提示不影响导入：')
+        lines.push(...d.warnings.map(e => `第${e.row}行：${e.msg}`))
+      }
       this.setData({
         importResult: { show: true, summary: `成功 ${d.inserted} 条 / 失败 ${d.failed} 条`, lines }
       })
