@@ -481,7 +481,17 @@ async function setUserStatus(event) {
   const targetResult = await db.collection(USER_COLLECTION).doc(event.id).get()
   const target = targetResult.data
   if (!target) return { code: -1, msg: '用户不存在' }
-  if (target.username === 'admin') return { code: -1, msg: '默认系统超管不可停用' }
+  if (target.username === 'admin') {
+    // 超管不可删除，但允许停用（可收回）；前提是还有另一名在岗超管，避免系统失去管理入口。
+    if (status === 0) {
+      const otherSupRes = await db.collection(USER_COLLECTION).where({
+        role: 'super_admin',
+        status: 1,
+        _id: _.neq(target._id)
+      }).count()
+      if (!otherSupRes.total) return { code: -1, msg: '必须先启用另一名超级管理员，才能停用当前超管' }
+    }
+  }
   if ((target.status === undefined ? 1 : target.status) === status) {
     return { code: -1, msg: status === 0 ? '该账号已是停用状态' : '该账号已是正常状态' }
   }

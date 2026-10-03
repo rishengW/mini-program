@@ -18,15 +18,9 @@
 12. `message.json` → `message`
 13. `abnormal_record.json` → `abnormal_record`
 
-`app_user` 中只保存 PBKDF2 密码哈希，不保存明文密码。初始账号仅用于首次登录，登录后应立即在账号管理中修改密码：
+`app_user` 中只保存 PBKDF2 密码哈希，不保存明文密码。初始账号仅用于首次登录，登录后应立即在账号管理中修改密码。
 
-| 角色 | 账号 | 初始密码 |
-| --- | --- | --- |
-| 超级管理员 | `admin` | `Admin@2026` |
-| 下单人员 | `chef` | `Chef@2026` |
-| 店长 | `manager` | `Manager@2026` |
-| 管理员 | `admin_user` | `Purchaser@2026` |
-| 供货商 | `supplier_test` | `Supplier@2026` |
+> ⚠️ **安全提示（2026-10-03 P0-1 修复）**：本文件历史上曾包含明文初始口令（`Admin@2026` 等），已全部轮换作废，且 git 历史中仍可查到旧口令。**新初始口令不再写入仓库**——部署时由管理员通过云开发控制台直接在 `app_user` 集合设置，或通过 `authService.createUser` 逐个创建；所有账号首次登录后必须立即改密。
 
 > 供货商账号需关联供货商档案（`default_supplier_id`，如 `supplier_test` 关联 `SUP001` 绿源蔬菜批发），登录后只能看到自己供货的订单、收货记录与协议价格。
 
