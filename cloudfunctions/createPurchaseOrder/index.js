@@ -76,19 +76,25 @@ async function createSubmissionMessage(orderNo, orderDate, storeId, storeName) {
 // 计数器文档 _id = 类型_范围_日期，先原子自增，文档不存在则创建（创建冲突时重试自增）。
 async function getNextVersion(reportType, scopeId, relatedDate) {
   const _ = db.command
+  // P0-4：CAS 取号——读旧值 → 条件更新（count 仍等于旧值才写旧值+1）→ updated===1 才算抢到。
+  // 原「_.inc 后回读」是两步操作，并发双方会回读到同一个最终值 → 版本号跳号、report_id 碰撞。
   const counterId = `${reportType}_${scopeId}_${relatedDate}`
   const counters = db.collection('report_version_counter')
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const incRes = await counters.doc(counterId).update({ data: { count: _.inc(1), updated_at: db.serverDate() } })
-    if (incRes.stats && incRes.stats.updated > 0) {
-      const doc = await counters.doc(counterId).get()
-      const count = Number(doc.data && doc.data.count)
-      if (Number.isFinite(count) && count > 0) return count
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const doc = await counters.doc(counterId).get().catch(() => null)
+    const current = doc && doc.data ? Number(doc.data.count) : null
+    if (current !== null && Number.isFinite(current) && current >= 0) {
+      // 条件更新独占版本号：并发方抢先写入后 where 不再命中（updated===0），重读重试
+      const casRes = await counters.where({ _id: counterId, count: current })
+        .update({ data: { count: current + 1, updated_at: db.serverDate() } })
+      if (casRes.stats && casRes.stats.updated === 1) return current + 1
+      continue
     }
     try {
+      // 计数器不存在：创建 count=1；_id 撞车说明并发方已建，重试走 CAS 路径
       await counters.add({ data: { _id: counterId, count: 1, updated_at: db.serverDate() } })
       return 1
-    } catch (err) { /* 并发创建冲突，重试自增 */ }
+    } catch (err) { /* 并发创建冲突，重试 */ }
   }
   throw new Error('getNextVersion: 计数器更新失败')
 }
@@ -144,8 +150,15 @@ exports.main = async (event = {}) => {
         .limit(1)
         .get()
       if (dupRes.data.length) {
-        idempotentOrderNo = dupRes.data[0].purchase_order_id
-        idempotentIsDraft = dupRes.data[0].order_status === 'draft'
+        const dup = dupRes.data[0]
+        // P1-1：幂等命中时校验状态一致——"存草稿"超时后改点"提交"会复用同一键，
+        // 若静默返回草稿单号，前端会误报"提交成功"（实际仍是草稿、无报表、不进审核）。
+        // 例外：命中的正是本次要编辑的草稿，继续走编辑流程
+        if (dup.order_status !== orderStatus && !(orderId && orderId === dup.purchase_order_id && dup.order_status === 'draft')) {
+          return { code: -1, msg: `该请求此前已创建过${dup.order_status === 'draft' ? '草稿' : '正式'}单（${dup.purchase_order_id}），与本次操作类型不一致，请返回列表确认后再操作` }
+        }
+        idempotentOrderNo = dup.purchase_order_id
+        idempotentIsDraft = dup.order_status === 'draft'
       }
     }
     let existingOrder = null
@@ -298,6 +311,7 @@ exports.main = async (event = {}) => {
 
     // The order header and all lines must commit together. A failed write
     // must never leave a submitted order without (or with half of) its lines.
+    let idempotentConflictNo = ''
     await db.runTransaction(async transaction => {
       if (existingOrder) {
         await transaction.collection('purchase_order').doc(existingOrder._id).update({ data: orderData })
@@ -309,6 +323,19 @@ exports.main = async (event = {}) => {
           await transaction.collection('purchase_order_item').doc(oldItem._id).remove()
         }
       } else {
+        // P1-9：新建路径在事务内对幂等键做最后复查，收窄并发双击的建单窗口
+        // （check-then-act 仍非严格原子，终极防线是 (request_id, created_by) 唯一索引，见修复计划 B6-2）
+        if (trimmedRequestId) {
+          const dupInTx = await transaction.collection('purchase_order')
+            .where({ request_id: trimmedRequestId, created_by: user.user_id || user._id })
+            .limit(1)
+            .get()
+          if (dupInTx.data.length) {
+            idempotentConflictNo = dupInTx.data[0].purchase_order_id
+            await transaction.rollback({ code: -1, msg: `检测到重复建单（${idempotentConflictNo}），本次请求已拦截` })
+            return
+          }
+        }
         await transaction.collection('purchase_order').add({
           data: {
             purchase_order_id: orderNo, order_no: orderNo,
@@ -466,6 +493,10 @@ exports.main = async (event = {}) => {
       }
     }
     console.error('[createPurchaseOrder] 采购订单保存失败:', err)
+    // P1-9：事务内幂等拦截的回滚信息透传给前端（否则被吞成通用文案，用户不知已建单）
+    if (idempotentConflictNo) {
+      return { code: -1, msg: `检测到重复建单（${idempotentConflictNo}），本次请求已拦截，请返回列表查看` }
+    }
     return { code: -1, msg: '采购订单保存失败，请稍后重试' }
   }
 }

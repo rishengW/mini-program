@@ -359,20 +359,25 @@ function safePathPart(value) {
 }
 
 async function getNextVersion(reportType, scopeId, relatedDate) {
-  // 原子计数器取下一版本号，避免并发"查最大+1"取得相同版本（报表路径含单号+audit标记仍保证唯一）
+  // P0-4：CAS 取号——读旧值 → 条件更新（count 仍等于旧值才写旧值+1）→ updated===1 才算抢到。
+  // 原「_.inc 后回读」是两步操作，并发双方会回读到同一个最终值 → 版本号跳号、report_id 碰撞。
   const counterId = `${reportType}_${scopeId}_${relatedDate}`
   const counters = db.collection('report_version_counter')
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const incRes = await counters.doc(counterId).update({ data: { count: _.inc(1), updated_at: db.serverDate() } })
-    if (incRes.stats && incRes.stats.updated > 0) {
-      const doc = await counters.doc(counterId).get()
-      const count = Number(doc.data && doc.data.count)
-      if (Number.isFinite(count) && count > 0) return count
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const doc = await counters.doc(counterId).get().catch(() => null)
+    const current = doc && doc.data ? Number(doc.data.count) : null
+    if (current !== null && Number.isFinite(current) && current >= 0) {
+      // 条件更新独占版本号：并发方抢先写入后 where 不再命中（updated===0），重读重试
+      const casRes = await counters.where({ _id: counterId, count: current })
+        .update({ data: { count: current + 1, updated_at: db.serverDate() } })
+      if (casRes.stats && casRes.stats.updated === 1) return current + 1
+      continue
     }
     try {
+      // 计数器不存在：创建 count=1；_id 撞车说明并发方已建，重试走 CAS 路径
       await counters.add({ data: { _id: counterId, count: 1, updated_at: db.serverDate() } })
       return 1
-    } catch (err) { /* 并发创建冲突，重试自增 */ }
+    } catch (err) { /* 并发创建冲突，重试 */ }
   }
   throw new Error('getNextVersion: 计数器更新失败')
 }
@@ -569,13 +574,29 @@ async function auditOrder(event) {
     throw err
   })
 
-  await createMessage({
-    type: 'approval',
-    title: event.status === 'approved' ? '采购申请已通过' : '采购申请已驳回',
-    content: `${order.order_no || event.orderId}${event.status === 'approved' ? '审核通过' : '被驳回'}`,
-    bizId: event.orderId,
-    storeId: order.store_id
-  })
+  // P2-10：事务提交到后续动作之间存在窗口，另一管理员可能已作废订单——
+  // 复查状态，已非本次目标状态则跳过报表重算与供应商通知（不向已作废单刷报表/花钱群发）
+  const postAuditRes = await db.collection('purchase_order')
+    .where({ purchase_order_id: event.orderId })
+    .limit(1)
+    .get()
+  const postOrder = postAuditRes.data[0]
+  if (!postOrder || postOrder.order_status !== event.status) {
+    return { code: 0, data: { reportWarning: '订单状态已变化（可能已被作废），已跳过报表重算与供应商通知' } }
+  }
+
+  try {
+    await createMessage({
+      type: 'approval',
+      title: event.status === 'approved' ? '采购申请已通过' : '采购申请已驳回',
+      content: `${order.order_no || event.orderId}${event.status === 'approved' ? '审核通过' : '被驳回'}`,
+      bizId: event.orderId,
+      storeId: order.store_id
+    })
+  } catch (err) {
+    // P2-16：审核事务已提交，消息写失败不能把整个操作报成失败——降级为警告
+    console.error('[dataService] 审核结果消息写入失败:', err)
+  }
 
   // 批准且审核数量与申请数量不一致时，下单类报表必须按批准数量重算，
   // 否则发往供应商的报表仍是审核前的数字。
@@ -848,7 +869,7 @@ async function getOrderStats(event) {
   } else {
     return { code: -403, msg: '当前账号无权查看采购订单' }
   }
-  const receivableStatuses = ['approved', 'report_generated', 'partial_received', 'to_receive']
+  const receivableStatuses = ['approved', 'report_generated', 'partial_received']
   // 已完成与列表「已收货」tab 同口径（全部 received）；待核销子集单独出 to_verify 卡片
   const receivedQuery = { ...baseQuery, order_status: 'received' }
   const [submittedRes, receivableRes, receivedRes, toVerifyRes] = await Promise.all([
@@ -1329,7 +1350,7 @@ async function cancelOrder(event) {
   if (!order) return { code: -1, msg: '采购订单不存在' }
 
   // 已有收货记录的订单不能作废（货已到，走异常处理流程）
-  if (['partial_received', 'to_receive', 'received', 'receipt_abnormal'].includes(order.order_status)) {
+  if (['partial_received', 'received', 'receipt_abnormal'].includes(order.order_status)) {
     return { code: -1, msg: '该订单已有收货记录，不能作废，请走异常处理流程' }
   }
   if (!['submitted', 'approved', 'report_generated'].includes(order.order_status)) {
@@ -1337,23 +1358,59 @@ async function cancelOrder(event) {
   }
 
   await db.runTransaction(async transaction => {
+    // P1-3：事务内复查订单状态——事务外的状态检查与真正写入之间存在窗口，
+    // 并发收货可能在窗口内把订单推入 partial_received/received，
+    // 无条件覆盖会把"货已到、钱应付"的已收货订单作废（账单 superseded → 漏账）
+    const recheckRes = await transaction.collection('purchase_order')
+      .where({ purchase_order_id: event.orderId })
+      .limit(1)
+      .get()
+    const current = recheckRes.data[0]
+    if (!current) {
+      await transaction.rollback({ code: -1, msg: '采购订单不存在' })
+      return
+    }
+    if (['partial_received', 'received', 'receipt_abnormal'].includes(current.order_status)) {
+      await transaction.rollback({ code: -1, msg: '该订单已有收货记录，不能作废，请走异常处理流程' })
+      return
+    }
+    if (!['submitted', 'approved', 'report_generated'].includes(current.order_status)) {
+      await transaction.rollback({ code: -1, msg: '当前状态的订单不可作废' })
+      return
+    }
     const updateData = {
       order_status: 'cancelled',
+      // P2-23：作废时清空供应商确认/发货标记——否则供货商门户仍显示"已确认接单"，
+      // 与 cancelled 状态并存误导供应商继续备货
+      supplier_confirmations: {},
       cancel_reason: reason,
       cancelled_by: auth.user.name,
       cancelled_at: db.serverDate(),
       updated_at: db.serverDate()
     }
     // 清单 #23：手动单作废时重置核销状态（凭证文件保留在 vouchers/ 留痕，只重置状态）
-    if (order.is_manual && order.verify_status && order.verify_status !== 'none') {
+    if (current.is_manual && current.verify_status && current.verify_status !== 'none') {
       updateData.verify_status = 'none'
-      updateData.verify_cancel_note = `订单作废时重置核销状态（原状态 ${order.verify_status}），作废原因：${reason}`
+      updateData.verify_cancel_note = `订单作废时重置核销状态（原状态 ${current.verify_status}），作废原因：${reason}`
     }
-    await transaction.collection('purchase_order').doc(order._id).update({ data: updateData })
-    // 关联报表标记 superseded（保留审计痕迹）
-    await transaction.collection('report_file')
+    await transaction.collection('purchase_order').doc(current._id).update({ data: updateData })
+    // P1-4：事务内 where().update() 不携带 transactionId（SDK 已证实，不在事务保护内），
+    // 改为 where().get() + 逐条 doc().update()
+    const rptRes = await transaction.collection('report_file')
       .where({ source_order_id: event.orderId, report_type: _.in(['store_order_report', 'supplier_order_report']) })
-      .update({ data: { status: 'superseded', updated_at: db.serverDate() } })
+      .get()
+    for (const rpt of rptRes.data) {
+      await transaction.collection('report_file').doc(rpt._id).update({
+        data: { status: 'superseded', updated_at: db.serverDate() }
+      })
+    }
+  }).catch(err => {
+    // rollback 携带的自定义信息转业务返回（同 auditOrder 的 catch 模式：子串匹配 + 固定文案）
+    const msg = (err && err.errMsg) || ''
+    if (msg.includes('该订单已有收货记录，不能作废')) return { code: -1, msg: '该订单已有收货记录，不能作废，请走异常处理流程' }
+    if (msg.includes('当前状态的订单不可作废')) return { code: -1, msg: '当前状态的订单不可作废' }
+    if (msg.includes('采购订单不存在')) return { code: -1, msg: '采购订单不存在' }
+    throw err
   })
 
   await createMessage({
@@ -1383,7 +1440,7 @@ async function requestCancel(event) {
     .get()
   const order = orderResult.data[0]
   if (!order) return { code: -1, msg: '采购订单不存在' }
-  if (!['submitted', 'approved', 'report_generated', 'partial_received', 'to_receive'].includes(order.order_status)) {
+  if (!['submitted', 'approved', 'report_generated', 'partial_received'].includes(order.order_status)) {
     return { code: -1, msg: '当前状态的订单无法申请取消' }
   }
   // 门店归属校验：全局角色可跨门店，门店角色仅可对本门店订单提交取消申请
@@ -1465,6 +1522,18 @@ async function remindAudit(event) {
     content: `${auth.user.name} 催促审核采购单 ${order.order_no || event.orderId}（${order.store_name || ''}，已等待审核），请尽快处理`,
     bizId: event.orderId,
     storeId: order.store_id
+  }).catch(async err => {
+    // P2-17：限频标记已推进但消息写失败时，催办会永久丢失且 1 小时内无法重试——
+    // 回退标记到原值（无旧值则清除），让用户可以立即重试
+    console.error('[dataService] 催审消息写入失败，回退限频标记:', err)
+    try {
+      await db.collection('purchase_order').doc(order._id).update({
+        data: { audit_reminded_at: order.audit_reminded_at || null, updated_at: db.serverDate() }
+      })
+    } catch (resetErr) {
+      console.error('[dataService] 限频标记回退失败:', resetErr)
+    }
+    return { code: -1, msg: '催办消息发送失败，请稍后重试' }
   })
   return { code: 0 }
 }
@@ -1498,11 +1567,13 @@ async function verifyManualOrder(event) {
     return { code: -403, msg: '无权操作其他门店的采购订单' }
   }
 
-  // 提交凭证：店长/采购员/管理员均可；#22 拍板（2026-09-24）：必须收齐（received）才能核销，
-  // 部分收货/收货异常的单剩余批次未定，不允许提前闭环
+  // 提交凭证：店长/采购员/管理员均可；P0-7（2026-10-03 修订口径，替代原 #22"须收齐"门槛）：
+  // 手动单少货常态停在 partial_received、最终批带异常为 receipt_abnormal，
+  // 仍要求 received 会让 S9 凭证核销主链路在真实场景下永久不可达——
+  // 门槛放宽到「收货已定」三态，与前端 purchase-detail 的展示口径一致
   if (action === 'submit') {
-    if (order.order_status !== 'received') {
-      return { code: -1, msg: '订单尚未收齐，需全部批次收货完成后才能提交付款凭证' }
+    if (!['received', 'receipt_abnormal', 'partial_received'].includes(order.order_status)) {
+      return { code: -1, msg: '订单尚在收货中，需全部批次收货完成后才能提交付款凭证' }
     }
     if (order.verify_status === 'approved') return { code: -1, msg: '该单已核销通过，无需重复提交' }
     if (voucherFileIds.length === 0) return { code: -1, msg: '请上传付款证明或发票' }

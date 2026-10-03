@@ -120,7 +120,7 @@ Page({
       const statusInfo = meta.getStatusInfo(o.orderStatus)
       const manualCount = o.items.filter(i => i.isManual).length
       // 判断是否可直接收货
-      const canReceive = canReceiveRole && ['approved', 'report_generated', 'partial_received', 'to_receive'].includes(o.orderStatus)
+      const canReceive = canReceiveRole && ['approved', 'report_generated', 'partial_received'].includes(o.orderStatus)
       return {
         ...o,
         statusText: statusInfo.text,

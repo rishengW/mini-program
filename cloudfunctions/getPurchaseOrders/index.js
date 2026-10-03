@@ -71,7 +71,7 @@ exports.main = async (event = {}) => {
       if (!isGlobal) return { code: -403, msg: '当前账号无权查看待核销订单' }
       query.verify_status = 'pending'
     } else if (orderStatus === 'receivable') {
-      query.order_status = _.in(['approved', 'report_generated', 'partial_received', 'to_receive'])
+      query.order_status = _.in(['approved', 'report_generated', 'partial_received'])
     } else if (orderStatus) {
       query.order_status = orderStatus
     }
@@ -91,7 +91,7 @@ exports.main = async (event = {}) => {
       db.collection('purchase_order').where({ ...baseQuery, order_status: 'partial_received' }).count(),
       db.collection('purchase_order').where({ ...baseQuery, verify_status: 'pending' }).count(),
       // 待收货（虚拟筛选）：与首页「待收货」卡片、getOrderStats.receivable 同口径
-      db.collection('purchase_order').where({ ...baseQuery, order_status: _.in(['approved', 'report_generated', 'partial_received', 'to_receive']) }).count()
+      db.collection('purchase_order').where({ ...baseQuery, order_status: _.in(['approved', 'report_generated', 'partial_received']) }).count()
     ])
     const statusCounts = {
       all: allRes.total,

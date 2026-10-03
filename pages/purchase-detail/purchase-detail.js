@@ -68,7 +68,7 @@ Page({
       })
       supplierGroups = Object.values(groups)
     }
-    const canReceive = currentUser.role !== 'chef' && ['approved', 'report_generated', 'partial_received', 'to_receive'].includes(order.orderStatus)
+    const canReceive = currentUser.role !== 'chef' && ['approved', 'report_generated', 'partial_received'].includes(order.orderStatus)
     // #18（2026-09-24 拍板）：本店店长可代改/代提交本店任何人的草稿（含离职员工遗留草稿）
     const canEdit = order.orderStatus === 'draft' && (
       ['super_admin', 'purchaser'].includes(currentUser.role) ||
@@ -87,13 +87,28 @@ Page({
     // #12-③：submitted 单等待审核时，下单人/店长可发催审消息（管理员本人不需要催自己）
     const canRemindAudit = order.orderStatus === 'submitted' && !['purchaser', 'super_admin'].includes(currentUser.role)
     // S9（2026-09-22）：手动商品专用单凭证核销
-    // 提交凭证：店长/采购员/管理员，#22 拍板：须收齐（received）才可提交；核销裁决：仅管理员
+    // 提交凭证：店长/采购员/管理员；核销裁决：仅管理员
+    // P0-7（2026-10-03 修订口径）：核销门槛放宽到「收货已定」三态——手动单少货常态下
+    // 停在 partial_received、最终批带异常为 receipt_abnormal，若仍要求 received 则主链路永久不可达；
+    // 仍在收货中（approved/report_generated/to_receive）与草稿/审批中等状态不可提交，需给出原因
     const isManualOrder = !!order.isManual
     const verifyStatus = order.verifyStatus || ''
+    const receiptSettled = ['received', 'receipt_abnormal', 'partial_received'].includes(order.orderStatus)
     const canSubmitVoucher = isManualOrder &&
       ['store_manager', 'purchaser', 'super_admin'].includes(currentUser.role) &&
-      order.orderStatus === 'received' &&
+      receiptSettled &&
       ['none', 'rejected'].includes(verifyStatus)
+    // P0-7：不可提交时给出可解释的原因，不再静默隐藏
+    let voucherBlockReason = ''
+    if (isManualOrder && !canSubmitVoucher && !['approved'].includes(verifyStatus)) {
+      if (verifyStatus === 'pending') {
+        voucherBlockReason = '凭证已提交，等待管理员核销'
+      } else if (!receiptSettled) {
+        voucherBlockReason = '订单尚在收货中，需全部批次收货完成后才能提交付款凭证'
+      } else if (!['store_manager', 'purchaser', 'super_admin'].includes(currentUser.role)) {
+        voucherBlockReason = '当前账号无权提交付款凭证'
+      }
+    }
     const canVerify = isManualOrder && verifyStatus === 'pending' &&
       ['purchaser', 'super_admin'].includes(currentUser.role)
     // 凭证图片转临时链接，核销人核对凭证时可见
@@ -114,6 +129,7 @@ Page({
       canRemindAudit,
       isManualOrder,
       verifyStatus,
+      voucherBlockReason,
       canSubmitVoucher,
       canVerify
     })

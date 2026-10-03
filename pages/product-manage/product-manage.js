@@ -26,7 +26,6 @@ Page({
   },
 
   async loadData() {
-    const app = getApp()
     const [productResult, categoryResult, supplierResult] = await Promise.all([
       cloud.callFunction('getProducts', { includeInactive: true }),
       cloud.callFunction('dataService', { action: 'getCategories' }),
@@ -209,7 +208,6 @@ Page({
 
     this._submitting = true
     try {
-      const app = getApp()
       const result = await cloud.callFunction('dataService', {
         action: 'saveProduct',
         productId: editItem && editItem.productId,
@@ -239,7 +237,6 @@ Page({
     if (!confirmed) return
     this._submitting = true
     try {
-      const app = getApp()
       const result = await cloud.callFunction('dataService', {
         action: 'toggleProduct',
         productId: id

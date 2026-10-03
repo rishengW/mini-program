@@ -54,7 +54,6 @@ Page({
 
   async loadExistingOrder() {
     util.showLoading('加载草稿...')
-    const app = getApp()
     const result = await cloud.callFunction('getPurchaseOrderDetail', {
       orderId: this.editingOrderId,
     })
@@ -102,7 +101,6 @@ Page({
   },
 
   async loadReferenceData() {
-    const app = getApp()
     const categoryResult = await cloud.callFunction('dataService', { action: 'getCategories' })
     if (!categoryResult || categoryResult.code !== 0) {
       util.showToast((categoryResult && categoryResult.msg) || '分类数据加载失败')
@@ -125,7 +123,6 @@ Page({
   },
 
   async loadProducts() {
-    const app = getApp()
     const result = await cloud.callFunction('getProducts', {
       includeInactive: false,
     })
@@ -333,8 +330,9 @@ Page({
       orderStatus,
       // 幂等键：本次进入页面的一次「保存/提交」动作内所有请求共用（含失败重试），
       // 服务端按 request_id 查重，请求超时后重试不会重复建单。
-      // 拆单时档案单/手动单各带 :c/:m 子键，避免两笔请求在服务端互相误判为重复
-      requestId: this.requestId + reqSuffix
+      // P1-1：键中拼入动作类型（draft/submitted）——"存草稿"超时后改点"提交"
+      // 不再命中草稿的幂等记录而被静默吞掉；拆单时档案/手动单再带 :c/:m 子键
+      requestId: this.requestId + ':' + orderStatus + reqSuffix
     })
 
     const confirmed = await util.showConfirm(orderStatus === 'draft' ? '确认保存采购草稿？' : '确认提交门店采购申请？')
@@ -404,7 +402,12 @@ Page({
     } else {
       // 拆单部分失败后的重试 / 纯手动单再次保存：沿用已建手动单号，避免重复建单。
       // 纯手动单沿用 :m 子键，与拆单时的手动请求同一幂等键，超时重试可被服务端查重
-      const reuseId = this.editingOrderId || this.manualOrderId || undefined
+      // P1-14：reuseId 按本次提交的路径分流——手动路径只复用手动单号，
+      // 档案路径只复用编辑草稿号/档案单号；否则手动单号会被误当作编辑目标，
+      // 把档案商品写进手动专用单（或反向），两单数据互相污染
+      const reuseId = (hasManual && !hasCatalog)
+        ? (this.manualOrderId || undefined)
+        : (this.editingOrderId || this.catalogOrderId || undefined)
       const retrySuffix = hasManual && !hasCatalog ? ':m' : ''
       result = await cloud.callFunction('createPurchaseOrder', buildPayload(toPayloadItems(allItems), reuseId, retrySuffix))
     }

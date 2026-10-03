@@ -21,6 +21,10 @@
         <view class="verify-product-name">{{item.productName}}</view>
         <view class="text-sm text-tertiary">订单: ×{{item.orderQty}} {{item.unit}}</view>
       </view>
+      <!-- P1-17：分批收货时展示该行历史累计与剩余量，供验收人对照填写 -->
+      <view wx:if="{{item.receivedTotal > 0}}" class="text-sm text-tertiary" style="margin-top:4rpx;">
+        已收 {{item.receivedTotal}} {{item.unit}}<text wx:if="{{item.remainingQty > 0}}">，剩余 {{item.remainingQty}} {{item.unit}}</text><text wx:else>，已收齐</text>
+      </view>
       
       <view class="verify-form">
         <view class="verify-row">

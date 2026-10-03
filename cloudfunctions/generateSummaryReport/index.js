@@ -52,19 +52,25 @@ function safePathPart(value) {
 // 辅助：原子计数器取下一版本号，避免并发"查最大+1"取得相同版本。查询/更新失败必须向上抛出。
 async function getNextVersion(reportType, scopeId, relatedDate) {
   const _ = db.command
+  // P0-4：CAS 取号——读旧值 → 条件更新（count 仍等于旧值才写旧值+1）→ updated===1 才算抢到。
+  // 原「_.inc 后回读」是两步操作，并发双方会回读到同一个最终值 → 版本号跳号、report_id 碰撞。
   const counterId = `${reportType}_${scopeId}_${relatedDate}`
   const counters = db.collection('report_version_counter')
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const incRes = await counters.doc(counterId).update({ data: { count: _.inc(1), updated_at: db.serverDate() } })
-    if (incRes.stats && incRes.stats.updated > 0) {
-      const doc = await counters.doc(counterId).get()
-      const count = Number(doc.data && doc.data.count)
-      if (Number.isFinite(count) && count > 0) return count
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const doc = await counters.doc(counterId).get().catch(() => null)
+    const current = doc && doc.data ? Number(doc.data.count) : null
+    if (current !== null && Number.isFinite(current) && current >= 0) {
+      // 条件更新独占版本号：并发方抢先写入后 where 不再命中（updated===0），重读重试
+      const casRes = await counters.where({ _id: counterId, count: current })
+        .update({ data: { count: current + 1, updated_at: db.serverDate() } })
+      if (casRes.stats && casRes.stats.updated === 1) return current + 1
+      continue
     }
     try {
+      // 计数器不存在：创建 count=1；_id 撞车说明并发方已建，重试走 CAS 路径
       await counters.add({ data: { _id: counterId, count: 1, updated_at: db.serverDate() } })
       return 1
-    } catch (err) { /* 并发创建冲突，重试自增 */ }
+    } catch (err) { /* 并发创建冲突，重试 */ }
   }
   throw new Error('getNextVersion: 计数器更新失败')
 }

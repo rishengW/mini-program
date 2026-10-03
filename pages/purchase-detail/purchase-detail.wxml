@@ -89,8 +89,11 @@
       <text wx:if="{{verifyStatus === 'approved'}}" class="tag tag-success">已核销</text>
       <text wx:elif="{{verifyStatus === 'pending'}}" class="tag tag-warning">待核销（凭证已提交）</text>
       <text wx:elif="{{verifyStatus === 'rejected'}}" class="tag tag-danger">凭证被驳回，请重新提交</text>
+      <text wx:elif="{{voucherBlockReason}}" class="tag tag-grey">暂不可提交凭证</text>
       <text wx:else class="tag tag-info">待提交凭证</text>
     </view>
+    <!-- P0-7：静默不可达改为可解释阻塞——不可提交时必须给出原因 -->
+    <view wx:if="{{voucherBlockReason}}" class="text-sm" style="margin-top:8rpx;color:#FF6B00;">{{voucherBlockReason}}</view>
     <view wx:if="{{voucherImages.length}}" class="voucher-list">
       <image wx:for="{{voucherImages}}" wx:key="*this" src="{{item}}" mode="aspectFill" class="voucher-img" bindtap="previewVoucher" data-index="{{index}}" />
     </view>

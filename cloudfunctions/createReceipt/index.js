@@ -71,20 +71,25 @@ function getItemAbnormalNames(item) {
 }
 
 async function getNextVersion(reportType, scopeId, relatedDate) {
-  // 原子计数器取下一版本号，避免并发"查最大+1"取得相同版本（报表路径本身仍含收货单号保证唯一）
+  // P0-4：CAS 取号——读旧值 → 条件更新（count 仍等于旧值才写旧值+1）→ updated===1 才算抢到。
+  // 原「_.inc 后回读」是两步操作，并发双方会回读到同一个最终值 → 版本号跳号、report_id 碰撞。
   const counterId = `${reportType}_${scopeId}_${relatedDate}`
   const counters = db.collection('report_version_counter')
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const incRes = await counters.doc(counterId).update({ data: { count: _.inc(1), updated_at: db.serverDate() } })
-    if (incRes.stats && incRes.stats.updated > 0) {
-      const doc = await counters.doc(counterId).get()
-      const count = Number(doc.data && doc.data.count)
-      if (Number.isFinite(count) && count > 0) return count
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const doc = await counters.doc(counterId).get().catch(() => null)
+    const current = doc && doc.data ? Number(doc.data.count) : null
+    if (current !== null && Number.isFinite(current) && current >= 0) {
+      // 条件更新独占版本号：并发方抢先写入后 where 不再命中（updated===0），重读重试
+      const casRes = await counters.where({ _id: counterId, count: current })
+        .update({ data: { count: current + 1, updated_at: db.serverDate() } })
+      if (casRes.stats && casRes.stats.updated === 1) return current + 1
+      continue
     }
     try {
+      // 计数器不存在：创建 count=1；_id 撞车说明并发方已建，重试走 CAS 路径
       await counters.add({ data: { _id: counterId, count: 1, updated_at: db.serverDate() } })
       return 1
-    } catch (err) { /* 并发创建冲突，重试自增 */ }
+    } catch (err) { /* 并发创建冲突，重试 */ }
   }
   throw new Error('getNextVersion: 计数器更新失败')
 }
@@ -191,8 +196,10 @@ exports.main = async (event = {}) => {
     if (!Array.isArray(items) || items.length === 0) {
       return { code: -1, msg: '验收商品信息为空，请返回订单后重试' }
     }
-    if (items.length > 100) {
-      return { code: -1, msg: '每单验收商品最多100种' }
+    if (items.length > 50) {
+      // P2-15：单事务最坏 ≈ 行数×(1明细+4异常)+单据+订单+消息 ≈ 6×行数。
+      // 100 行时 >600 操作，触及平台单事务上限会硬失败（不重试）——压到 50 行保安全
+      return { code: -1, msg: '每单验收商品最多50种，请分批提交收货' }
     }
     const hasInvalidItem = items.some(item => (
       !item || !item.productId || !item.productName || !item.unit ||
@@ -225,7 +232,7 @@ exports.main = async (event = {}) => {
     if (order.store_id && order.store_id !== storeId) {
       return { code: -1, msg: '订单门店与当前门店不一致，请切换门店后重试' }
     }
-    if (!['approved', 'report_generated', 'partial_received', 'to_receive'].includes(order.order_status)) {
+    if (!['approved', 'report_generated', 'partial_received'].includes(order.order_status)) {
       return { code: -1, msg: '订单尚未审批通过，不可收货' }
     }
     storeName = order.store_name || storeName
@@ -319,16 +326,20 @@ exports.main = async (event = {}) => {
     // 加随机后缀防并发碰撞（同毫秒创建多张收货单）
     const receiptId = 'RCP' + Date.now() + crypto.randomBytes(3).toString('hex')
 
+    // P2-14：店长 ID 在事务外预取（普通查询），事务内只消费结果
+    const abnormalRecipient = await getStoreManagerId(storeId)
+
     // 实收少于下单即为少货，即使用户未手动勾选也按异常处理：
     // 避免短收被静默记为"已收货"，少货行不进入付款结算，走异常流程跟进。
-    // B3 分批收货：按「历史累计实收 + 本次实收」与下单量比较，未收完的行不算少货。
+    // B3 分批收货：按「历史累计实收 + 本次实收」与下单量比较——此处为预检，
+    // P0-3/P1-5/P1-16：事务内会用新鲜 txHistoryQty 重算，并发下以事务内为准。
     items.forEach(item => {
       const cumulativeQty = (historyQtyMap[item.orderItemId] || 0) + item.receivedQty
       if (cumulativeQty < item.orderQty) item.isShortage = true
     })
 
-    const hasAbnormal = items.some(item => getItemAbnormalTypes(item).length > 0)
-    const abnormalTypeNames = [...new Set(items.reduce((all, item) => all.concat(getItemAbnormalNames(item)), []))]
+    let hasAbnormal = items.some(item => getItemAbnormalTypes(item).length > 0)
+    let abnormalTypeNames = [...new Set(items.reduce((all, item) => all.concat(getItemAbnormalNames(item)), []))]
 
     // 价格以数据库中的价格为准，避免客户端旧价格进入结算报表。
     // 批量取价：按 product_id 分块一次查回，再在内存中按 (供应商, 商品) 匹配，
@@ -383,18 +394,14 @@ exports.main = async (event = {}) => {
       }
     }
 
-    // B3 分批收货：判断本批收完后是否所有订单行都已收齐（累计实收 = 下单量）
-    const isFinalBatch = orderItems.every(oi => {
-      const key = oi.item_id || oi._id
-      const orderQty = Number(oi.order_qty) || 0
-      const thisQtyMap = {}
-      items.forEach(item => { thisQtyMap[item.orderItemId] = (thisQtyMap[item.orderItemId] || 0) + item.receivedQty })
-      return (historyQtyMap[key] || 0) + (thisQtyMap[key] || 0) >= orderQty
-    })
+    // P0-3：终态判定（is_final）已移入事务内用新鲜 txHistoryQty 重算，
+    // 事务外快照在并发（SDK 事务冲突自动重试）下必然过期，会造成订单永久卡 partial_received
 
     // 收货主表、明细和订单状态必须同时成功或同时回滚。
     // committedBatchNo 由事务内赋值，提交后用于 CSV 批次展示，保证与落库 batch_no 一致
     let committedBatchNo = batchNo
+    // P0-3：事务内重算的终态结果回传到事务外，供 CSV 表头「（收齐）」标记使用
+    let committedIsFinal = false
     await db.runTransaction(async transaction => {
       const latestOrderRes = await transaction.collection('purchase_order').doc(order._id).get()
       // B3 分批收货：已全部收齐（received）才拦截；receipt_abnormal 状态允许继续补收
@@ -403,14 +410,17 @@ exports.main = async (event = {}) => {
         duplicateError.code = 'RECEIPT_EXISTS'
         throw duplicateError
       }
-      if (!['approved', 'report_generated', 'partial_received', 'to_receive'].includes(latestOrderRes.data.order_status)) {
+      if (!['approved', 'report_generated', 'partial_received'].includes(latestOrderRes.data.order_status)) {
         const statusError = new Error('ORDER_NOT_RECEIVABLE')
         statusError.code = 'ORDER_NOT_RECEIVABLE'
         throw statusError
       }
 
-      // 事务内复查历史累计实收，防止并发提交超收（事务外的校验只是预检）
-      const txItemIds = items.map(item => item.orderItemId).filter(Boolean)
+      // 事务内复查历史累计实收，防止并发提交超收（事务外的校验只是预检）。
+      // P0-3：必须覆盖「全部订单行」的历史（不只本批行），否则 is_final 会把
+      // 其他并发批次已收齐的行误判为未收齐
+      const txItemIds = [...new Set(orderItems.map(oi => oi.item_id || oi._id).filter(Boolean)
+        .concat(items.map(item => item.orderItemId).filter(Boolean)))]
       const txHistoryRes = await transaction.collection('receipt_item')
         .where({ purchase_order_item_id: _.in(txItemIds) })
         .limit(1000)
@@ -432,6 +442,22 @@ exports.main = async (event = {}) => {
         }
       }
 
+      // P0-3/P1-5/P1-16：用事务内新鲜的 txHistoryQty 重算终态与短收。
+      // 事务外快照在 SDK 事务冲突自动重试整个回调时必然过期。
+      const thisQtyMap = {}
+      items.forEach(item => { thisQtyMap[item.orderItemId] = (thisQtyMap[item.orderItemId] || 0) + item.receivedQty })
+      const txIsFinalBatch = orderItems.every(oi => {
+        const key = oi.item_id || oi._id
+        return (txHistoryQty[key] || 0) + (thisQtyMap[key] || 0) >= (Number(oi.order_qty) || 0)
+      })
+      // P1-16：非最终批（还有行未收齐）不生成 shortage 异常——短收只在最终批判定，
+      // 避免正常分批收货把异常台账灌满虚假 shortage 记录
+      if (!txIsFinalBatch) {
+        items.forEach(item => { item.isShortage = false })
+      }
+      hasAbnormal = items.some(item => getItemAbnormalTypes(item).length > 0)
+      abnormalTypeNames = [...new Set(items.reduce((all, item) => all.concat(getItemAbnormalNames(item)), []))]
+
       // 批次号在事务内按已提交收货单数生成，避免并发重号
       const txHistoryReceiptRes = await transaction.collection('receipt')
         .where({ purchase_order_id: purchaseOrderId })
@@ -439,6 +465,7 @@ exports.main = async (event = {}) => {
         .get()
       const txBatchNo = txHistoryReceiptRes.data.length + 1
       committedBatchNo = txBatchNo
+      committedIsFinal = txIsFinalBatch
 
       await transaction.collection('receipt').add({
         data: {
@@ -451,7 +478,7 @@ exports.main = async (event = {}) => {
           receipt_status: hasAbnormal ? 'abnormal' : 'completed', overall_remark: overallRemark,
           photo_file_ids: photoFileIds.filter(Boolean),
           batch_no: txBatchNo,
-          is_final: isFinalBatch,
+          is_final: txIsFinalBatch,
           created_at: db.serverDate()
         }
       })
@@ -520,7 +547,8 @@ exports.main = async (event = {}) => {
       }
 
       // B3 分批收货：本批收齐→received（有异常则 receipt_abnormal），未收齐→partial_received
-      const nextStatus = isFinalBatch ? (hasAbnormal ? 'receipt_abnormal' : 'received') : 'partial_received'
+      // （P0-3：txIsFinalBatch 为事务内新鲜重算值）
+      const nextStatus = txIsFinalBatch ? (hasAbnormal ? 'receipt_abnormal' : 'received') : 'partial_received'
       await transaction.collection('purchase_order')
         .doc(order._id)
         .update({ data: { order_status: nextStatus, updated_at: db.serverDate() } })
@@ -531,7 +559,8 @@ exports.main = async (event = {}) => {
       // lost response.
       // 清单 #5 门店内消息可见口径：异常消息定向给店长（处理责任人），
       // 正常收货完成消息保留门店广播（厨师等全员可见）。
-      const abnormalRecipient = hasAbnormal ? await getStoreManagerId(storeId) : ''
+      // P2-14：店长查询已在事务外预取（abnormalRecipient 由外部变量带入）——
+      // 事务内跑普通查询不带 transactionId，既不受隔离保护又拉长事务墙钟时间
       await transaction.collection('message').add({
         data: {
           message_id: `MSG_RECEIVE_${receiptId}`,
@@ -541,7 +570,7 @@ exports.main = async (event = {}) => {
             ? `${receiptDate} ${storeName}收货存在${abnormalTypeNames.join('、')}，请及时处理`
             : `${receiptDate} ${storeName}采购单已完成收货验收`,
           biz_id: receiptId,
-          recipient_user_id: abnormalRecipient,
+          recipient_user_id: hasAbnormal ? abnormalRecipient : '',
           store_id: storeId,
           read: false,
           created_at: db.serverDate()
@@ -554,7 +583,7 @@ exports.main = async (event = {}) => {
     // 单据信息头共用字段：订单号、门店、收货日期、下单日期、期望到货、经办人
     const orderDateStr = order.order_date || ''
     const deliveryDateStr = order.delivery_date || ''
-    const infoHead = [csvField('采购单号'), csvField(purchaseOrderId), csvField('门店'), csvField(storeName), csvField('收货日期'), csvField(receiptDate), csvField('下单日期'), csvField(orderDateStr), csvField('期望到货'), csvField(deliveryDateStr), csvField('验收人'), csvField(receivedBy || ''), csvField('批次'), csvField(`第${committedBatchNo}批${isFinalBatch ? '（收齐）' : ''}`)].join(',') + '\n'
+    const infoHead = [csvField('采购单号'), csvField(purchaseOrderId), csvField('门店'), csvField(storeName), csvField('收货日期'), csvField(receiptDate), csvField('下单日期'), csvField(orderDateStr), csvField('期望到货'), csvField(deliveryDateStr), csvField('验收人'), csvField(receivedBy || ''), csvField('批次'), csvField(`第${committedBatchNo}批${committedIsFinal ? '（收齐）' : ''}`)].join(',') + '\n'
 
     // 批量查供应商名称（明细行供应商字段供各报表使用）
     const supplierNameMap = {}

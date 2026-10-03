@@ -96,6 +96,26 @@ exports.main = async (event = {}) => {
       items = items.map(item => ({ ...item, supplier_name: supplierNames[item.supplier_id] || '' }))
     }
 
+    // P1-17：聚合每行已收累计（分批收货时前端展示"已收 X / 剩余 Y"），
+    // 一次查询 receipt_item 按 purchase_order_item_id 汇总，避免 N+1
+    if (items.length) {
+      const itemIds = items.map(it => it.item_id || it._id).filter(Boolean)
+      const receivedRes = await db.collection('receipt_item')
+        .where({ purchase_order_item_id: _.in(itemIds) })
+        .limit(1000)
+        .get()
+      const receivedMap = {}
+      ;(receivedRes.data || []).forEach(ri => {
+        const key = ri.purchase_order_item_id
+        if (!key) return
+        receivedMap[key] = (receivedMap[key] || 0) + (Number(ri.received_qty) || 0)
+      })
+      items = items.map(item => {
+        const received = receivedMap[item.item_id || item._id] || 0
+        return { ...item, received_total: received, remaining_qty: Math.max(0, (Number(item.order_qty) || 0) - received) }
+      })
+    }
+
     // 查关联收货记录
     const receiptRes = await db.collection('receipt')
       .where({ purchase_order_id: orderId })

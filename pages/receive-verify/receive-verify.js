@@ -77,11 +77,18 @@ Page({
     }
 
     const items = order.items.map(item => {
+      // P1-17：分批收货时展示每行「已收 X / 剩余 Y」，默认本批上限为剩余量
+      const receivedTotal = Number(item.received_total) || 0
+      const remainingQty = item.remaining_qty !== undefined
+        ? Number(item.remaining_qty) || 0
+        : Math.max(0, (Number(item.orderQty) || 0) - receivedTotal)
       return {
         ...item,
         productName: item.productNameSnapshot,
         unit: item.unitSnapshot,
         orderQty: item.orderQty,
+        receivedTotal,
+        remainingQty,
         // B3 分批收货：默认本批不收该行，数量留空/0 表示本批不收
         receivedQty: 0,
         priceSnapshot: 0,
