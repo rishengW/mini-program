@@ -1,4 +1,21 @@
 {
   "simulatorPluginLibVersion": {},
-  "compileType": "miniprogram"
+  "compileType": "miniprogram",
+  "packOptions": {
+    "ignore": [
+      { "type": "folder", "value": "_tmp_test" },
+      { "type": "folder", "value": "seed-data" },
+      { "type": "folder", "value": "scripts" },
+      { "type": "folder", "value": "cloudfunctions" },
+      { "type": "file", "value": "审查报告-2026-09-30.md" },
+      { "type": "file", "value": "修复计划-2026-10-03.md" },
+      { "type": "file", "value": "README.md" },
+      { "type": "file", "value": "review.md" },
+      { "type": "file", "value": "log.md" },
+      { "type": "file", "value": "业务模糊点确认清单.md" },
+      { "type": "file", "value": "采购流程图.html" },
+      { "type": "suffix", "value": ".md" },
+      { "type": "suffix", "value": ".html" }
+    ]
+  }
 }
