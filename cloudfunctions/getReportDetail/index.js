@@ -115,8 +115,10 @@ exports.main = async (event = {}) => {
             receivedQty: item.received_qty,
             unit: item.unit_snapshot,
             unitPrice: item.price_snapshot,
-            subtotal: (item.received_qty * item.price_snapshot).toFixed(2) * 1,
+            // P2-62/P0-8：与 CSV 生成侧同为"逐行先舍入到分"，保证页面行小计与文件一致
+            subtotal: Math.round((Number(item.received_qty) || 0) * (Number(item.price_snapshot) || 0) * 100) / 100,
             payable: item.payable_flag,
+            isManual: !!item.is_manual,
             abnormal: abnormalTypeNames.length > 0,
             abnormalTypeNames,
             abnormalText: abnormalTypeNames.join('、'),
@@ -186,8 +188,10 @@ exports.main = async (event = {}) => {
             orderQty: item.order_qty_snapshot,
             unit: item.unit_snapshot,
             unitPrice: item.price_snapshot,
-            subtotal: (item.received_qty * item.price_snapshot).toFixed(2) * 1,
+            // P2-62/P0-8：与 CSV 生成侧同为"逐行先舍入到分"，保证页面行小计与文件一致
+            subtotal: Math.round((Number(item.received_qty) || 0) * (Number(item.price_snapshot) || 0) * 100) / 100,
             payable: item.payable_flag,
+            isManual: !!item.is_manual,
             abnormal: abnormalTypeNames.length > 0,
             abnormalTypeNames,
             abnormalText: abnormalTypeNames.join('、'),

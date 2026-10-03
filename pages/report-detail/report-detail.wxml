@@ -22,6 +22,9 @@
     <view wx:if="{{report.hasAbnormal}}" class="report-abnormal-banner">
       收货异常：{{report.abnormalSummary || '请查看明细中的异常标记'}}
     </view>
+    <view wx:if="{{report.excludedNote}}" class="report-abnormal-banner" style="margin-top:8rpx;">
+      {{report.excludedNote}}
+    </view>
     
     <!-- 下单报表 -->
     <block wx:if="{{report.reportType === 'store_order_report'}}">

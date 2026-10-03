@@ -330,7 +330,7 @@ exports.main = async (event = {}) => {
     const hasAbnormal = items.some(item => getItemAbnormalTypes(item).length > 0)
     const abnormalTypeNames = [...new Set(items.reduce((all, item) => all.concat(getItemAbnormalNames(item)), []))]
 
-    // 价格以数据库中的当前供应商价格为准，避免客户端旧价格进入结算报表。
+    // 价格以数据库中的价格为准，避免客户端旧价格进入结算报表。
     // 批量取价：按 product_id 分块一次查回，再在内存中按 (供应商, 商品) 匹配，
     // 避免每条明细一次数据库请求。
     const priceMap = {}
@@ -339,11 +339,23 @@ exports.main = async (event = {}) => {
     const priceProductIds = [...new Set(items.filter(item => item.supplierId && !item.isManual).map(item => item.productId))]
     for (let i = 0; i < priceProductIds.length; i += 20) {
       const idChunk = priceProductIds.slice(i, i + 20)
+      // P1-11（#10 口径"结算取收货日现价"）：按 effective_date <= 收货日的价格行中
+      // 取最新一档，而非只看 is_current 标志——补录历史日期（#16 允许）时
+      // is_current 指向今天的价，会把历史单据的价格快照写错。
+      // 同日多行时优先 is_current；收货日之前无任何价格行则视为缺价，走 missing_price 流程。
       const priceRes = await db.collection('supplier_product_price')
-        .where({ product_id: _.in(idChunk), is_current: 1 })
-        .limit(100)
+        .where({ product_id: _.in(idChunk), effective_date: _.lte(receiptDate) })
+        .limit(1000)
         .get()
-      priceRes.data.forEach(p => { priceMap[`${p.supplier_id}|${p.product_id}`] = Number(p.price) || 0 })
+      const priceCandidates = {}
+      priceRes.data.forEach(p => {
+        const key = `${p.supplier_id}|${p.product_id}`
+        const cur = priceCandidates[key]
+        if (!cur) { priceCandidates[key] = p; return }
+        const cmp = String(p.effective_date || '').localeCompare(String(cur.effective_date || ''))
+        if (cmp > 0 || (cmp === 0 && p.is_current === 1 && cur.is_current !== 1)) priceCandidates[key] = p
+      })
+      Object.keys(priceCandidates).forEach(key => { priceMap[key] = Number(priceCandidates[key].price) || 0 })
     }
     for (let i = 0; i < items.length; i++) {
       const item = items[i]
@@ -360,7 +372,9 @@ exports.main = async (event = {}) => {
       if (item.isManual) {
         item.payableFlag = false
       } else {
-        item.payableFlag = !hardAbnormal && item.payableFlag !== false && priceSnapshot > 0
+        // P1-10：付款资格完全由服务端裁决（异常类型 + 协议价），不信任客户端传来的
+        // payableFlag——否则改客户端参数即可把正常行挤出（或塞回）结算账单
+        item.payableFlag = !hardAbnormal && priceSnapshot > 0
         // #11 拍板（2026-09-24）：档案商品缺价不再是静默漏账——标记 missing_price，
         // 生成 abnormal_record 提醒补价，补价后可走 repriceReceipt 补出账单。
         if (!item.isManual && priceSnapshot <= 0 && item.supplierId && item.receivedQty > 0) {

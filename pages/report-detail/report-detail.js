@@ -51,8 +51,15 @@ Page({
         rpt.abnormalSummary = [...new Set(rows.reduce((all, row) => all.concat(row.abnormalTypeNames || []), []))].join('、')
       }
       if (rpt.reportType.includes('price')) {
-        const sum = rows.reduce((s, r) => s + (r.subtotal || 0), 0)
+        // P0-8：与 Excel 生成口径一致——只累加可付款的非手动行，
+        // 被剔除的异常行数单独提示，页面合计才能与下载文件对平
+        const counted = rows.filter(r => r.payable !== false && !r.isManual)
+        const excluded = rows.length - counted.length
+        const sum = counted.reduce((s, r) => s + (Number(r.subtotal) || 0), 0)
         totalAmount = sum.toFixed(2)
+        if (excluded > 0) {
+          rpt.excludedNote = `另有 ${excluded} 行异常/不可付款行未计入合计（与下载文件口径一致）`
+        }
       } else if (rpt.reportType.includes('summary')) {
         const sum = rows.reduce((s, r) => s + (r.subtotal || 0), 0)
         totalAmount = sum.toFixed(2)

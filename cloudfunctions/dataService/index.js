@@ -543,7 +543,14 @@ async function auditOrder(event) {
       const approvedQty = qtyMap[item.item_id]
       if (event.status === 'approved' && Number.isFinite(approvedQty) && approvedQty > 0) {
         await transaction.collection('purchase_order_item').doc(item._id).update({
-          data: { order_qty: approvedQty, approved_qty: approvedQty, updated_at: db.serverDate() }
+          data: {
+            // P1-12：首次改量时把审核前的下单量留档到 original_order_qty（仅首次，
+            // 不随重复审核覆盖），order_qty 被改后对账仍可还原原始量（等式4）
+            original_order_qty: item.original_order_qty === undefined ? item.order_qty : item.original_order_qty,
+            order_qty: approvedQty,
+            approved_qty: approvedQty,
+            updated_at: db.serverDate()
+          }
         })
       }
     }
@@ -894,91 +901,122 @@ async function settleReceipt(event) {
     return { code: -1, msg: '该收货单已补结算，请勿重复操作' }
   }
 
-  // 已解决且裁决为"按实收付款"的异常行，随补结算一并转回可付款
-  const payReceivedRecords = abnormalRes.data.filter(item => item.status !== 'closed' && item.payment_decision === 'pay_received')
-  const payReceivedKeys = new Set(payReceivedRecords.map(r => r.abnormal_id))
-  if (payReceivedKeys.size > 0) {
+  // P1-2 并发锁：条件更新抢占，双管理员同时补结算只有一个能进入生成流程；
+  // 锁带时间戳，超过 10 分钟视为上次执行崩溃残留，允许接管自愈
+  const staleCutoff = Date.now() - 10 * 60 * 1000
+  const lockRes = await db.collection('receipt').where(_.or([
+    { _id: receipt._id, settle_lock: _.neq(true) },
+    { _id: receipt._id, settle_lock_at: _.lt(staleCutoff) }
+  ])).update({
+    data: { settle_lock: true, settle_lock_at: Date.now(), updated_at: db.serverDate() }
+  })
+  if (!lockRes.stats || lockRes.stats.updated === 0) {
+    return { code: -1, msg: '补结算正在处理中，请勿重复操作' }
+  }
+
+  try {
+    // P0-2 核心修复：只结算本次因异常处理（pay_received 裁决）解锁的行。
+    // 原 ⑥ 账单已覆盖收货时可付款的行，补充账单只含增量，两者合计 ≡ 应付总额；
+    // 不再把全部可付款行重复计入。
+    const payReceivedRecords = abnormalRes.data.filter(item => item.status !== 'closed' && item.payment_decision === 'pay_received')
     const itemResForPay = await db.collection('receipt_item')
       .where({ receipt_id: receiptId })
       .limit(1000)
       .get()
+    const unlockedIds = new Set()
     for (const rec of payReceivedRecords) {
       // abnormal_id 格式：{receiptId}_{行序号}_{type}，按行序号定位 receipt_item_id
       const parts = String(rec.abnormal_id || '').split('_')
       if (parts.length < 3 || parts[0] !== receiptId) continue
       const itemItemId = receiptId + '_' + parts[1]
       const target = itemResForPay.data.find(it => it.receipt_item_id === itemItemId)
-      if (target && Number(target.price_snapshot) > 0) {
+      if (target && !target.is_manual && Number(target.price_snapshot) > 0) {
+        unlockedIds.add(target._id)
         await db.collection('receipt_item').doc(target._id).update({
           data: { payable_flag: true, updated_at: db.serverDate() }
         })
       }
     }
-  }
 
-  const itemRes = await db.collection('receipt_item')
-    .where({ receipt_id: receiptId })
-    .limit(1000)
-    .get()
-  // payable_flag 缺失（旧数据）视为可付款；价格为 0 的行跳过不结算；
-  // 清单 #24：手动商品行显式排除（金额走凭证核销回填，不进补结算）
-  const payableItems = itemRes.data.filter(item => !item.is_manual && item.payable_flag !== false && Number(item.price_snapshot) > 0)
-  if (payableItems.length === 0) return { code: -1, msg: '无可结算的明细行' }
+    if (unlockedIds.size === 0) {
+      return { code: -1, msg: '没有因异常处理解锁的明细行，无需补结算' }
+    }
 
-  const receiptDate = receipt.receipt_date || new Date().toISOString().slice(0, 10)
-  const storeId = receipt.store_id || ''
-  const storeName = receipt.store_name || ''
-  const purchaseOrderId = receipt.purchase_order_id || ''
+    const itemRes = await db.collection('receipt_item')
+      .where({ receipt_id: receiptId })
+      .limit(1000)
+      .get()
+    // 只取本次解锁的行；价格为 0 的行跳过不结算；
+    // 清单 #24：手动商品行显式排除（金额走凭证核销回填，不进补结算）
+    const payableItems = itemRes.data.filter(item =>
+      unlockedIds.has(item._id) && !item.is_manual && Number(item.price_snapshot) > 0)
+    if (payableItems.length === 0) return { code: -1, msg: '无可结算的明细行' }
 
-  // 按供应商分组
-  const supplierMap = {}
-  payableItems.forEach(item => {
-    const sid = item.supplier_id || 'unknown'
-    if (!supplierMap[sid]) supplierMap[sid] = { items: [], name: '' }
-    supplierMap[sid].items.push(item)
-  })
-  const supplierIds = Object.keys(supplierMap).filter(sid => sid !== 'unknown')
-  for (let i = 0; i < supplierIds.length; i += 20) {
-    const idChunk = supplierIds.slice(i, i + 20)
-    const supRes = await db.collection('supplier').where({ supplier_id: _.in(idChunk) }).limit(100).get()
-    supRes.data.forEach(s => {
-      if (supplierMap[s.supplier_id]) supplierMap[s.supplier_id].name = s.supplier_name
+    const receiptDate = receipt.receipt_date || new Date().toISOString().slice(0, 10)
+    const storeId = receipt.store_id || ''
+    const storeName = receipt.store_name || ''
+    const purchaseOrderId = receipt.purchase_order_id || ''
+
+    // 按供应商分组
+    const supplierMap = {}
+    payableItems.forEach(item => {
+      const sid = item.supplier_id || 'unknown'
+      if (!supplierMap[sid]) supplierMap[sid] = { items: [], name: '' }
+      supplierMap[sid].items.push(item)
     })
+    const supplierIds = Object.keys(supplierMap).filter(sid => sid !== 'unknown')
+    for (let i = 0; i < supplierIds.length; i += 20) {
+      const idChunk = supplierIds.slice(i, i + 20)
+      const supRes = await db.collection('supplier').where({ supplier_id: _.in(idChunk) }).limit(100).get()
+      supRes.data.forEach(s => {
+        if (supplierMap[s.supplier_id]) supplierMap[s.supplier_id].name = s.supplier_name
+      })
+    }
+
+    // 增量账单：只含本次解锁行，原 ⑥ 账单保持有效，不标 superseded
+    const infoHead = [csvField('采购单号'), csvField(purchaseOrderId), csvField('门店'), csvField(storeName), csvField('收货日期'), csvField(receiptDate), csvField('备注'), csvField('异常处理后补结算（增量）')].join(',') + '\n'
+    const generatedSuppliers = []
+    for (const sid of supplierIds) {
+      const supItems = supplierMap[sid].items
+      const supName = supplierMap[sid].name || sid
+      const ver = await getNextVersion('supplier_receipt_price_report', sid, receiptDate)
+
+      let csv = infoHead + [csvField('商品名称'), csvField('门店'), csvField('到货数量'), csvField('单位'), csvField('单价'), csvField('小计')].join(',') + '\n'
+      let total = 0
+      supItems.forEach(item => {
+        const price = Number(item.price_snapshot) || 0
+        const qty = Number(item.received_qty) || 0
+        const sub = Math.round(qty * price * 100) / 100
+        total = Math.round((total + sub) * 100) / 100
+        csv += [csvField(item.product_name), csvField(storeName), csvField(qty), csvField(item.unit_snapshot || ''), csvField(price), csvField(sub.toFixed(2))].join(',') + '\n'
+      })
+      csv += [csvField('合计'), csvField(''), csvField(''), csvField(''), csvField(''), csvField(total.toFixed(2))].join(',') + '\n'
+
+      const filePath = `reports/supplier/${receiptDate}/supplier-receipt-price-${safePathPart(supName)}-${receiptDate}-${receiptId}-settle-v${ver}.csv`
+      const uploadRes = await cloud.uploadFile({ cloudPath: filePath, fileContent: Buffer.from(String.fromCharCode(0xFEFF) + csv, 'utf-8') })
+      await db.collection('report_file').add({
+        data: {
+          report_id: 'RPT_SURP_' + sid + '_' + receiptId + '_S', report_type: 'supplier_receipt_price_report',
+          report_scope: 'supplier', scope_id: sid, scope_name: supName,
+          related_date: receiptDate, source_order_id: purchaseOrderId, basis_date_type: 'receipt_date',
+          file_name: filePath, file_url: uploadRes.fileID, file_version: ver,
+          generated_at: db.serverDate(), generated_by_system: true, status: 'generated',
+          settle_for_receipt: receiptId, settle_type: 'increment'
+        }
+      })
+      generatedSuppliers.push(sid)
+    }
+    return { code: 0, data: { generatedSuppliers, count: generatedSuppliers.length } }
+  } finally {
+    // 无论成功失败都释放并发锁；失败后可重新发起，成功后由上方 _S 幂等检查兜底
+    try {
+      await db.collection('receipt').doc(receipt._id).update({
+        data: { settle_lock: false, settle_lock_at: null, updated_at: db.serverDate() }
+      })
+    } catch (e) {
+      console.error('[settleReceipt] 释放补结算锁失败:', e)
+    }
   }
-
-  const infoHead = [csvField('采购单号'), csvField(purchaseOrderId), csvField('门店'), csvField(storeName), csvField('收货日期'), csvField(receiptDate), csvField('备注'), csvField('异常处理后补结算')].join(',') + '\n'
-  const generatedSuppliers = []
-  for (const sid of supplierIds) {
-    const supItems = supplierMap[sid].items
-    const supName = supplierMap[sid].name || sid
-    const ver = await getNextVersion('supplier_receipt_price_report', sid, receiptDate)
-
-    let csv = infoHead + [csvField('商品名称'), csvField('门店'), csvField('到货数量'), csvField('单位'), csvField('单价'), csvField('小计')].join(',') + '\n'
-    let total = 0
-    supItems.forEach(item => {
-      const price = Number(item.price_snapshot) || 0
-      const qty = Number(item.received_qty) || 0
-      const sub = Math.round(qty * price * 100) / 100
-      total = Math.round((total + sub) * 100) / 100
-      csv += [csvField(item.product_name), csvField(storeName), csvField(qty), csvField(item.unit_snapshot || ''), csvField(price), csvField(sub.toFixed(2))].join(',') + '\n'
-    })
-    csv += [csvField('合计'), csvField(''), csvField(''), csvField(''), csvField(''), csvField(total.toFixed(2))].join(',') + '\n'
-
-    const filePath = `reports/supplier/${receiptDate}/supplier-receipt-price-${safePathPart(supName)}-${receiptDate}-${receiptId}-settle-v${ver}.csv`
-    const uploadRes = await cloud.uploadFile({ cloudPath: filePath, fileContent: Buffer.from(String.fromCharCode(0xFEFF) + csv, 'utf-8') })
-    await db.collection('report_file').add({
-      data: {
-        report_id: 'RPT_SURP_' + sid + '_' + receiptId + '_S', report_type: 'supplier_receipt_price_report',
-        report_scope: 'supplier', scope_id: sid, scope_name: supName,
-        related_date: receiptDate, source_order_id: purchaseOrderId, basis_date_type: 'receipt_date',
-        file_name: filePath, file_url: uploadRes.fileID, file_version: ver,
-        generated_at: db.serverDate(), generated_by_system: true, status: 'generated',
-        settle_for_receipt: receiptId
-      }
-    })
-    generatedSuppliers.push(sid)
-  }
-  return { code: 0, data: { generatedSuppliers, count: generatedSuppliers.length } }
 }
 
 // ===== 清单 #7：下单报表失败后补生成 ① ② 报表 =====
