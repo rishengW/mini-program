@@ -210,7 +210,7 @@ exports.main = async (event = {}) => {
     }
     // 照片 fileID 必须位于本订单的上传目录下（路径规则见 utils/cloud.js 的 uploadReceiptPhotos）
     const photoPrefix = `receipts/${purchaseOrderId}/`
-    if (photoFileIds.some(id => typeof id !== 'string' || !id.includes(photoPrefix))) {
+    if (photoFileIds.some(id => typeof id !== 'string' || !id.startsWith(photoPrefix))) {
       return { code: -1, msg: '验收照片信息无效，请重新上传' }
     }
 

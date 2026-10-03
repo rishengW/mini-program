@@ -1443,6 +1443,12 @@ async function verifyManualOrder(event) {
   const orderId = String(event.orderId || '').trim()
   const amount = Number(event.amount)
   const voucherFileIds = Array.isArray(event.voucherFileIds) ? event.voucherFileIds.filter(Boolean) : []
+  // P0-5：凭证数量上限 + fileID 必须位于本订单的凭证目录（路径规则见 purchase-detail 的上传 cloudPath）
+  const voucherPrefix = `vouchers/${orderId}/`
+  if (voucherFileIds.length > 9) return { code: -1, msg: '付款凭证最多9张' }
+  if (voucherFileIds.some(id => typeof id !== 'string' || !id.startsWith(voucherPrefix))) {
+    return { code: -1, msg: '付款凭证信息无效，请重新上传' }
+  }
   const note = String(event.note || '').trim()
 
   const orderRes = await db.collection('purchase_order').where({ purchase_order_id: orderId }).limit(1).get()
@@ -1478,9 +1484,10 @@ async function verifyManualOrder(event) {
     if (!submitRes.stats || submitRes.stats.updated === 0) {
       return { code: -1, msg: '该单已核销通过，无需重复提交' }
     }
-    // 被替换掉的旧凭证图从云存储清掉，避免驳回重传堆积孤儿文件
+    // 被替换掉的旧凭证图从云存储清掉，避免驳回重传堆积孤儿文件。
+    // P0-5：只删通过前缀校验的本订单文件，防止越权删除他人/他门店的 fileID
     const oldFileIds = Array.isArray(order.verify_voucher_file_ids) ? order.verify_voucher_file_ids : []
-    const staleFileIds = oldFileIds.filter(id => id && !voucherFileIds.includes(id))
+    const staleFileIds = oldFileIds.filter(id => id && typeof id === 'string' && id.startsWith(voucherPrefix) && !voucherFileIds.includes(id))
     if (staleFileIds.length) {
       try {
         await cloud.deleteFile({ fileList: staleFileIds })
@@ -1495,6 +1502,8 @@ async function verifyManualOrder(event) {
   if (!['approve', 'reject'].includes(action)) return { code: -1, msg: '无效的核销动作' }
   if (order.verify_status !== 'pending') return { code: -1, msg: '该单没有待核销的凭证' }
   if (action === 'reject') {
+    // P2-24：驳回必须留原因，否则提交人不知道要改什么，审计链也不完整
+    if (!note) return { code: -1, msg: '请填写驳回原因' }
     const rejectRes = await db.collection('purchase_order')
       .where({ _id: order._id, verify_status: 'pending' })
       .update({
