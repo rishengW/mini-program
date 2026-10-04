@@ -377,7 +377,11 @@ async function getNextVersion(reportType, scopeId, relatedDate) {
       // 计数器不存在：创建 count=1；_id 撞车说明并发方已建，重试走 CAS 路径
       await counters.add({ data: { _id: counterId, count: 1, updated_at: db.serverDate() } })
       return 1
-    } catch (err) { /* 并发创建冲突，重试 */ }
+    } catch (err) {
+      // 空 catch 会把「集合不存在/无权限」和「并发撞 _id」压成同一张脸，排查时
+      // 只剩一句无信息量的「计数器更新失败」。仅在最后一次重试时带出真实原因。
+      if (attempt === 4) console.error('[dataService][getNextVersion] 计数器创建失败:', counterId, err)
+    }
   }
   throw new Error('getNextVersion: 计数器更新失败')
 }

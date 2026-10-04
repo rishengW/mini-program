@@ -39,7 +39,7 @@ Page({
 
   initTabs() {
     const app = getApp()
-    const role = app.globalData.userInfo?.role || 'purchaser'
+    const role = (app.globalData.userInfo && app.globalData.userInfo.role) || 'purchaser'
     let tabs = [{ value: 'all', label: '全部', iconBase: 'chart' }]
 
     if (role === 'chef') {
@@ -66,8 +66,8 @@ Page({
 
   async loadReports(page = 1, append = false) {
     const app = getApp()
-    const role = app.globalData.userInfo?.role || 'purchaser'
-    const storeId = app.globalData.currentStore?.storeId
+    const role = (app.globalData.userInfo && app.globalData.userInfo.role) || 'purchaser'
+    const storeId = app.globalData.currentStore && app.globalData.currentStore.storeId
     if (append) this.setData({ isLoadingMore: true })
 
     const result = await cloud.callFunction('getReports', {
@@ -142,7 +142,7 @@ Page({
         const result = await cloud.callFunction('generateSummaryReport', {
           period,
           date,
-          storeId: app.globalData.currentStore?.storeId || ''
+          storeId: (app.globalData.currentStore && app.globalData.currentStore.storeId) || ''
         })
         wx.hideLoading()
         if (!result || result.code !== 0) {

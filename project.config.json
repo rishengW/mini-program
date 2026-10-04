@@ -1,6 +1,7 @@
 {
   "simulatorPluginLibVersion": {},
   "compileType": "miniprogram",
+  "cloudfunctionRoot": "cloudfunctions/",
   "packOptions": {
     "ignore": [
       { "type": "folder", "value": "_tmp_test" },
@@ -14,6 +15,7 @@
       { "type": "file", "value": "log.md" },
       { "type": "file", "value": "业务模糊点确认清单.md" },
       { "type": "file", "value": "采购流程图.html" },
+      { "type": "file", "value": "采购流程图.png" },
       { "type": "suffix", "value": ".md" },
       { "type": "suffix", "value": ".html" }
     ]

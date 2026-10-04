@@ -72,6 +72,38 @@ async function createSubmissionMessage(orderNo, orderDate, storeId, storeName) {
   }
 }
 
+// 报表生成失败的补偿：订单打 missing_reports 标记 + 定向通知超管补生成。
+// 必须是模块级函数——原先这段内联在 catch 里，引用了 try 内 const 声明的 orderData，
+// 而 try/catch 同级块作用域互不可见，导致通知永远写不进去（全链路静默）。
+async function markOrderReportsMissing(orderNo, storeId) {
+  try {
+    await db.collection('purchase_order')
+      .where({ purchase_order_id: orderNo })
+      .update({ data: { missing_reports: true, updated_at: db.serverDate() } })
+    const adminRes = await db.collection('app_user')
+      .where({ role: 'super_admin', status: 1 })
+      .limit(1)
+      .get()
+    const adminId = (adminRes.data[0] && (adminRes.data[0].user_id || adminRes.data[0]._id)) || ''
+    await db.collection('message').add({
+      data: {
+        message_id: `MSG_ORDER_REPORT_MISSING_${orderNo}`,
+        type: 'abnormal',
+        title: '订货报表生成失败',
+        content: `采购单 ${orderNo} 已保存，但订货报表生成失败，请管理员补生成。`,
+        biz_id: orderNo,
+        recipient_user_id: adminId,
+        store_id: storeId || '',
+        read: false,
+        read_by: [],
+        created_at: db.serverDate()
+      }
+    })
+  } catch (markErr) {
+    console.error('[createPurchaseOrder] 缺报表标记/通知写入失败:', markErr)
+  }
+}
+
 // 辅助：原子计数器取下一版本号，避免并发"查最大+1"取得相同版本。
 // 计数器文档 _id = 类型_范围_日期，先原子自增，文档不存在则创建（创建冲突时重试自增）。
 async function getNextVersion(reportType, scopeId, relatedDate) {
@@ -94,13 +126,19 @@ async function getNextVersion(reportType, scopeId, relatedDate) {
       // 计数器不存在：创建 count=1；_id 撞车说明并发方已建，重试走 CAS 路径
       await counters.add({ data: { _id: counterId, count: 1, updated_at: db.serverDate() } })
       return 1
-    } catch (err) { /* 并发创建冲突，重试 */ }
+    } catch (err) {
+      // 空 catch 会把「集合不存在/无权限」和「并发撞 _id」压成同一张脸，排查时
+      // 只剩一句无信息量的「计数器更新失败」。仅在最后一次重试时带出真实原因。
+      if (attempt === 4) console.error('[createPurchaseOrder][getNextVersion] 计数器创建失败:', counterId, err)
+    }
   }
   throw new Error('getNextVersion: 计数器更新失败')
 }
 
 exports.main = async (event = {}) => {
   let persistedOrderNo = ''
+  // 同样提到函数级：catch 与 try 是同级块作用域，取不到 try 内声明的 storeId/orderData
+  let persistedStoreId = ''
   try {
     const user = await getSessionUser(event.authToken)
     if (!user) return { code: -401, msg: '登录已过期，请重新登录' }
@@ -367,6 +405,7 @@ exports.main = async (event = {}) => {
       }
     })
     persistedOrderNo = orderNo
+    persistedStoreId = storeId
 
     if (orderStatus === 'draft') {
       return { code: 0, data: { orderId: orderNo, reportGenerated: false, reportsGenerated: 0 } }
@@ -461,32 +500,7 @@ exports.main = async (event = {}) => {
       console.error('[createPurchaseOrder] 订单已保存，但报表生成失败:', err)
       // 清单 #7：缺口从"静默缺失"变为"有标记、有提示"，管理员可经
       // dataService.regenerateOrderReports 补生成 ① ② 报表。
-      try {
-        await db.collection('purchase_order')
-          .where({ purchase_order_id: persistedOrderNo })
-          .update({ data: { missing_reports: true, updated_at: db.serverDate() } })
-        const adminRes = await db.collection('app_user')
-          .where({ role: 'super_admin', status: 1 })
-          .limit(1)
-          .get()
-        const adminId = (adminRes.data[0] && (adminRes.data[0].user_id || adminRes.data[0]._id)) || ''
-        await db.collection('message').add({
-          data: {
-            message_id: `MSG_ORDER_REPORT_MISSING_${persistedOrderNo}`,
-            type: 'abnormal',
-            title: '订货报表生成失败',
-            content: `采购单 ${persistedOrderNo} 已保存，但订货报表生成失败，请管理员补生成。`,
-            biz_id: persistedOrderNo,
-            recipient_user_id: adminId,
-            store_id: orderData && orderData.store_id || '',
-            read: false,
-            read_by: [],
-            created_at: db.serverDate()
-          }
-        })
-      } catch (markErr) {
-        console.error('[createPurchaseOrder] 缺报表标记/通知写入失败:', markErr)
-      }
+      await markOrderReportsMissing(persistedOrderNo, persistedStoreId)
       return {
         code: 0,
         data: { orderId: persistedOrderNo, reportGenerated: false, reportsGenerated: 0, reportWarning: '订单已保存，但报表生成失败，请联系管理员处理。' }
