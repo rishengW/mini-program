@@ -7,8 +7,9 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 const _ = db.command
 
-// 对供货商不可见的订单状态
-const HIDDEN_ORDER_STATUS = ['draft', 'rejected']
+// 对供货商不可见的订单状态：submitted/pending_approval 尚未通过内部审核，
+// 审核通过（approved）起才对供货商可见——与 auditOrder 通过后才推送供货商通知的口径一致
+const HIDDEN_ORDER_STATUS = ['draft', 'submitted', 'pending_approval', 'rejected']
 // 已完结（含收货中异常），供货商视角统一视为"已完成"；
 // partial_received 按 S8 拍板不算完成——分批收货中剩余批次可能未到，保留供货商已有确认状态
 const DONE_ORDER_STATUS = ['received', 'receipt_abnormal', 'completed']
