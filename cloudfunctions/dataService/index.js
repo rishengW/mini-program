@@ -14,6 +14,13 @@ function hashToken(token) {
   return crypto.createHash('sha256').update(String(token || '')).digest('hex')
 }
 
+// fileID（cloud://{env}.{bucket}/{cloudPath}）→ cloudPath；非法格式返回空串。
+// 200cb63 引入的凭证归属校验曾直接对完整 fileID 做 startsWith，导致带凭证提交必然被拒。
+function cloudPathOfFileId(fileId) {
+  const match = /^cloud:\/\/[^/]+\/(.+)$/.exec(typeof fileId === 'string' ? fileId : '')
+  return match ? match[1] : ''
+}
+
 async function getSessionUser(authToken) {
   if (!authToken) return null
   const tokenHash = hashToken(authToken)
@@ -1554,10 +1561,11 @@ async function verifyManualOrder(event) {
   const orderId = String(event.orderId || '').trim()
   const amount = Number(event.amount)
   const voucherFileIds = Array.isArray(event.voucherFileIds) ? event.voucherFileIds.filter(Boolean) : []
-  // P0-5：凭证数量上限 + fileID 必须位于本订单的凭证目录（路径规则见 purchase-detail 的上传 cloudPath）
+  // P0-5：凭证数量上限 + fileID 必须位于本订单的凭证目录（路径规则见 purchase-detail 的上传 cloudPath）。
+  // fileID 形如 cloud://{env}.{bucket}/vouchers/{订单号}/xx.jpg，须先剥离协议头再按 cloudPath 校验
   const voucherPrefix = `vouchers/${orderId}/`
   if (voucherFileIds.length > 9) return { code: -1, msg: '付款凭证最多9张' }
-  if (voucherFileIds.some(id => typeof id !== 'string' || !id.startsWith(voucherPrefix))) {
+  if (voucherFileIds.some(id => !cloudPathOfFileId(id).startsWith(voucherPrefix))) {
     return { code: -1, msg: '付款凭证信息无效，请重新上传' }
   }
   const note = String(event.note || '').trim()
@@ -1600,7 +1608,10 @@ async function verifyManualOrder(event) {
     // 被替换掉的旧凭证图从云存储清掉，避免驳回重传堆积孤儿文件。
     // P0-5：只删通过前缀校验的本订单文件，防止越权删除他人/他门店的 fileID
     const oldFileIds = Array.isArray(order.verify_voucher_file_ids) ? order.verify_voucher_file_ids : []
-    const staleFileIds = oldFileIds.filter(id => id && typeof id === 'string' && id.startsWith(voucherPrefix) && !voucherFileIds.includes(id))
+    const staleFileIds = oldFileIds.filter(id => {
+      const path = cloudPathOfFileId(id)
+      return path && path.startsWith(voucherPrefix) && !voucherFileIds.includes(id)
+    })
     if (staleFileIds.length) {
       try {
         await cloud.deleteFile({ fileList: staleFileIds })

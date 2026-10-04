@@ -49,6 +49,13 @@ function safePathPart(value) {
   return String(value || '').replace(/[\\/:*?"<>|]/g, '_').slice(0, 80) || '未命名'
 }
 
+// fileID（cloud://{env}.{bucket}/{cloudPath}）→ cloudPath；非法格式返回空串。
+// 200cb63 引入的归属校验曾直接对完整 fileID 做 startsWith，导致带附件提交必然被拒。
+function cloudPathOfFileId(fileId) {
+  const match = /^cloud:\/\/[^/]+\/(.+)$/.exec(typeof fileId === 'string' ? fileId : '')
+  return match ? match[1] : ''
+}
+
 const ABNORMAL_TYPE_NAMES = {
   shortage: '少货/缺货',
   quality: '质量问题',
@@ -219,9 +226,10 @@ exports.main = async (event = {}) => {
     if (photoFileIds.length > 9) {
       return { code: -1, msg: '验收照片最多9张' }
     }
-    // 照片 fileID 必须位于本订单的上传目录下（路径规则见 utils/cloud.js 的 uploadReceiptPhotos）
+    // 照片 fileID 必须位于本订单的上传目录下（路径规则见 utils/cloud.js 的 uploadReceiptPhotos）。
+    // fileID 形如 cloud://{env}.{bucket}/receipts/{订单号}/xx.jpg，须先剥离协议头再按 cloudPath 校验
     const photoPrefix = `receipts/${purchaseOrderId}/`
-    if (photoFileIds.some(id => typeof id !== 'string' || !id.startsWith(photoPrefix))) {
+    if (photoFileIds.some(id => !cloudPathOfFileId(id).startsWith(photoPrefix))) {
       return { code: -1, msg: '验收照片信息无效，请重新上传' }
     }
 
