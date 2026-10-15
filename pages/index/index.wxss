@@ -21,24 +21,26 @@
   margin-left: 20rpx;
 }
 .store-action {
-  font-size: 24rpx;
+  font-size: 26rpx;
   line-height: 1.4;
   opacity: 0.9;
   white-space: nowrap;
+  padding: 10rpx 4rpx;
 }
 .store-action-icon { margin-right: 6rpx; }
 .store-action + .store-action { margin-top: 12rpx; }
 
-/* 退出登录：页底大按钮 */
-.logout-btn { margin-top: 12rpx; }
+/* 退出登录：页底大按钮（加大加高） */
+.logout-btn { margin-top: 24rpx; height: 104rpx; line-height: 104rpx; font-size: 32rpx; border-radius: 16rpx; }
 
-/* 未读消息铃铛入口 */
+/* 未读消息铃铛入口（加大热区，便于点按） */
 .bell-entry {
   position: relative;
   margin-bottom: 12rpx;
   align-self: flex-end;
+  padding: 10rpx;
 }
-.bell-icon { width: 48rpx; height: 48rpx; display: block; }
+.bell-icon { width: 64rpx; height: 64rpx; display: block; }
 .bell-badge {
   position: absolute;
   top: -10rpx;
@@ -55,47 +57,62 @@
   box-sizing: border-box;
 }
 
-/* 数据概览：2×3 网格（厨师角色 4 卡时为 2×2），卡片更大方便阅读 */
+/* 数据概览：2×N 大卡片，点击区域宽松 */
 .stats-row {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 16rpx;
-  margin-bottom: 20rpx;
+  gap: 20rpx;
+  margin-bottom: 24rpx;
 }
 .stat-card {
   background: #ffffff;
-  border-radius: 16rpx;
-  padding: 28rpx 16rpx;
+  border-radius: 20rpx;
+  padding: 40rpx 16rpx 36rpx;
   text-align: center;
-  box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.04);
+  box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.06);
+  transition: transform 0.12s ease, opacity 0.12s ease;
 }
-.stat-icon { margin: 0 auto; }
-.stat-value { font-size: 44rpx; font-weight: 700; color: var(--color-text-primary); margin: 6rpx 0; }
-.stat-label { font-size: 26rpx; color: var(--color-text-tertiary); }
+.stat-card:active {
+  transform: scale(0.96);
+  opacity: 0.88;
+}
+.stat-card .stat-icon { margin: 0 auto; width: 60rpx; height: 60rpx; }
+.stat-value { font-size: 56rpx; font-weight: 700; color: var(--color-text-primary); margin: 10rpx 0 4rpx; }
+.stat-label { font-size: 28rpx; color: var(--color-text-tertiary); }
 
-/* 快捷操作 */
+/* 快捷操作：2 列大按钮，白卡片 + 阴影 + 按压反馈 */
 .action-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16rpx;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20rpx;
 }
 .action-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 24rpx 0;
-}
-/* 功能图标：浅绿衬底圆角块 + 品牌绿线性图标，替代 emoji */
-.action-icon {
-  width: 88rpx;
-  height: 88rpx;
+  justify-content: center;
+  padding: 36rpx 0 32rpx;
+  background: #ffffff;
   border-radius: 20rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.05);
+  transition: transform 0.12s ease, opacity 0.12s ease;
+}
+.action-item:active {
+  transform: scale(0.96);
+  opacity: 0.88;
+}
+/* 功能图标：浅绿衬底大圆角块 + 品牌绿线性图标，替代 emoji */
+.action-icon {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 28rpx;
   background: rgba(0, 135, 62, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.action-label { font-size: 26rpx; color: var(--color-text-secondary); margin-top: 10rpx; }
+.action-icon .icon { width: 64rpx; height: 64rpx; }
+.action-label { font-size: 30rpx; font-weight: 500; color: var(--color-text-primary); margin-top: 16rpx; }
 
 /* 列表 */
 .item-meta { margin-top: 8rpx; font-size: 24rpx; color: var(--color-text-tertiary); }

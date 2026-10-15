@@ -136,8 +136,8 @@ function validateUserInput(data, requirePassword) {
   const password = String(data.password || '')
   const role = data.role
 
-  if (!/^[a-z0-9_.-]{3,32}$/.test(username)) {
-    return { error: '账号只能包含3-32位字母、数字、点、横线或下划线' }
+  if (!/^[a-z0-9_.-]{2,32}$/.test(username)) {
+    return { error: '账号只能包含2-32位字母、数字、点、横线或下划线' }
   }
   if (!name) return { error: '请输入用户姓名' }
   if (!ROLE_LABELS[role]) return { error: '用户角色无效' }
