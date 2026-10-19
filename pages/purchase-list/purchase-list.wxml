@@ -5,7 +5,6 @@
           class="filter-tab {{activeFilter === item.value ? 'filter-tab-active' : ''}}"
           bindtap="switchFilter" data-value="{{item.value}}">
       {{item.label}}
-      <view wx:if="{{item.count > 0}}" class="filter-badge">{{item.count}}</view>
     </view>
   </view>
 
@@ -40,6 +39,11 @@
   <view wx:elif="{{filteredList.length === 0}}" class="empty-state">
     <view class="empty-state-icon icon icon-xxl icon-clipboard-grey"></view>
     <view class="empty-state-text">暂无采购申请</view>
+  </view>
+
+  <!-- 分页状态提示：上拉加载中 / 已加载全部 -->
+  <view wx:if="{{filteredList.length > 0 && (isLoadingMore || !hasMore)}}" class="load-more-hint">
+    {{isLoadingMore ? '正在加载…' : '没有更多了'}}
   </view>
 
   <view class="fab" bindtap="goCreate"><text>+</text></view>

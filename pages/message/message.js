@@ -51,7 +51,20 @@ Page({
         if (message.bizId) {
             const role = (getApp().globalData.userInfo || {}).role
             if (role === 'supplier') {
-                wx.navigateTo({ url: '/pages/supplier-orders/supplier-orders' })
+                // 供应商定向消息目前只有「新订单通知」一类，落到待确认 tab 而非默认列表
+                wx.navigateTo({ url: '/pages/supplier-orders/supplier-orders?status=pending' })
+                return
+            }
+            // 报表补生成类消息虽打 type:'abnormal'，但落点是补生成入口，不是异常列表：
+            // 订单侧（MSG_ORDER_REPORT_MISSING_，bizId 为采购单号）→ 采购单详情页（有补生成按钮）；
+            // 收货侧（MSG_REPORT_MISSING_，bizId 为收货单号）→ 收货列表（有补生成按钮）
+            const msgId = String(message.messageId || '')
+            if (msgId.indexOf('MSG_ORDER_REPORT_MISSING_') === 0) {
+                wx.navigateTo({ url: '/pages/purchase-detail/purchase-detail?id=' + message.bizId })
+                return
+            }
+            if (msgId.indexOf('MSG_REPORT_MISSING_') === 0) {
+                wx.navigateTo({ url: '/pages/receive-list/receive-list' })
                 return
             }
             if (message.type === 'abnormal') {

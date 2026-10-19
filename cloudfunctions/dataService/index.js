@@ -422,6 +422,8 @@ async function regenerateApprovedOrderReports(order, orderItems, qtyMap, qtyChan
       title: '订单改量，供货商需重新确认',
       content: `采购单 ${orderNo}（${storeName}）审核改量后已重发订货单，原供货商确认已重置，请线下通知供应商（${confirmedSuppliers.join('、')}）按新数量重新确认接单。`,
       type: 'order',
+      // bizId 必须带上：message.js 对无 bizId 的消息只 toast「已读」，点击无任何反应
+      bizId: orderNo,
       storeId,
       recipientUserId: await resolveActiveRecipient(order.created_by, storeId)
     })
@@ -662,13 +664,20 @@ async function getMessages(event) {
   if (auth.user.role === 'supplier') {
     // 供货商消息按供货商档案定向（不绑门店）：只收 scope_type=supplier 且 scope_id 匹配的消息
     query = _.and([recipientCondition, { scope_type: 'supplier', scope_id: auth.user.default_supplier_id || '' }])
-  } else if (!GLOBAL_ROLES.includes(auth.user.role)) {
-    const storeCondition = _.or([
-      { store_id: '' },
-      { store_id: auth.user.default_store_id || '' },
-      { store_id: _.exists(false) }
-    ])
-    query = _.and([recipientCondition, storeCondition])
+  } else {
+    // 供应商定向消息不下发给内部角色：这类消息写库时不带 store_id，
+    // 下方 storeCondition 的「store_id 为空」分支会把它们漏给厨师/店长/管理员
+    const notSupplierCondition = _.or([{ scope_type: '' }, { scope_type: _.exists(false) }])
+    if (!GLOBAL_ROLES.includes(auth.user.role)) {
+      const storeCondition = _.or([
+        { store_id: '' },
+        { store_id: auth.user.default_store_id || '' },
+        { store_id: _.exists(false) }
+      ])
+      query = _.and([recipientCondition, storeCondition, notSupplierCondition])
+    } else {
+      query = _.and([recipientCondition, notSupplierCondition])
+    }
   }
   const result = await db.collection('message').where(query).orderBy('created_at', 'desc').limit(100).get()
   const list = result.data.map(message => {
@@ -1485,6 +1494,48 @@ async function requestCancel(event) {
   return { code: 0 }
 }
 
+// ===== B8 取消申请的驳回出口：cancel_requested 原来只写不清（requestCancel 置 true 后
+// 系统没有任何入口能清除），申请被拒后订单永久挂着"待确认取消"标记 =====
+async function rejectCancel(event) {
+  const auth = await requireUser(event, GLOBAL_ROLES)
+  if (auth.error) return auth.error
+  if (!event.orderId) return { code: -1, msg: '缺少订单号' }
+  const reason = String(event.reason || '').trim()
+
+  const orderResult = await db.collection('purchase_order')
+    .where({ purchase_order_id: event.orderId })
+    .limit(1)
+    .get()
+  const order = orderResult.data[0]
+  if (!order) return { code: -1, msg: '采购订单不存在' }
+  if (!order.cancel_requested) return { code: -1, msg: '该订单没有待处理的取消申请' }
+
+  // 条件更新防并发：已无待确认申请时 updated===0，说明被并发处理（作废或驳回）
+  const rejectRes = await db.collection('purchase_order')
+    .where({ _id: order._id, cancel_requested: true })
+    .update({
+      data: {
+        cancel_requested: false,
+        cancel_rejected_by: auth.user.name,
+        cancel_rejected_reason: reason,
+        cancel_rejected_at: db.serverDate(),
+        updated_at: db.serverDate()
+      }
+    })
+  if (!rejectRes.stats || rejectRes.stats.updated === 0) {
+    return { code: -1, msg: '该订单没有待处理的取消申请' }
+  }
+
+  await createMessage({
+    type: 'cancel',
+    title: '取消申请已驳回',
+    content: `采购单 ${order.order_no || event.orderId} 的取消申请已被驳回${reason ? '，原因：' + reason : ''}。订单继续执行。`,
+    bizId: event.orderId,
+    storeId: order.store_id
+  })
+  return { code: 0 }
+}
+
 // ===== #12-③ 审核催办：下单人/店长可对 submitted 单发催办消息提醒管理员 =====
 async function remindAudit(event) {
   const auth = await requireUser(event, ['chef', 'store_manager', 'purchaser', 'super_admin'])
@@ -1681,6 +1732,7 @@ exports.main = async (event = {}) => {
       case 'regenerateOrderReports': return await regenerateOrderReports(event)
       case 'cancelOrder': return await cancelOrder(event)
       case 'requestCancel': return await requestCancel(event)
+      case 'rejectCancel': return await rejectCancel(event)
       case 'remindAudit': return await remindAudit(event)
       case 'verifyManualOrder': return await verifyManualOrder(event)
       default: return { code: -1, msg: '不支持的数据操作' }

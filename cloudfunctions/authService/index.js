@@ -14,7 +14,7 @@ const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000
 const ROLE_LABELS = {
   chef: '门店下单人员',
   store_manager: '店长',
-  purchaser: '管理员',
+  purchaser: '采购主管',
   super_admin: '超级管理员',
   supplier: '供货商'
 }
@@ -415,6 +415,18 @@ async function updateUser(event) {
   }
 
   const effectiveRole = target.username === 'admin' ? 'super_admin' : input.role
+
+  // 末位超管守卫：把在岗超管降级为非超管角色，等于变相停用管理入口，
+  // 与 setUserStatus 停用 admin 的前提一致——必须还有另一名在岗超管
+  if (target.role === 'super_admin' && effectiveRole !== 'super_admin') {
+    const otherSupRes = await db.collection(USER_COLLECTION).where({
+      role: 'super_admin',
+      status: 1,
+      _id: _.neq(target._id)
+    }).count()
+    if (!otherSupRes.total) return { code: -1, msg: '系统必须保留至少一名在岗超级管理员' }
+  }
+
   const updateData = {
     username: target.username === 'admin' ? 'admin' : input.username,
     name: input.name,
@@ -430,6 +442,9 @@ async function updateUser(event) {
     updateData.password_salt = salt
     updateData.password_hash = hashPassword(input.password, salt)
     updateData.password_iterations = PASSWORD_ITERATIONS
+  }
+  // 改角色也要清会话：降级用户若保留旧会话，将在过期前继续持有新角色的越权面
+  if (effectiveRole !== target.role) {
     updateData.sessions = []
     updateData.session_token_hash = ''
     updateData.session_expires_at = null
@@ -491,6 +506,16 @@ async function setUserStatus(event) {
       }).count()
       if (!otherSupRes.total) return { code: -1, msg: '必须先启用另一名超级管理员，才能停用当前超管' }
     }
+  }
+  // 同一守卫对任意超管账号生效，而非仅 username==='admin'——
+  // 否则停用非 admin 超管可把在岗超管清零，管理入口锁死
+  if (target.role === 'super_admin' && status === 0) {
+    const otherSupRes = await db.collection(USER_COLLECTION).where({
+      role: 'super_admin',
+      status: 1,
+      _id: _.neq(target._id)
+    }).count()
+    if (!otherSupRes.total) return { code: -1, msg: '系统必须保留至少一名在岗超级管理员' }
   }
   if ((target.status === undefined ? 1 : target.status) === status) {
     return { code: -1, msg: status === 0 ? '该账号已是停用状态' : '该账号已是正常状态' }

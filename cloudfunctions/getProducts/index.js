@@ -49,14 +49,15 @@ exports.main = async (event = {}) => {
     if (categoryId !== undefined && categoryId !== null && categoryId !== '') {
       where.category_level_2_id = Number(categoryId)
     }
+    // 关键词下推到数据库（与 getSuppliers 同款 db.RegExp）：原先 limit(200) 截断后才内存过滤，
+    // 商品超 200 种时排在截断线后的商品永远搜不到。正则元字符转义，防止 ( [ 等输入炸查询
+    if (keyword) {
+      const escaped = String(keyword).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      if (escaped) where.product_name = db.RegExp({ regexp: escaped, options: 'i' })
+    }
 
     const res = await db.collection('product').where(where).orderBy('product_name', 'asc').limit(200).get()
-    let list = res.data
-
-    if (keyword) {
-      const kw = keyword.toLowerCase()
-      list = list.filter(p => String(p.product_name || '').toLowerCase().includes(kw))
-    }
+    const list = res.data
 
     return { code: 0, data: list }
   } catch (err) {

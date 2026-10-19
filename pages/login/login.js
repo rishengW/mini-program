@@ -9,8 +9,8 @@ Page({
     isSuperAdminLogin: false,
     roles: [
       { key: 'chef', label: '下单人员', iconClass: 'icon-chef-primary' },
-      { key: 'store_manager', label: '店长', iconClass: 'icon-briefcase-primary' },
-      { key: 'purchaser', label: '管理员', iconClass: 'icon-chart-primary' },
+      { key: 'store_manager', label: '店长', iconClass: 'icon-store-primary' },
+      { key: 'purchaser', label: '采购主管', iconClass: 'icon-chart-primary' },
       { key: 'supplier', label: '供货商', iconClass: 'icon-truck-primary' }
     ],
     selectedRole: 'chef'

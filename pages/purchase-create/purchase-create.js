@@ -22,6 +22,7 @@ Page({
     // 采购信息（商品列表下方）
     orderDate: '',
     deliveryDate: '',
+    deliveryTime: '',
     remark: '',
     today: '',
     tomorrow: '',
@@ -90,9 +91,13 @@ Page({
       }
     })
     this._qtyMap = qtyMap
+    // 期望到货兼容两种存储格式：旧记录仅日期（YYYY-MM-DD），新记录可带时分（YYYY-MM-DD HH:mm）
+    const rawDelivery = order.deliveryDate || order.orderDate || this.data.deliveryDate
+    const [deliveryDatePart, deliveryTimePart = ''] = String(rawDelivery).split(' ')
     this.setData({
       orderDate: order.orderDate || this.data.orderDate,
-      deliveryDate: order.deliveryDate || order.orderDate || this.data.deliveryDate,
+      deliveryDate: deliveryDatePart,
+      deliveryTime: deliveryTimePart,
       remark: order.remark || '',
       manualItems
     })
@@ -280,6 +285,7 @@ Page({
   // ========== 表单 ==========
   onOrderDateChange(e) { this.setData({ orderDate: e.detail.value }) },
   onDeliveryDateChange(e) { this.setData({ deliveryDate: e.detail.value }) },
+  onDeliveryTimeChange(e) { this.setData({ deliveryTime: e.detail.value }) },
   onRemarkInput(e) { this.setData({ remark: e.detail.value }) },
 
   // ========== 提交 ==========
@@ -322,7 +328,8 @@ Page({
       storeName: store.storeName || store.name,
       orderId,
       orderDate: this.data.orderDate,
-      deliveryDate: this.data.deliveryDate,
+      // 选了时分的按 YYYY-MM-DD HH:mm 存储；未选保持纯日期，与旧记录格式一致
+      deliveryDate: this.data.deliveryTime ? `${this.data.deliveryDate} ${this.data.deliveryTime}` : this.data.deliveryDate,
       createdBy: user.userId || user.id || user.name || user.username,
       createdByName: user.name || user.username,
       items,

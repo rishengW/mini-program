@@ -84,8 +84,12 @@ Page({
     const cancelEligible = ['approved', 'report_generated'].includes(order.orderStatus)
     const canRequestCancel = cancelEligible && ['purchaser', 'super_admin'].includes(currentUser.role) && !order.cancelRequested
     const canForceCancel = cancelEligible && currentUser.role === 'super_admin'
+    // B8 驳回出口：挂着的取消申请，管理员可驳回清除标记（原系统只写不清）
+    const canRejectCancel = !!order.cancelRequested && ['purchaser', 'super_admin'].includes(currentUser.role)
     // #12-③：submitted 单等待审核时，下单人/店长可发催审消息（管理员本人不需要催自己）
     const canRemindAudit = order.orderStatus === 'submitted' && !['purchaser', 'super_admin'].includes(currentUser.role)
+    // 清单 #7 订单侧补救入口：订货报表生成失败（missing_reports）的订单，管理员在此补生成
+    const canRegenerateReports = !!order.missingReports && ['purchaser', 'super_admin'].includes(currentUser.role)
     // S9（2026-09-22）：手动商品专用单凭证核销
     // 提交凭证：店长/采购员/管理员；核销裁决：仅管理员
     // P0-7（2026-10-03 修订口径）：核销门槛放宽到「收货已定」三态——手动单少货常态下
@@ -126,13 +130,36 @@ Page({
       canCancel,
       canRequestCancel,
       canForceCancel,
+      canRejectCancel,
       canRemindAudit,
+      canRegenerateReports,
       isManualOrder,
       verifyStatus,
       voucherBlockReason,
       canSubmitVoucher,
       canVerify
     })
+  },
+
+  // 清单 #7 订单侧补救：订货报表生成失败后，管理员手动补生成（后端仅 purchaser/super_admin）
+  async regenerateOrderReports() {
+    const confirmed = await util.showConfirm('确认补生成该订单的订货报表？将按订单明细重新生成门店与供应商订货报表。')
+    if (!confirmed) return
+    if (this._submitting) return
+    this._submitting = true
+    util.showLoading('补生成中...')
+    const result = await cloud.callFunction('dataService', {
+      action: 'regenerateOrderReports',
+      orderId: this.orderId
+    })
+    util.hideLoading()
+    this._submitting = false
+    if (!result || result.code !== 0) {
+      util.showToast((result && result.msg) || '补生成失败')
+      return
+    }
+    util.showSuccess('补生成完成')
+    await this.loadData()
   },
 
   // S9：提交付款凭证（店长/采购员/管理员），上传图片后登记
@@ -269,6 +296,30 @@ Page({
       this.loadData()
     } else {
       util.showToast((result && result.msg) || '申请取消失败')
+    }
+  },
+
+  // B8：驳回挂起的取消申请，清除 cancel_requested 标记并通知申请人
+  async rejectCancel() {
+    const d = this.data.detail
+    if (!d.purchaseOrderId) return
+    const reason = await util.showPrompt('确认驳回该采购单的取消申请？驳回后订单继续执行。', '请填写驳回原因（选填）', '驳回取消申请')
+    if (reason === null) return
+    if (this._submitting) return
+    this._submitting = true
+    util.showLoading('提交中...')
+    const result = await cloud.callFunction('dataService', {
+      action: 'rejectCancel',
+      orderId: d.purchaseOrderId,
+      reason: (reason || '').trim()
+    })
+    util.hideLoading()
+    this._submitting = false
+    if (result && result.code === 0) {
+      util.showSuccess('已驳回取消申请')
+      this.loadData()
+    } else {
+      util.showToast((result && result.msg) || '驳回失败')
     }
   },
 

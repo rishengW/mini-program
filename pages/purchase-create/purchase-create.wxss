@@ -122,7 +122,7 @@
 .remark-input {
   width: 100%; padding: 12rpx 16rpx;
   background: #F5F7FA; border-radius: 8rpx;
-  font-size: 26rpx; box-sizing: border-box;
+  font-size: 26rpx; line-height: 40rpx; box-sizing: border-box;
 }
 
 /* 底部提交栏 */
@@ -133,8 +133,11 @@
   padding-bottom: calc(16rpx + env(safe-area-inset-bottom));
   background: #fff; box-shadow: 0 -2rpx 12rpx rgba(0,0,0,0.06); z-index: 50;
 }
-.submit-info { font-size: 26rpx; color: #595959; }
-.submit-btns { display: flex; gap: 12rpx; }
+/* 商品种数汇总：放在备注卡片内（移出底部操作栏，避免与按钮争抢宽度） */
+.remark-summary { font-size: 24rpx; color: #8C8C8C; margin-top: 12rpx; }
+/* 操作栏只有按钮：两个按钮等宽铺满整栏 */
+.submit-btns { display: flex; gap: 12rpx; flex: 1; }
+.submit-btns .btn { flex: 1; }
 
 /* 弹窗 */
 .picker-mask {

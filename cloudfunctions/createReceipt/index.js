@@ -244,7 +244,8 @@ exports.main = async (event = {}) => {
     if (order.store_id && order.store_id !== storeId) {
       return { code: -1, msg: '订单门店与当前门店不一致，请切换门店后重试' }
     }
-    if (!['approved', 'report_generated', 'partial_received'].includes(order.order_status)) {
+    // receipt_abnormal（最终批带异常）允许继续补收，与事务内白名单口径一致
+    if (!['approved', 'report_generated', 'partial_received', 'receipt_abnormal'].includes(order.order_status)) {
       return { code: -1, msg: '订单尚未审批通过，不可收货' }
     }
     storeName = order.store_name || storeName
@@ -422,7 +423,8 @@ exports.main = async (event = {}) => {
         duplicateError.code = 'RECEIPT_EXISTS'
         throw duplicateError
       }
-      if (!['approved', 'report_generated', 'partial_received'].includes(latestOrderRes.data.order_status)) {
+      // 白名单含 receipt_abnormal，落实 :419 的既定口径；超收由上方 OVER_RECEIVE 逐行拦截，不依赖状态白名单兜底
+      if (!['approved', 'report_generated', 'partial_received', 'receipt_abnormal'].includes(latestOrderRes.data.order_status)) {
         const statusError = new Error('ORDER_NOT_RECEIVABLE')
         statusError.code = 'ORDER_NOT_RECEIVABLE'
         throw statusError

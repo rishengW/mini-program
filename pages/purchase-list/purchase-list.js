@@ -1,5 +1,5 @@
 // pages/purchase-list/purchase-list.js
-// 分页版：服务端状态筛选 + statusCounts 服务端计数 + 上拉加载 + 下拉刷新
+// 分页版：服务端状态筛选 + 上拉加载 + 下拉刷新
 const meta = require('../../utils/meta')
 const util = require('../../utils/util')
 const cloud = require('../../utils/cloud')
@@ -80,22 +80,20 @@ Page({
     const newOrders = (result.data || []).map(cloud.normalizePurchaseOrder)
     const orders = append ? this.data.orders.concat(newOrders) : newOrders
     const total = Number(result.total) || 0
-    // tab 计数来自服务端 statusCounts，不受分页截断影响
-    const counts = result.statusCounts || {}
     const isGlobal = ['super_admin', 'purchaser'].includes((getApp().globalData.userInfo || {}).role)
     const filterTabs = [
-      { label: '全部', value: 'all', count: counts.all || 0 },
-      { label: '草稿', value: 'draft', count: counts.draft || 0 },
-      { label: '已提交', value: 'submitted', count: counts.submitted || 0 },
-      { label: '待收货', value: 'receivable', count: counts.receivable || 0 },
-      { label: '部分收货', value: 'partial_received', count: counts.partialReceived || 0 },
-      { label: '已收货', value: 'received', count: counts.received || 0 },
-      { label: '收货异常', value: 'receipt_abnormal', count: counts.receiptAbnormal || 0 },
-      { label: '已作废', value: 'cancelled', count: counts.cancelled || 0 }
+      { label: '全部', value: 'all' },
+      { label: '草稿', value: 'draft' },
+      { label: '已提交', value: 'submitted' },
+      { label: '待收货', value: 'receivable' },
+      { label: '部分收货', value: 'partial_received' },
+      { label: '已收货', value: 'received' },
+      { label: '收货异常', value: 'receipt_abnormal' },
+      { label: '已作废', value: 'cancelled' }
     ]
     // 待核销 tab 仅管理员可见（清单 #20 催办入口）
     if (isGlobal) {
-      filterTabs.push({ label: '待核销', value: 'to_verify', count: counts.toVerify || 0 })
+      filterTabs.push({ label: '待核销', value: 'to_verify' })
     }
     this.setData({
       filterTabs,

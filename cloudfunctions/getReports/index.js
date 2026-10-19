@@ -95,7 +95,13 @@ exports.main = async (event = {}) => {
       .limit(pageSize)
       .get()
 
-    return { code: 0, data: res.data, total: countRes.total, page, pageSize }
+    // 不下发 file_url：下载一律走 getReportFileUrl 按 reportId 鉴权后取临时链接，
+    // 防止客户端从列表拿到 fileID 后绕过鉴权直调 wx.cloud.getTempFileURL
+    const list = res.data.map(item => {
+      const { file_url, ...rest } = item
+      return { ...rest, has_file: !!file_url }
+    })
+    return { code: 0, data: list, total: countRes.total, page, pageSize }
   } catch (err) {
     console.error('[getReports] 报表查询失败:', err)
     return { code: -1, msg: '报表数据加载失败，请稍后重试' }

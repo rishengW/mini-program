@@ -58,6 +58,13 @@ async function requireUser(event, roles) {
   return { user }
 }
 
+// fileID（cloud://{env}.{bucket}/{cloudPath}）→ cloudPath；非法格式返回空串。
+// 与 createReceipt 的 cloudPathOfFileId 同款：须先剥离协议头再按 cloudPath 校验前缀
+function cloudPathOfFileId(fileId) {
+  const match = /^cloud:\/\/[^/]+\/(.+)$/.exec(typeof fileId === 'string' ? fileId : '')
+  return match ? match[1] : ''
+}
+
 function cellText(v) {
   if (v === null || v === undefined) return ''
   return String(v).trim()
@@ -86,16 +93,21 @@ async function main(event) {
   const fileID = event.fileID
   if (!fileID) return { code: -1, msg: '缺少文件' }
 
-  // 下载并解析 Excel
+  // fileID 必须位于导入目录下（前端上传规则见 product-manage.js 的 imports/products/ 前缀），
+  // 否则任意登录管理账号可传入他人凭证/报表的 fileID 读取并销毁
+  if (!cloudPathOfFileId(fileID).startsWith('imports/products/')) {
+    return { code: -1, msg: '文件无效，请重新上传导入文件' }
+  }
+
+  // 下载并解析 Excel；解析成功后才清理云存储——解析失败时保留文件，避免用户必须重传
   let workbook
   try {
     const res = await cloud.downloadFile({ fileID })
-    // 文件已读入内存，尽快清理云存储，避免 imports/ 目录不断累积
-    try { await cloud.deleteFile({ fileList: [fileID] }) } catch (e) { console.error('清理导入文件失败:', e) }
     workbook = XLSX.read(res.fileContent, { type: 'buffer' })
   } catch (e) {
     return { code: -1, msg: '文件下载或解析失败，请确认为 .xlsx 格式' }
   }
+  try { await cloud.deleteFile({ fileList: [fileID] }) } catch (e) { console.error('清理导入文件失败:', e) }
   const sheet = workbook.Sheets[workbook.SheetNames[0]]
   if (!sheet) return { code: -1, msg: 'Excel 中没有工作表' }
   const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })

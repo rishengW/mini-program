@@ -20,7 +20,7 @@ const USERS = [
   { user_id: 'U000', username: 'admin', name: '超级管理员', mobile: '13900000000', role: 'super_admin', role_label: '超级管理员', default_store_id: '' },
   { user_id: 'U001', username: 'xd', name: '王大厨', mobile: '13900001111', role: 'chef', role_label: '门店下单人员', default_store_id: 'S001' },
   { user_id: 'U002', username: 'dz', name: '陈店长', mobile: '13900002222', role: 'store_manager', role_label: '店长', default_store_id: 'S001' },
-  { user_id: 'U003', username: 'cg', name: '赵采购', mobile: '13900003333', role: 'purchaser', role_label: '管理员', default_store_id: '' },
+  { user_id: 'U003', username: 'cg', name: '赵采购', mobile: '13900003333', role: 'purchaser', role_label: '采购主管', default_store_id: '' },
   { user_id: 'U004', username: 'ghs', name: '绿源蔬菜批发-刘师傅', mobile: '13800010001', role: 'supplier', role_label: '供货商', default_store_id: '', default_supplier_id: 'SUP001' }
 ]
 

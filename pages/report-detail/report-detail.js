@@ -95,11 +95,10 @@ Page({
 
   async exportReport() {
     const { report } = this.data
-    if (report.fileUrl || report.file_url) {
-      // 有云存储文件，通过云函数获取临时链接后下载
-      const fileResult = await cloud.callFunction('getReportFileUrl', {
-        fileId: report.fileUrl || report.file_url,
-      })
+    const reportId = report.reportId || report.report_id
+    if (report.hasFile || report.has_file || report.fileUrl || report.file_url) {
+      // 有云存储文件，按 reportId 经云函数鉴权后获取临时链接下载（file_url 已不下发客户端）
+      const fileResult = await cloud.callFunction('getReportFileUrl', { reportId })
       const fileUrl = fileResult && fileResult.code === 0 && fileResult.data
         ? fileResult.data.url
         : null

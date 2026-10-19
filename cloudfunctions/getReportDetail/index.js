@@ -253,7 +253,10 @@ exports.main = async (event = {}) => {
       }
     }
 
-    return { code: 0, data: { ...report, rows } }
+    // 不下发 file_url（汇总报表的服务端解析已在上方用完 file_url）；
+    // has_file 供前端判断是否展示下载入口，下载走 getReportFileUrl 按 reportId 鉴权
+    const { file_url, ...safeReport } = report
+    return { code: 0, data: { ...safeReport, rows, has_file: !!file_url } }
   } catch (err) {
     console.error('[getReportDetail] 报表详情查询失败:', err)
     return { code: -1, msg: '报表详情加载失败，请稍后重试' }

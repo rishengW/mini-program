@@ -15,7 +15,7 @@ Page({
     roles: [
       { key: 'chef', label: '门店下单人员' },
       { key: 'store_manager', label: '店长' },
-      { key: 'purchaser', label: '管理员' },
+      { key: 'purchaser', label: '采购主管' },
       { key: 'super_admin', label: '超级管理员' },
       { key: 'supplier', label: '供货商' }
     ],

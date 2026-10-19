@@ -172,7 +172,12 @@ exports.main = async (event = {}) => {
       const date = new Date(`${text}T00:00:00Z`)
       return /^\d{4}-\d{2}-\d{2}$/.test(text) && !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === text
     }
-    if (!isDate(actualDate) || !isDate(actualDeliveryDate) || actualDeliveryDate < actualDate) {
+    // 期望到货允许精确到时分：接受 YYYY-MM-DD 或 YYYY-MM-DD HH:mm（采购日期仍为纯日期）
+    const isDateOrDateTime = value => {
+      const match = /^(\d{4}-\d{2}-\d{2})(?: ([01]\d|2[0-3]):[0-5]\d)?$/.exec(String(value))
+      return !!match && isDate(match[1])
+    }
+    if (!isDate(actualDate) || !isDateOrDateTime(actualDeliveryDate) || actualDeliveryDate < actualDate) {
       return { code: -1, msg: '采购日期或期望到货日期无效' }
     }
 

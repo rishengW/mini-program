@@ -69,12 +69,21 @@ exports.main = async (event = {}) => {
 
     // 1. 查出该供货商的所有订单明细，得到关联订单号集合
     // 清单 #24 双保险：显式排除手动商品行，不依赖 supplier_id 为空的隐式前提
+    // 分页取全量：原硬 limit(1000) 无 orderBy，供货商累计订单行超 1000 后
+    // 旧订单静默消失、statusCounts/total 失真。按 _id 排序保证分页边界稳定
     const itemQuery = { supplier_id: supplierId, is_manual: _.neq(true) }
-    const itemsRes = await db.collection('purchase_order_item')
-      .where(itemQuery)
-      .limit(1000)
-      .get()
-    const myItems = itemsRes.data
+    const myItems = []
+    const ITEM_BATCH = 1000
+    for (;;) {
+      const batch = await db.collection('purchase_order_item')
+        .where(itemQuery)
+        .orderBy('_id', 'asc')
+        .skip(myItems.length)
+        .limit(ITEM_BATCH)
+        .get()
+      myItems.push(...batch.data)
+      if (batch.data.length < ITEM_BATCH) break
+    }
     if (!myItems.length) {
       return {
         code: 0,
@@ -114,7 +123,14 @@ exports.main = async (event = {}) => {
     }
 
     // 4. 排序 + 内存分页（单个供货商的订单量级可控）
-    filtered.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
+    // created_at 回读为 Date 对象，String(Date).localeCompare 按星期名/月份名字典序比较，
+    // 与时间先后无关（跨月全乱）。统一转时间戳比较：Date 对象与 ISO 字符串都兼容
+    const toTs = v => {
+      const t = new Date(v)
+      const ms = t && typeof t.getTime === 'function' ? t.getTime() : NaN
+      return Number.isFinite(ms) ? ms : 0
+    }
+    filtered.sort((a, b) => toTs(b.created_at) - toTs(a.created_at))
     const total = filtered.length
     const pageOrders = filtered.slice((page - 1) * pageSize, page * pageSize)
 

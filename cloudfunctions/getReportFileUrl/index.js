@@ -40,11 +40,15 @@ exports.main = async (event = {}) => {
   try {
     const user = await getSessionUser(event.authToken)
     if (!user) return { code: -401, msg: '登录已过期，请重新登录' }
-    const { fileId } = event || {}
-    if (!fileId) return { code: -1, msg: '缺少fileId' }
+    const { reportId, fileId } = event || {}
+    if (!reportId && !fileId) return { code: -1, msg: '缺少报表标识' }
 
-    const reportRes = await db.collection('report_file').where({ file_url: fileId }).limit(1).get()
-    if (!reportRes.data.length) return { code: -1, msg: '报表文件不存在' }
+    // 报表元数据已不向客户端暴露 file_url，新链路按 reportId 定位报表；
+    // fileId 入参仅兼容旧版本客户端，鉴权口径与 reportId 路径一致
+    const reportRes = reportId
+      ? await db.collection('report_file').where({ report_id: reportId }).limit(1).get()
+      : await db.collection('report_file').where({ file_url: fileId }).limit(1).get()
+    if (!reportRes.data.length || !reportRes.data[0].file_url) return { code: -1, msg: '报表文件不存在' }
     const report = reportRes.data[0]
     if (!['super_admin', 'purchaser'].includes(user.role)) {
       if (!['chef', 'store_manager'].includes(user.role) || report.report_scope !== 'store' || report.scope_id !== user.default_store_id) {
@@ -52,7 +56,7 @@ exports.main = async (event = {}) => {
       }
       if (user.role === 'chef' && report.report_type !== 'store_order_report') return { code: -403, msg: '当前账号无权下载该报表文件' }
     }
-    const res = await cloud.getTempFileURL({ fileList: [fileId] })
+    const res = await cloud.getTempFileURL({ fileList: [report.file_url] })
     if (res.fileList && res.fileList.length > 0 && res.fileList[0].tempFileURL) {
       return { code: 0, data: { url: res.fileList[0].tempFileURL } }
     }

@@ -84,9 +84,14 @@
     </view>
     <view class="form-row">
       <text class="form-row-label">期望到货</text>
-      <picker mode="date" value="{{deliveryDate}}" start="{{today}}" bindchange="onDeliveryDateChange">
-        <text class="form-row-value {{deliveryDate ? '' : 'text-tertiary'}}">{{deliveryDate || '请选择'}} ▾</text>
-      </picker>
+      <view style="display:flex; align-items:center;">
+        <picker mode="date" value="{{deliveryDate}}" start="{{today}}" bindchange="onDeliveryDateChange">
+          <text class="form-row-value {{deliveryDate ? '' : 'text-tertiary'}}">{{deliveryDate || '请选择'}} ▾</text>
+        </picker>
+        <picker mode="time" value="{{deliveryTime}}" bindchange="onDeliveryTimeChange">
+          <text class="form-row-value {{deliveryTime ? '' : 'text-tertiary'}}" style="margin-left:16rpx;">{{deliveryTime || '时分'}} ▾</text>
+        </picker>
+      </view>
     </view>
   </view>
 
@@ -94,7 +99,8 @@
   <view class="section-card">
     <view class="form-row-label" style="margin-bottom:8rpx;">备注</view>
     <textarea class="remark-input" placeholder="选填" value="{{remark}}" bindinput="onRemarkInput"
-              maxlength="200" auto-height="true" style="min-height:60rpx;max-height:160rpx;" />
+              maxlength="200" auto-height="true" style="min-height:88rpx;max-height:200rpx;" />
+    <view class="remark-summary">共 {{totalCount}} 种商品</view>
   </view>
 
   <!-- 底部占位 -->
@@ -102,7 +108,6 @@
 
   <!-- 8. 底部提交 -->
   <view class="submit-bar">
-    <view class="submit-info">共 {{totalCount}} 种商品</view>
     <view class="submit-btns">
       <button class="btn btn-outline btn-sm" bindtap="saveDraft">存草稿</button>
       <button class="btn btn-primary btn-sm" bindtap="submitRequest">提交申请</button>

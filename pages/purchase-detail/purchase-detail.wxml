@@ -120,9 +120,15 @@
     <button class="btn btn-outline btn-block" bindtap="remindAudit"><view class="icon icon-sm icon-inline icon-bell-primary"></view>催促审核</button>
   </view>
 
-  <view wx:if="{{canRequestCancel || canForceCancel}}" class="bottom-actions">
+  <view wx:if="{{canRequestCancel || canForceCancel || canRejectCancel}}" class="bottom-actions">
     <button wx:if="{{canRequestCancel}}" class="btn btn-outline btn-block" bindtap="requestCancel">申请取消</button>
     <button wx:if="{{canForceCancel}}" class="btn btn-danger btn-block" bindtap="cancelOrder">管理员作废</button>
+    <button wx:if="{{canRejectCancel}}" class="btn btn-outline btn-block" bindtap="rejectCancel">驳回取消申请</button>
+  </view>
+
+  <!-- 清单 #7 订单侧补救入口：订货报表生成失败的订单，管理员可补生成 -->
+  <view wx:if="{{canRegenerateReports}}" class="bottom-actions">
+    <button class="btn btn-outline btn-block" bindtap="regenerateOrderReports"><view class="icon icon-sm icon-inline icon-file-primary"></view>补生成订货报表</button>
   </view>
 
   <view wx:if="{{canReceive}}" class="bottom-actions">

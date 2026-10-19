@@ -25,7 +25,7 @@
 
       <view class="form-group">
         <view class="form-label">账号</view>
-        <input class="form-input" placeholder="请输入账号" value="{{username}}" bindinput="onInput" data-field="username" />
+        <input class="form-input" placeholder="请输入账号" value="{{username}}" bindinput="onInput" data-field="username" cursor-spacing="120" />
       </view>
 
       <view class="form-group">
@@ -45,7 +45,7 @@
 
       <view class="form-group">
         <view class="form-label">超级账号</view>
-        <input class="form-input" placeholder="请输入超级管理员账号" value="{{username}}" bindinput="onInput" data-field="username" />
+        <input class="form-input" placeholder="请输入超级管理员账号" value="{{username}}" bindinput="onInput" data-field="username" cursor-spacing="120" />
       </view>
 
       <view class="form-group">
