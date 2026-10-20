@@ -321,6 +321,7 @@ fileId 为空 → -1 (:44)
 1. **汇总下单数量成倍放大（高）**：`order_qty_snapshot` 存的是**整行订单量**（`createReceipt:500-501` 原样写 `item.orderQty`，而 `createReceipt:278-297` 的批次校验允许同一订单行分 ≥2 批收货）→ 同一商品 N 个批次各带一份完整下单量，`:218` 逐行累加 → **下单数量 = 真实下单量 × N**。`实收数量`（`received_qty` 是本批量）与金额（逐行 `received_qty × price`）口径正确，**只有"下单数量"列失真**。
 2. **汇总金额含不可付款行（中）**：日/月汇总的 `total_amount` > 同日带价报表/供应商账单合计，**差额 = 质量/错货/缺价异常行金额**。若汇总被当作对账依据则对不上；若仅作运营看板，应在 UI 明示"含不可付款行"（当前无任何提示）。
 3. **详情页与归档文件不同源（高）**：`getReportDetail:100-103` 的 `receipt.limit(1)` **无 orderBy** → 订单分批收货时（`createReceipt:567` 每批一份 `store_receipt_report`，共享 `source_order_id`），**取到哪张 receipt 不确定**，第 2 批及以上的报表详情页显示的是另一批的行，点导出下载到的是本批 CSV。
+   > **✅ 已修复（2026-10-20，提交 `196d52b`）**：改为从 `report_id` 反解本批 `receiptId` 精确查询（旧格式 `report_id` 兜底回退原逻辑），详情页与自身 CSV 同源。**第 1、2 条（汇总下单数量成倍放大 / 汇总金额含不可付款行）仍未修复。**
 
 **时间范围口径（无 bug，明确记录）**：依据 **`receipt_date`（收货日期，裸字符串）**，**不是 `created_at`**。daily 为**精确等值**单点匹配；monthly 为 `_.gte('YYYY-MM-01').and(_.lte('YYYY-MM-31'))` **闭区间、含首含尾**，上界字符串 `'31'` 对 30 天/28 天月份大于任何合法日期 → 等价整月，字符串字典序下无歧义。`receipt_date` 为裸字符串 → **无 UTC+8 时区偏移风险**。唯一相关缺陷是 `generateSummaryReport:175-176` 不禁止未来日期，可生成必然为空的报表。
 
@@ -428,7 +429,7 @@ fileId 为空 → -1 (:44)
 | 级别 | 文件:行号 | 问题 | 触发场景 |
 |---|---|---|---|
 | **高** | `generateSummaryReport/index.js:218` | 汇总"下单数量"按 `receipt_item` 逐行累加 `order_qty_snapshot`，而该字段是**整行订单量**而非本批量（`createReceipt:500-501`） | 同一商品被分 ≥2 批收货（`partial_received` 流程，`createReceipt:239/:417` 显式支持）→ 下单数量 = 真实值 × 批次数；实收数量与金额仍正确，仅该列失真 |
-| **高** | `getReportDetail/index.js:100-103` | 收货报表重建 `receipt.where({purchase_order_id}).limit(1)` **无 `orderBy`** | 订单分批收货（每批一份报表，共享 `source_order_id`）→ 取到哪张 receipt 不确定，点第 2 批及以上报表时详情表格显示其他批次的行，与下载的 CSV 不同源 |
+| **高** | `getReportDetail/index.js:100-103` | 收货报表重建 `receipt.where({purchase_order_id}).limit(1)` **无 `orderBy`** | 订单分批收货（每批一份报表，共享 `source_order_id`）→ 取到哪张 receipt 不确定，点第 2 批及以上报表时详情表格显示其他批次的行，与下载的 CSV 不同源 —— **✅ 已修复（2026-10-20，`196d52b`）：改为从 `report_id` 反解 `receiptId` 精确查询** |
 | **高** | `getReportDetail/index.js:135-138`、`:166-169` | 供应商类报表重建按 `order_date`/`receipt_date` 取当日单据 `limit(200)` **无分页**，且**忽略 `report.source_order_id`**（`:82` 取值但两条分支从未使用） | 同一供应商当天在多家门店有单 → 详情页是"当日全门店全部单据"并集，CSV 只有 1 单/1 批；当日跨店单据 >200 时**静默截断** |
 | **高** | `getReportDetail/index.js:130-160`（叠加最新 commit 口径） | 两条供应商类分支**无 `order_status` 过滤** → 草稿/已提交/待审批（未过内部审核）订单的行进入重建结果 | 审核前已生成 `supplier_order_report`（`createPurchaseOrder:440-490`），打开该报表详情页即含未过审核订单；与 `getSupplierOrders:11-13` 收紧后的 `HIDDEN` 口径不一致 |
 | 中 | `generateSummaryReport/index.js:199-223` | 汇总金额仅剔除 `is_manual`（`:201`），**未剔除 `payable_flag === false`**（质量/错货/缺价异常行） | 门店当天有异常收货 → 汇总 `total_amount` > 同日带价报表/供应商账单合计，差额 = 不可付款行金额；无任何 UI 提示 |

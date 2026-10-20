@@ -42,7 +42,7 @@
 
 并发与安全审查发现的问题已全部修复（修复留痕见提交 `ffb5bf4`/`9350b9d`/`d48b17c`；后续公司级复查见 `审查报告-2026-09-30.md`）：
 
-- **会话安全**：启动时异步调 `authService.validate` 服务端裁决会话（`app.js`），失败自动清本地登录态；`utils/cloud.js` 统一拦截 `-401`（清会话 + 防抖跳登录）；除登录页外 25 个页面全部接入 `utils/auth-guard.js` 登录守卫。
+- **会话安全**：启动时异步调 `authService.validate` 服务端裁决会话（`app.js`），**仅在服务端明确返回 `-401` 时**才清本地登录态并跳登录页；其余错误码（云函数未部署、内部异常、网络故障）保留本地登录态，不误踢用户。`app.js` 补 `onShow` 温启动复检（会话可能在后台期间被作废）；`utils/cloud.js` 统一拦截 `-401`（清会话 + 防抖跳登录）；除登录页外 25 个页面全部接入 `utils/auth-guard.js` 登录守卫。
 - **并发竞态**：`createReceipt` 超收校验与批次号生成移入事务内；`confirmSupplierOrder`/`dataService.auditOrder` 改条件更新/事务内复查，拒绝重复确认与重复审核；报表版本号改 `report_version_counter` 原子计数器（4 个云函数）；业务 ID（RCP/U/P/SUP/MSG/storeId）加随机后缀或撞号重试。
 - **登录防护**：失败计数 `_.inc` 原子自增，达 5 次条件更新锁定 10 分钟（并发不顺延）；登录页不再预填任何演示账号。
 - **操作防重**：详情页/列表页全部写操作加 `_submitting` 防重入；`purchase-detail` 提交/复制带 `requestId` 幂等键（服务端去重）；`requestCancel` 限采购员/店长/管理员且防重复申请刷通知。
@@ -60,6 +60,15 @@
 - **其他**：期望到货时间支持精确到时分（`YYYY-MM-DD HH:mm`）；`receipt_abnormal` 允许继续补收（与事务内白名单口径一致）；`importProducts` fileID → cloudPath 解析修正。
 - **采购列表页**：状态 tab 去掉数字徽标（大数字溢出被横向滚动容器裁剪）、加高点击区；补分页底部「正在加载…/没有更多了」提示与底部留白（避开悬浮新建按钮）。
 - **B5 前端体验批次（25/30 项）**：按《修复计划-2026-10-03》B5 执行——防重入补齐（purchase-create 全段 try/finally、product-manage 三处）、状态字典单源收敛到 `meta.js`（核销态/异常类型/报表 superseded）、分页竞态防护（3 个列表页）、失败态与空态互斥、命中区域加大等。未做 4 项（首页调用合并、分页骨架重构、setData 裁剪、Excel 模板）详见 `log.md` 2026-10-19 节与《修复计划》§0 进度表。
+
+### 2026-10-20 修复批次（登录态 + 报表批次）
+
+- **登录态跨冷启动维持**：小程序 `app.json` 的 `pages[0]` 是登录页，冷启动时即使会话有效也停在登录页要求重新登录。现改为登录页 `onShow` 探测到登录态即让路（供货商→`supplier-home`，其余→`index`），落点与登录成功路径一致；`utils/auth-guard.js` 拆出只读 `isLoggedIn()` 供其使用。
+- **会话有效期解析修正**：服务端返回的是标准 ISO 8601，而客户端原实现把它改写成非标准格式（`2026/10/27 12:00:00.000Z`），**iOS 的 JSCore 判为 Invalid Date**，导致每次冷启动都被误判会话过期。新增 `utils/date.js` 收口为「先原生 ISO 解析、失败才退回斜杠格式」。
+- **会话失效处理**：服务端判定会话失效（`-401`）时立即清本地态并跳登录页，不再停在首页看空数据；`app.js` 补 `onShow` 温启动复检（后台期间会话可能已被改密/停用作废）。
+- **校验不再误踢用户**：`validate` 返回非 `-401` 的错误（云端未部署 `validate` action、云函数内部异常）时保留本地登录态，只有服务端明确裁决失效才登出。
+- **分批收货报表批次错位**：收货报表按批次生成（`report_id` 含 `receiptId`），但详情页原先按 `purchase_order_id + limit(1)` 取收货单，跨天分批收货时第 2、3 批的报表页面显示第 1 批的明细、**页面合计与下载的 CSV 对不上**。现从 `report_id` 反解 `receiptId` 精确查询（旧格式 `report_id` 兜底回退原逻辑）。
+- **部署**：登录态修复只改前端，需**重新上传前端小程序包**；报表修复需**重新部署 `getReportDetail` 云函数**。云端 `authService` 建议一并部署（`validate` action 自 2026-09-28 才加入）。
 
 ## 供货商新订单通知（三层触达）
 
@@ -93,7 +102,7 @@ pages/                 小程序页面（门店端 + 供货商门户）
   message/             消息中心（tabBar）
   abnormal-list/       异常记录处理
 cloudfunctions/        云函数（每目录一个，独立部署）
-utils/                 cloud.js（调用封装/数据规整）、meta.js（状态字典）、util.js
+utils/                 cloud.js（调用封装/数据规整）、meta.js（状态字典）、util.js、auth-guard.js（登录守卫）、date.js（日期解析单源）
 seed-data/             初始数据与导入说明（见 seed-data/README.md）
 ```
 
@@ -116,6 +125,7 @@ seed-data/             初始数据与导入说明（见 seed-data/README.md）
 
 1. 微信开发者工具导入项目（`project.config.json`），开通云开发环境。
 2. 上传 `cloudfunctions/` 下全部云函数（云端安装依赖），建议一次全部部署，避免新旧版本混跑。2026-10 修复批次涉及 **10 个云函数需重新部署**：`authService`、`createPurchaseOrder`、`createReceipt`、`dataService`、`getProducts`、`getReports`、`getReportDetail`、`getReportFileUrl`、`getSupplierOrders`、`importProducts`。其中 `getReports`/`getReportDetail`/`getReportFileUrl` 为联动改动须一起部署；前端小程序包需同步上传。
+   - 2026-10-20 批次追加：`getReportDetail`（分批收货报表批次）需重新部署；`authService` 建议一并部署（`validate` action 自 2026-09-28 起才存在，云端若仍是旧版，冷启动校验会返回 `-1`）。登录态其余改动在前端，**重新上传小程序包**即可。
 3. 按 `seed-data/README.md` 导入初始数据（含初始账号与建议索引：`app_user.username` 唯一索引等）。
 4. 小程序后台申请**订阅消息模板**，模板 ID 填入上表两处占位符。
 5. 云数据库需建集合：`store`、`app_user`、`category`、`supplier`、`product`、`supplier_product_price`、`purchase_order`、`purchase_order_item`、`receipt`、`receipt_item`、`report_file`、`message`、`abnormal_record`。

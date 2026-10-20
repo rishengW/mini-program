@@ -306,7 +306,7 @@ report-list / report-history → goDetail
 | # | 严重度 | 风险 | 触发条件 | 证据 |
 |---|---|---|---|---|
 | R1 | **高** | 汇总报表「下单数量」在分批收货时被成倍放大。`order_qty_snapshot` 存的是整行订单量，非本批量；汇总按批累加 | 采购单存在 ≥2 个收货批次（`partial_received` 流程，`createReceipt/index.js:455-468` 显式支持） | `createReceipt/index.js:278, :287-297, :497`；`generateSummaryReport/index.js:214` |
-| R2 | **高** | 带价报表（门店/供应商）详情页显示第 1 批的行，而非本批报表对应的那一批 | 订单分批收货 → 每批各一份 `RPT_SR_*` / `RPT_SRP_*` 报表；点第 2 批及以上报表 | `getReportDetail/index.js:100-105`（`.limit(1)`）；`createReceipt/index.js:586, :610` |
+| R2 | ~~**高**~~ ✅已修复 | 带价报表（门店/供应商）详情页显示第 1 批的行，而非本批报表对应的那一批 | 订单分批收货 → 每批各一份 `RPT_SR_*` / `RPT_SRP_*` 报表；点第 2 批及以上报表 | `getReportDetail/index.js:100-105`（`.limit(1)`）；`createReceipt/index.js:586, :610` |
 | R3 | **高** | 供应商类报表（订货/到货/带价）详情页显示该供应商**当日全部门店全部单据**的并集，与 CSV 的单订单/单批次内容不符；且 `.limit(200)` 无分页，跨店单量 >200 静默截断 | 同一供应商当天在多家门店有单 | `getReportDetail/index.js:130-160, :161-202`（按 `date` 查、`limit(200)`）；对照 `createPurchaseOrder/index.js:425-450`、`createReceipt/index.js:673-736` 均为单订单/单批 |
 | R4 | **中** | 日/月汇总的金额口径含不可付款行（质量/错货/缺价），与带价报表/结算口径不一致，两者对不上 | 门店当天存在质量/错货/缺价异常收货 | `generateSummaryReport/index.js:213-218`（无 `payable_flag` 过滤）对照 `createReceipt/index.js:626, :707` |
 | R5 | **中** | 汇总取数的两处 `skip/limit` 无 `orderBy`，CloudBase 无序分页顺序不保证 → 跨页重复或漏读 → 汇总金额/数量随机偏差 | 门店当日 receipt > 100，或单块 receipt_item > 100 | `generateSummaryReport/index.js:96-104, :116-123` |
@@ -327,6 +327,9 @@ report-list / report-history → goDetail
 | R20 | **低** | `getReportFileUrl` 不校验 `status`，`superseded` 报表仍可下载 | 下载已作废报表 | `getReportFileUrl/index.js:46-55`；作废标记在 `dataService/index.js:1403-1405` |
 | R21 | **低** | chef 在 `report-history` 可选到无权类型（供应商类），得到空列表；且 scope 选项对 chef 开放 `supplier` | chef 打开历史报表 | `report-history.js:20-24, :29-34` 对照 `getReports/index.js:79-83`（强制回退导致冲突） |
 | R22 | 信息性 | 报表列表不展示 `total_amount` / `item_count`，汇总报表在列表层看不到金额 | 浏览列表 | `utils/cloud.js:212-225`（`normalizeReport` 未映射）；`getReports/index.js:98` |
+
+> **R2 已修复（2026-10-20，提交 `196d52b`）**：`getReportDetail` 改为从 `report_id` 反解本批 `receiptId`（剥 `RPT_SR_`/`RPT_SRP_` 前缀与 `_RG` 后缀）按 `receipt_id` 精确查询，旧格式 `report_id` 兜底回退原 `purchase_order_id` 逻辑。分批收货时每张报表页面各显示各的明细，与自身 CSV 一致。方向与《业务模糊点确认清单》B3「报表按批次生成」一致。
+> **R1 / R3 / R4 / R7 仍未修复**：R1（汇总「下单数量」分批放大）、R3（供应商类报表按日聚合与 CSV 不同源 + `limit(200)` 静默截断）、R4（汇总金额含不可付款行）、R7（带价报表页面行集与 CSV 行集差异）本次未动。
 
 ---
 

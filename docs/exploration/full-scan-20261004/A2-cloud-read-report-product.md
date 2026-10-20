@@ -233,6 +233,9 @@
 - 触发场景：任一采购单发生第二次及以上收货（B3 分批收货场景）。
 - 影响面：门店收货报表、门店带价收货报表的详情页 rows 与它自己的 CSV 文件**不是同一批数据**，金额与行数对不上；`store_receipt_report` 的 CSV 本身含异常行与「是否可付款」列，页面对该批次重建的行同样可能错位。同函数 :137（supplier_order_report）、:168（supplier_receipt_report）的 `limit(200)` 是同类截断问题（见 H7）。
 
+> **✅ 已修复（2026-10-20，提交 `196d52b`）**：改为从 `report_id` 反解本批 `receiptId`（剥 `RPT_SR_`/`RPT_SRP_` 前缀与 `_RG` 后缀）按 `receipt_id` 精确查询；`report_id` 格式异常（旧数据）时兜底回退原 `purchase_order_id` 逻辑。修复方向与《业务模糊点确认清单》B3「报表按批次生成」的已拍板口径一致。同条目在 `deep-20261004/06-report-summary.md` R2、`batch1-cloudfunctions-data.md` §12.2、`full-scan-03-cloud-report.md` H3、`coverage-20261004/03-purchase-read-report.md` 中亦有记录，均已同步标注。
+> **⚠️ 未修复（本条目所涉的 `limit(200)` 截断）**：同函数 `:137`（supplier_order_report）、`:168`（supplier_receipt_report）按日聚合的 `limit(200)` 无分页、跨店单量超 200 会静默截断，且页面对应的是「当日全部门店并集」而非单批次——见 `deep-20261004/06-report-summary.md` R3，仍未处理。
+
 ### 【高】
 
 **H1 — getSupplierOrders:117 用 `String(Date)` 字典序排序，时间序错误**

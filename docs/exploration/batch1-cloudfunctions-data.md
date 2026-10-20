@@ -671,6 +671,8 @@ const receiptId = receiptRes.data[0].receipt_id
 - 无 `orderBy` + `limit(1)` → **只重建任意一批（通常第 1 批）的明细**。
 - 结果：**第 2 批及以后的收货报表，详情数据显示的是第 1 批**，与 CSV 内容不符。
 - 严重度：高（分批收货是主流程，用户看到的数字是错的）。
+
+> **✅ 已修复（2026-10-20，提交 `196d52b`）**：`getReportDetail` 改为从 `report_id` 反解本批 `receiptId` 精确查询（`RPT_SR_`/`RPT_SRP_` 前缀、`_RG` 后缀兼容），旧格式 `report_id` 兜底回退原逻辑。验证用真实云函数代码 + mock 数据库跑 6 场景（含分批各显示各的、`_RG`、旧格式兜底、页面合计与 CSV 一致）。
 - 修复建议：从 report_file 里带上 `settle_for_receipt` 之外的 receipt_id（当前 report_file **没有存 receipt_id 字段**，只有 source_order_id）—— 需在 createReceipt 写 report_file 时补 `source_receipt_id` 字段。
 
 ### 12.3 ⚠️ 严重：superseded 报表的详情数据被"改量后的新值"污染

@@ -195,3 +195,47 @@
 ### 未做
 - 真机验证：本机未安装微信开发者工具，以上为几何推算 + DOM 实测；上线前建议在目标机型（尤其安卓安全键盘机型）实测一次
 - `type="password"` 在部分安卓机型触发安全键盘、行为与普通键盘不同，属既有隐患，本次未改动
+
+---
+
+## 2026-10-20 登录态跨冷启动维持 + 分批收货报表批次修复
+
+两处修复：①小程序登录态在冷启动/划掉重开后被无故清掉；②分批收货时收货报表详情显示错批次。
+基线提交 `38e59ed`（固化此前 52 项未提交改动），修复提交 `7b9e39d` / `a4e970d` / `196d52b`。
+
+### 登录态三处缺口
+
+- **缺口1 · 冷启动永远先进登录页**：`app.json` 的 `pages[0]` 是 login，`app.js` 只把会话灌进 `globalData` 而不跳转，有效会话也停在登录页要求重新登录。
+  改法：`utils/auth-guard.js` 拆出只读 `isLoggedIn()`（不产生跳转）；`pages/login/login.js` 的 `onShow` 探测到登录态即让路（供货商→`supplier-home`，其余→`index`），落点与 `handleLoginSuccess` 保持一致。
+- **缺口2 · `sessionExpiresAt` 解析破坏 ISO 格式（iOS 必现）**：服务端返回 `toISOString()`（`2026-10-27T12:00:00.000Z`），而 `app.js` 原实现无条件把 `-` 换 `/`、去 `T`，改成 `2026/10/27 12:00:00.000Z`——非标准格式且带 `Z`，JSCore 判 `Invalid Date` → `NaN` → `NaN > Date.now()` 为 false → **每次冷启动都被判会话过期**（Android/V8 宽松故不显形）。
+  改法：新增 `utils/date.js` 收口为「先按原生 ISO 8601 解析，失败才退回斜杠格式」。
+- **缺口3 · 服务端判定失效后不回登录页**：`app.js` 校验失败只 `clearSession()` 不跳转，用户停在首页看到空数据（要等下一次业务请求的 401 兜底才被踢）。
+  改法：`app.js` 新增 `redirectToLogin()`，`utils/cloud.js` 的 401 改走同一出口（统一出口，避免两次 toast）；`app.js` 补 `onShow` 温启动复检（原先只有 `onLaunch`）。
+
+### 登录态附带修正（a4e970d）
+
+`validateSessionOnLaunch` 原先把**所有非 0 的 code** 当成「会话失效」一律清会话，但 `code:-1` 只表示服务侧故障：
+- 云端 `authService` 未部署 `validate` action → `code:-1`「不支持的认证操作」（该 action 是 2026-09-28 `ffb5bf4` 才加入，之前 `exports.main` 只有 `default` 分支）
+- 云函数内部异常 → `code:-1`「登录服务异常，请稍后重试」
+
+两者都会让用户被无故踢回登录页（开发版上尤其易命中：云端未跟着最新代码重新部署时，每次冷启动校验都返回 -1）。改为**只认 `code === -401`** 才清会话，其余保留本地登录态并打 warn 日志。
+
+### 分批收货报表批次错位（196d52b）
+
+`createReceipt` 按批次生成报表（`report_id = RPT_SR_<receiptId>` / `RPT_SRP_<receiptId>`，补生成版带 `_RG` 后缀），每张报表对应一批。
+但 `getReportDetail/index.js` 的 `store_receipt_report` 分支按 `purchase_order_id + limit(1)` 取收货单——同一订单有多张 receipt 时**永远取到第一批**，且无 `orderBy` 取到哪批不确定。
+后果：跨天分批收货时，第 2、3 批的报表页面显示第 1 批的明细，**页面合计与下载的 CSV 对不上**（账实不符），违反 P2-62/P0-8 的「页面行小计与文件一致」口径。
+
+改法：从 `report_id` 反解本批 `receiptId`（剥 `RPT_SR_`/`RPT_SRP_` 前缀与 `_RG` 后缀）按 `receipt_id` 精确查询；`report_id` 格式异常（旧数据）时兜底回退到原 `purchase_order_id` 逻辑，至少不丢数据。
+与已拍板口径一致：《业务模糊点确认清单》B3 定的是「报表按批次生成」。
+
+### 验证
+
+- 登录态：19 场景端到端模拟全过（会话有效进首页 / 供货商进门户 / 已过期停留 / 未登录停留 / 401 回登录页 / 校验不重复发请求 / 退出后台进程重启 / 杀进程重启 / 服务端已作废 / 温启动复检 / 云端未部署 validate / 云函数异常 / 旧格式兜底 / 手动登录竞态等），脚本在仓库外 `E:\酒店采购管理0804\_auth_session_backup_20261020\`
+- 报表：**真实云函数代码 + mock 数据库**跑 6 场景——3 张批次报表各显示各的明细（修复前均显示第一批）、`_RG` 补生成版正确解析、旧格式 `report_id` 兜底不崩溃、页面合计与 CSV 一致
+- 涉及文件 `node --check` 全过
+
+### 部署提醒（未做）
+
+- 登录态修复**只改前端**（`app.js`/`login.js`/`auth-guard.js`/`cloud.js`/`date.js`），需**重新上传前端小程序包**；云端 `authService` 建议一并重新部署（`validate` action 可能尚未部署）
+- 报表修复在 `cloudfunctions/`，需**重新部署 `getReportDetail`**

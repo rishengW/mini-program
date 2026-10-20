@@ -230,6 +230,8 @@ L203-206：每次打开汇总报表详情都 `cloud.downloadFile` 全量下载 C
 影响：点第 2 批报表进详情，可能拉到第 1 批的 `receipt_item`；命中哪批取决于数据库返回顺序，结果不稳定、无法复现。
 建议：报表记录里加 `source_receipt_id`（生成时已有 `receiptId`），读取侧优先按它取；至少补 `orderBy('batch_no','asc'|'desc')` 使结果确定。
 
+> **✅ 已修复（2026-10-20，提交 `196d52b`）**：采用「读取侧优先按它取」的方案——`getReportDetail` 从 `report_id` 反解本批 `receiptId`（`report_id` 生成时已编码 receiptId，无需改表结构），按 `receipt_id` 精确查询；`report_id` 格式异常（旧数据）时兜底回退原逻辑。不需额外加 `orderBy`，因为不再依赖「取到哪张」。
+
 **H4｜报表文件全为 CSV，但前端 `openDocument` 未传 fileType，应用内打开必然失败（跨批次，需前端配合）**
 云侧核实：全项目 14 处报表产出**全部是 `.csv`**（`generateSummaryReport:231`、`createReceipt:563,596,645,680`、`createPurchaseOrder:361,410`、`dataService:427,468,967,1158,1185,1218,1245`），无 xlsx/pdf。
 前端：`pages/report-detail/report-detail.js:103` `wx.openDocument({ filePath, showMenu: true })` 未传 `fileType`。
