@@ -96,9 +96,26 @@ exports.main = async (event = {}) => {
         remark: item.remark || ''
       }))
     } else if (type === 'store_receipt_report' || type === 'store_receipt_price_report') {
-      // 门店收货报表：从收货明细中获取
+      // 门店收货报表：报表按收货批次生成（report_id = RPT_SR_<receiptId> 或 RPT_SRP_<receiptId>，
+      // 补生成版带 _RG 后缀）。分批收货时一张订单有多张 receipt，
+      // 必须从 report_id 反解出本批 receiptId 精确查询——
+      // 若按 purchase_order_id + limit(1) 取，会取到第一批，导致第 2、3 批的报表页面
+      // 显示错误批次、页面合计与下载的 CSV 对不上。
+      const reportIdParts = String(report.report_id || '')
+      // 剥离 RPT_SR_ / RPT_SRP_ 前缀与 _RG 后缀，得到本批 receiptId
+      const receiptId = reportIdParts
+        .replace(/^RPT_SRP?_/, '')
+        .replace(/_RG$/, '')
+      let receiptIdFilter
+      if (/^RCP\d+/.test(receiptId)) {
+        // 正常解析：RCP + 时间戳 + 随机 hex
+        receiptIdFilter = { receipt_id: receiptId }
+      } else {
+        // 兜底：report_id 格式异常时维持原行为，至少返回数据
+        receiptIdFilter = { purchase_order_id: orderId }
+      }
       const receiptRes = await db.collection('receipt')
-        .where({ purchase_order_id: orderId })
+        .where(receiptIdFilter)
         .limit(1)
         .get()
       if (receiptRes.data.length > 0) {
