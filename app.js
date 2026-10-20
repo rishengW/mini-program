@@ -1,4 +1,6 @@
 // app.js
+const { parseTimestamp } = require('./utils/date')
+
 const CLOUD_ENV = 'cloud1-d3gezx51aca79d9bb'
 
 App({
@@ -10,15 +12,9 @@ App({
     const userInfo = wx.getStorageSync('userInfo')
     const authToken = wx.getStorageSync('authToken')
     const sessionExpiresAt = wx.getStorageSync('sessionExpiresAt')
-    // 兼容 iOS 对 "2026-09-24 12:00:00" 等非 ISO 格式解析为 Invalid Date 的问题：
-    // 数字直接用，字符串把 "-" 换成 "/"（JSCore 可解析），解析失败视为会话无效
-    const parseExpires = value => {
-      if (!value) return NaN
-      if (typeof value === 'number') return value
-      const date = new Date(String(value).replace(/-/g, '/').replace('T', ' '))
-      return date.getTime()
-    }
-    const sessionValid = authToken && sessionExpiresAt && parseExpires(sessionExpiresAt) > Date.now()
+    // 服务端返回的是 ISO 8601，统一按 utils/date 的口径解析（先原生 ISO，失败退回斜杠格式）
+    const expiresAt = parseTimestamp(sessionExpiresAt)
+    const sessionValid = !!(authToken && sessionExpiresAt && expiresAt > Date.now())
     if (userInfo && sessionValid) {
       this.globalData.userInfo = userInfo
       this.globalData.authToken = authToken
@@ -43,11 +39,26 @@ App({
     }
   },
 
-  // 启动时向服务端校验会话（异步，不阻塞首屏）。
-  // 失败/401 时清除本地会话并重置 globalData，等待用户重新登录。
+  // 温启动（后台切回）时复检会话：
+  // 会话在后台期间可能已被服务端作废（改密/停用/被挤下线），
+  // onLaunch 不会再次触发，需在 onShow 补一次校验。
+  onShow() {
+    if (!this.globalData.isLoggedIn) return
+    const authToken = this.globalData.authToken
+    if (!authToken) return
+    this.validateSessionOnLaunch(authToken)
+  },
+
+  // 启动/切回前台时向服务端校验会话（异步，不阻塞首屏）。
+  // 失败/401 时清除本地会话并重置 globalData，强制用户重新登录。
+  // 返回 Promise：会话是否仍然有效。登录页据此等待校验落定再决定去留，
+  // 避免"本地存储说有效、服务端说无效"时先闪一下首页再被踢回登录页。
   validateSessionOnLaunch(authToken) {
-    if (!wx.cloud) return
-    wx.cloud.callFunction({
+    if (!wx.cloud) return Promise.resolve(false)
+    // 冷启动时 onLaunch 与 onShow 紧邻触发，会连发两次校验；此处复用同一个 Promise
+    if (this._sessionValidation) return this._sessionValidation
+    this._validatingSession = true
+    this._sessionValidation = wx.cloud.callFunction({
       name: 'authService',
       data: { action: 'validate', authToken }
     }).then(res => {
@@ -61,12 +72,33 @@ App({
             wx.setStorageSync('sessionExpiresAt', r.data.sessionExpiresAt)
           }
         }
-      } else {
-        this.clearSession()
+        return true
       }
-    }).catch(() => {
+      // 服务端已判定会话失效（改密/停用/被挤下线）：清本地态并立刻回登录页，
+      // 否则用户会停在首页看到一片空数据（业务请求的 401 兜底要等下一次请求才触发）
+      this.clearSession()
+      this.redirectToLogin('登录已过期，请重新登录')
+      return false
+    }, () => {
       // 网络异常时保持本地登录态，由具体请求的 401 处理兜底
+      return true
+    }).then(result => {
+      this._validatingSession = false
+      this._sessionValidation = null
+      return result
     })
+    return this._sessionValidation
+  },
+
+  // 踢回登录页（带提示）。防止重复跳转。
+  redirectToLogin(message) {
+    if (this._redirectingToLogin) return
+    this._redirectingToLogin = true
+    if (message) wx.showToast({ title: message, icon: 'none' })
+    setTimeout(() => {
+      wx.reLaunch({ url: '/pages/login/login' })
+      this._redirectingToLogin = false
+    }, 600)
   },
 
   // 清除本地登录态（供会话失效时复用；P2-67：键位单源维护，各登出入口统一调这里）

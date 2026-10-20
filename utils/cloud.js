@@ -33,13 +33,18 @@ function ensureCloudReady() {
 // 登录页自身不发带 token 的请求，不会被误伤；防抖避免并发请求重复跳转。
 let redirectingToLogin = false
 function handleSessionExpired() {
-  try {
-    const app = getApp()
-    if (app && typeof app.clearSession === 'function') app.clearSession()
-  } catch (err) { /* ignore */ }
   if (redirectingToLogin) return
   redirectingToLogin = true
   setTimeout(() => { redirectingToLogin = false }, 1500)
+  try {
+    const app = getApp()
+    if (app && typeof app.clearSession === 'function') app.clearSession()
+    // 跳转交给 app.redirectToLogin 统一出口，避免与启动期校验各自弹一次 toast
+    if (app && typeof app.redirectToLogin === 'function') {
+      app.redirectToLogin('登录已过期，请重新登录')
+      return
+    }
+  } catch (err) { /* ignore */ }
   wx.showToast({ title: '登录已过期，请重新登录', icon: 'none' })
   setTimeout(() => {
     wx.reLaunch({ url: '/pages/login/login' })

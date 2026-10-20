@@ -11,6 +11,8 @@ function parseDate(date) {
     if (!date) return null
     const text = typeof date === 'string' ? date.trim() : ''
     if (text && /^-?\d+(?:\.\d+)?$/.test(text)) return parseDate(Number(text))
+    // 带 T 的是 ISO 8601（云函数返回格式），各基础库均可原生解析；
+    // 不带 T 的历史格式走斜杠形式，避免被当成 UTC 产生时区偏移
     const d = typeof date === 'string' ? new Date(text.includes('T') ? text : text.replace(/-/g, '/')) : new Date(date)
     return Number.isNaN(d.getTime()) ? null : d
 }

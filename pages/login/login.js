@@ -1,6 +1,7 @@
 // pages/login/login.js
 const util = require('../../utils/util')
 const cloud = require('../../utils/cloud')
+const authGuard = require('../../utils/auth-guard')
 
 // 光标与键盘的间距（单位 px）。微信 input 的 cursor-spacing 只认 px，
 // 但页面是按 rpx 自适应的：固定写死 120 会让宽屏（大字体/平板）下
@@ -31,6 +32,32 @@ Page({
   onShow() {
     // 不预填任何账号，避免向使用者公示测试账号
     this.setData({ username: '', password: '' })
+    // 会话仍有效时不显示登录页，直接进入对应门户。
+    // 冷启动入口是 pages[0]=login（app.json），这里负责"让路"，
+    // 否则有效会话也会停在登录页要求重新登录。
+    this.redirectIfLoggedIn()
+  },
+
+  // 已登录则跳转到对应首页；供货商走独立门户，其余走门店首页。
+  // 与 handleLoginSuccess 的落点保持一致，避免两条路径分叉。
+  //
+  // 先等服务端会话校验落定再决定去留：本地存储显示有效、但服务端已作废时，
+  // 若直接跳首页，用户会先看到首页空数据，再被 401 兜底踢回登录页（闪屏）。
+  async redirectIfLoggedIn() {
+    if (!authGuard.isLoggedIn()) return
+    const app = getApp()
+    if (typeof app.validateSessionOnLaunch === 'function') {
+      const valid = await app.validateSessionOnLaunch(app.globalData.authToken)
+      if (valid === false) return
+    }
+    // 校验期间会话可能已被清掉，再确认一次登录态
+    if (!authGuard.isLoggedIn()) return
+    const user = app.globalData.userInfo || {}
+    if (user.role === 'supplier') {
+      wx.reLaunch({ url: '/pages/supplier-home/supplier-home' })
+    } else {
+      wx.switchTab({ url: '/pages/index/index' })
+    }
   },
 
   // 按屏幕宽度折算 cursor-spacing（px）
