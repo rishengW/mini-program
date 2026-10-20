@@ -34,7 +34,7 @@
         <text class="col-unit">单位</text>
         <text class="col-qty">数量</text>
       </view>
-      <view wx:for="{{rows}}" wx:key="index" class="table-row">
+      <view wx:for="{{rows}}" wx:key="_key" class="table-row">
         <text class="col-name">{{item.productName}}</text>
         <text class="col-cat text-sm">{{item.category}}</text>
         <text class="col-unit">{{item.unit}}</text>
@@ -50,7 +50,7 @@
         <text class="col-num">实收</text>
         <text class="col-unit">单位</text>
       </view>
-      <view wx:for="{{rows}}" wx:key="index" class="table-row {{item.receivedQty < item.orderQty ? 'row-warning' : ''}}">
+      <view wx:for="{{rows}}" wx:key="_key" class="table-row {{item.receivedQty < item.orderQty ? 'row-warning' : ''}}">
         <text class="col-name link-text" bindtap="goSourceOrder">{{item.productName}} ›</text>
         <text class="col-num">{{item.orderQty}}</text>
         <text class="col-num text-bold {{item.receivedQty < item.orderQty ? 'text-danger' : 'text-success'}}">{{item.receivedQty}}</text>
@@ -67,7 +67,7 @@
         <text class="col-num">实收</text>
         <text class="col-unit">单位</text>
       </view>
-      <view wx:for="{{rows}}" wx:key="index" class="table-row" data-order-id="{{item.purchaseOrderId}}">
+      <view wx:for="{{rows}}" wx:key="_key" class="table-row" data-order-id="{{item.purchaseOrderId}}">
         <text class="col-store text-sm">{{item.storeName}}</text>
         <text class="col-name link-text" bindtap="goRowOrder" data-order-id="{{item.purchaseOrderId}}">{{item.productName}} ›</text>
         <text class="col-num text-bold">{{item.receivedQty}}</text>
@@ -84,7 +84,7 @@
         <text class="col-num">单价</text>
         <text class="col-amount">小计</text>
       </view>
-      <view wx:for="{{rows}}" wx:key="index" class="table-row">
+      <view wx:for="{{rows}}" wx:key="_key" class="table-row">
         <!-- 动态 bindtap 在部分基础库不生效，按类型拆成静态绑定 -->
         <text wx:if="{{report.reportType === 'store_receipt_price_report'}}" class="col-name link-text" bindtap="goSourceOrder" data-order-id="{{item.purchaseOrderId}}">{{item.productName}} ›</text>
         <text wx:else class="col-name link-text" bindtap="goRowOrder" data-order-id="{{item.purchaseOrderId}}">{{item.productName}} ›</text>
@@ -108,7 +108,7 @@
         <text class="col-num">数量</text>
         <text class="col-unit">单位</text>
       </view>
-      <view wx:for="{{rows}}" wx:key="index" class="table-row" data-order-id="{{item.purchaseOrderId}}">
+      <view wx:for="{{rows}}" wx:key="_key" class="table-row" data-order-id="{{item.purchaseOrderId}}">
         <text class="col-name link-text" bindtap="goRowOrder" data-order-id="{{item.purchaseOrderId}}">{{item.productName}} ›</text>
         <text class="col-store text-sm">{{item.storeName}}</text>
         <text class="col-num text-bold">{{item.orderQty || item.qty}}</text>
@@ -143,7 +143,8 @@
 
     <!-- 通用空态 -->
     <block wx:else>
-      <view class="empty-hint">报表数据加载中...</view>
+      <view wx:if="{{loadFailed}}" class="empty-hint">报表加载失败，请返回后重试</view>
+      <view wx:else class="empty-hint">报表数据加载中...</view>
     </block>
   </view>
 

@@ -10,9 +10,14 @@
   color: #ffffff;
   margin-bottom: 20rpx;
 }
-.store-name { font-size: 32rpx; font-weight: 600; display: flex; align-items: center; }
-.store-pin { margin-right: 8rpx; }
-.user-info { margin-top: 6rpx; color: rgba(255,255,255,0.8); }
+/* 门店名与「切换」：门店名可长可短（上限 30 字），必须允许收缩并截断，
+   否则长名会把「切换」挤到换行，变成竖排的「切/换/▸」 */
+.store-info { flex: 1; min-width: 0; }
+.store-name { font-size: 32rpx; font-weight: 600; display: flex; align-items: center; min-width: 0; }
+.store-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.store-switch { margin-left: 12rpx; flex-shrink: 0; white-space: nowrap; font-size: 24rpx; color: rgba(255,255,255,0.8); }
+.store-pin { margin-right: 8rpx; flex-shrink: 0; }
+.user-info { margin-top: 6rpx; color: rgba(255,255,255,0.8); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .store-actions {
   display: flex;
   flex-direction: column;

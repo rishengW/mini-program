@@ -1,6 +1,7 @@
 <!-- pages/purchase-list/purchase-list.wxml -->
 <view class="container">
-  <view class="filter-bar">
+  <!-- P2-29：首屏数据未回时筛选条整行空白——tabs 就绪前不渲染空条 -->
+  <view class="filter-bar" wx:if="{{filterTabs.length}}">
     <view wx:for="{{filterTabs}}" wx:key="value"
           class="filter-tab {{activeFilter === item.value ? 'filter-tab-active' : ''}}"
           bindtap="switchFilter" data-value="{{item.value}}">
@@ -32,7 +33,11 @@
     </view>
   </view>
 
-  <view wx:if="{{loadFailed}}" class="empty-state">
+  <!-- P2-29：首屏加载中与空态/失败态互斥，不再同时闪现"暂无采购申请" -->
+  <view wx:if="{{isLoading && filteredList.length === 0}}" class="empty-state">
+    <view class="empty-state-text">加载中…</view>
+  </view>
+  <view wx:elif="{{loadFailed}}" class="empty-state">
     <view class="empty-state-icon icon icon-xxl icon-alert-danger"></view>
     <view class="empty-state-text">加载失败，请下拉重试</view>
   </view>

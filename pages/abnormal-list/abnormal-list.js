@@ -1,6 +1,7 @@
 // pages/abnormal-list/abnormal-list.js
 const cloud = require('../../utils/cloud')
 const util = require('../../utils/util')
+const meta = require('../../utils/meta')
 const authGuard = require('../../utils/auth-guard')
 
 Page({
@@ -39,8 +40,8 @@ Page({
     if (activeFilter !== 'all') {
       list = list.filter(r => r.status === activeFilter)
     }
-    const statusColorMap = { pending: 'warning', processing: 'primary', resolved: 'success', closed: 'grey' }
-    const filteredList = list.map(r => ({ ...r, statusColor: statusColorMap[r.status] || 'grey' }))
+    // L23：状态色收敛到 meta.statusMap 单源，不再本地硬编码
+    const filteredList = list.map(r => ({ ...r, statusColor: meta.getStatusInfo(r.status).type }))
     this.setData({ filteredList })
   },
 

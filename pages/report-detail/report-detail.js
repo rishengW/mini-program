@@ -8,6 +8,7 @@ Page({
   data: {
     report: {},
     rows: [],
+    loadFailed: false,
     totalAmount: '0.00',
     typeLabel: '',
     typeIconClass: '',
@@ -56,18 +57,20 @@ Page({
         const counted = rows.filter(r => r.payable !== false && !r.isManual)
         const excluded = rows.length - counted.length
         const sum = counted.reduce((s, r) => s + (Number(r.subtotal) || 0), 0)
-        totalAmount = sum.toFixed(2)
+        totalAmount = util.formatMoney(sum, false)
         if (excluded > 0) {
           rpt.excludedNote = `另有 ${excluded} 行异常/不可付款行未计入合计（与下载文件口径一致）`
         }
       } else if (rpt.reportType.includes('summary')) {
         const sum = rows.reduce((s, r) => s + (r.subtotal || 0), 0)
-        totalAmount = sum.toFixed(2)
+        totalAmount = util.formatMoney(sum, false)
       }
 
+      // L26：wxml 列表 wx:key 需引用真实存在的字段；报表行无统一 id，注入 _key（优先业务 id，序号兜底唯一）
+      const keyedRows = rows.map((row, i) => ({ ...row, _key: row.itemId || row.purchaseOrderItemId || row.productId || (row.purchaseOrderId || '') + '-' + (row.productName || '') + '-' + i }))
       this.setData({
         report: rpt,
-        rows,
+        rows: keyedRows,
         totalAmount,
         typeLabel: typeInfo.label,
         typeIconClass: typeInfo.iconClass,
@@ -75,7 +78,9 @@ Page({
         scopeLabel: rpt.reportScope === 'store' ? '门店' : '供应商'
       })
     } else {
-      util.showToast('加载失败')
+      // P2-30：失败置位——wxml 渲染失败态，不再永久停在"报表数据加载中..."
+      this.setData({ loadFailed: true })
+      util.showToast((result && result.msg) || '加载失败')
     }
   },
 

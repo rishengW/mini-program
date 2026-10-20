@@ -26,15 +26,41 @@ Page({
 
   onShow() {
     if (!authGuard.requireLogin()) return
+    const role = (getApp().globalData.userInfo || {}).role
+    const isGlobal = ['super_admin', 'purchaser'].includes(role)
+    // P2-34：筛选项按角色裁剪——非全局角色服务端会强制 report_scope='store'，
+    // 若仍提供"供应商报表"选项会造成标签与内容不一致
+    const scopeOptions = isGlobal
+      ? [
+          { value: 'all', label: '全部' },
+          { value: 'store', label: '门店报表' },
+          { value: 'supplier', label: '供应商报表' }
+        ]
+      : [{ value: 'store', label: '门店报表' }]
     const reportTypeOptions = [
         { value: '', label: '全部类型' },
-        ...Object.keys(meta.reportTypeMap).map(k => ({
-          value: k, label: meta.reportTypeMap[k].label
-        }))
+        ...Object.keys(meta.reportTypeMap)
+          .filter(k => isGlobal || k.indexOf('store_') === 0)
+          .map(k => ({
+            value: k, label: meta.reportTypeMap[k].label
+          }))
       ]
     const selectedType = reportTypeOptions.find(item => item.value === this.data.filterType)
-    this.setData({ reportTypeOptions, filterTypeLabel: selectedType ? selectedType.label : '全部类型' })
-    this.reload()
+    const patch = {
+      scopeOptions,
+      reportTypeOptions,
+      filterTypeLabel: selectedType ? selectedType.label : '全部类型'
+    }
+    if (!isGlobal) {
+      patch.filterScope = 'store'
+      if (this.data.filterType && this.data.filterType.indexOf('store_') !== 0) {
+        patch.filterType = ''
+        patch.filterTypeLabel = '全部类型'
+      }
+    }
+    this.setData(patch)
+    // P2-33：仅首次进入加载；从详情页返回时保留翻页位置，不再无条件复位到第 1 页
+    if (this.data.reports.length === 0) this.reload()
   },
 
   onPullDownRefresh() {
@@ -52,6 +78,8 @@ Page({
   },
 
   async loadReports(page = 1, append = false) {
+    // P2-31：请求序号防竞态——刷新/切筛选后旧请求的后至响应直接丢弃
+    const seq = (this._reqSeq = (this._reqSeq || 0) + 1)
     const app = getApp()
     const role = app.globalData.userInfo ? app.globalData.userInfo.role : 'purchaser'
     const storeId = app.globalData.currentStore ? app.globalData.currentStore.storeId : ''
@@ -67,14 +95,19 @@ Page({
       pageSize: PAGE_SIZE
     })
 
+    if (seq !== this._reqSeq) return
     if (result.code === 0) {
       const newReports = (result.data || []).map(r => {
         const typeInfo = meta.getReportTypeInfo(r.reportType || r.report_type)
+        const nr = cloud.normalizeReport(r)
         return {
-          ...cloud.normalizeReport(r),
+          ...nr,
           typeLabel: typeInfo.label,
           typeIconClass: typeInfo.iconClass,
-          typeColor: typeInfo.color
+          typeColor: typeInfo.color,
+          // P2-55：报表状态文案走 meta 单源，wxml 不再硬编码 'superseded'
+          statusText: meta.getStatusInfo(nr.status).text,
+          statusType: meta.getStatusInfo(nr.status).type
         }
       })
       const reports = append ? this.data.reports.concat(newReports) : newReports

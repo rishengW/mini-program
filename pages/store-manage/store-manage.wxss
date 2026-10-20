@@ -112,25 +112,7 @@
   margin-bottom: 40rpx;
 }
 
-.form-group {
-  margin-bottom: 24rpx;
-}
-
-.form-label {
-  font-size: 28rpx;
-  color: #595959;
-  margin-bottom: 12rpx;
-}
-
-.form-input {
-  width: 100%;
-  height: 80rpx;
-  background: #F5F7FA;
-  border-radius: 12rpx;
-  padding: 0 24rpx;
-  box-sizing: border-box;
-  font-size: 28rpx;
-}
+/* P2-73：删除本地对全局 .form-group/.form-label/.form-input/.btn-group 的静默覆盖（页面 wxss 后加载会压过全局，导致跨页输入框底色不一致），统一走 app.wxss 全局定义 */
 
 .form-static {
   color: #8C8C8C;
@@ -140,9 +122,4 @@
   font-size: 24rpx;
   color: #8C8C8C;
   margin-top: 12rpx;
-}
-
-.btn-group {
-  display: flex;
-  gap: 20rpx;
 }

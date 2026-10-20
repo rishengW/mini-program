@@ -1,6 +1,7 @@
 // pages/supplier-receipts/supplier-receipts.js
 const util = require('../../utils/util')
 const cloud = require('../../utils/cloud')
+const meta = require('../../utils/meta')
 const authGuard = require('../../utils/auth-guard')
 
 Page({
@@ -13,7 +14,7 @@ Page({
   },
 
   onShow() {
-  if (!authGuard.requireLogin()) return
+    if (!authGuard.requireLogin()) return
     const app = getApp()
     const user = app.globalData.userInfo || {}
     if (!app.globalData.isLoggedIn) {
@@ -52,13 +53,16 @@ Page({
       // S9：手动商品行（is_manual）0 价为预期行为（金额走凭证核销回填），不标异常
       const abnormal = !item.is_manual && (receivedQty !== orderQty || item.payable_flag === false)
       // S7 拍板：展示异常处理进度与裁决结果，供供货商对账（只读）
-      const abnormals = (item.abnormals || []).map(rec => {
-        const typeText = { shortage: '短收', quality: '质量问题', wrong_item: '错货' }[rec.type] || rec.type || '异常'
-        const statusText = { pending: '待处理', processing: '处理中', resolved: '已解决', closed: '已关闭' }[rec.status] || rec.status || ''
+      const abnormals = (item.abnormals || []).map((rec, i) => {
+        // P2-54：类型/状态文案走 meta 单源（补 missing_price，不再自建重复字典）
+        const typeText = meta.getAbnormalTypeInfo(rec.type).text
+        const statusText = meta.getStatusInfo(rec.status).text
         const decisionText = rec.payment_decision === 'pay_received'
           ? '裁决：按实收补款'
           : rec.payment_decision === 'reject' ? '裁决：维持不付款' : ''
         return {
+          // L26：wxml wx:key 需真实存在的字段
+          akey: rec.type + '-' + i,
           text: `${typeText}（${statusText}）${rec.resolution || ''}${decisionText ? ' ' + decisionText : ''}`,
           done: rec.status === 'resolved' || rec.status === 'closed'
         }
@@ -67,8 +71,8 @@ Page({
         ...item,
         receivedQty,
         orderQty,
-        priceText: '¥' + (Number(item.price_snapshot) || 0).toFixed(2),
-        amountText: '¥' + (Number(item.amount) || 0).toFixed(2),
+        priceText: util.formatMoney(item.price_snapshot),
+        amountText: util.formatMoney(item.amount),
         abnormal,
         abnormals
       }

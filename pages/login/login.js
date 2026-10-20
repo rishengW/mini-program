@@ -2,11 +2,19 @@
 const util = require('../../utils/util')
 const cloud = require('../../utils/cloud')
 
+// 光标与键盘的间距（单位 px）。微信 input 的 cursor-spacing 只认 px，
+// 但页面是按 rpx 自适应的：固定写死 120 会让宽屏（大字体/平板）下
+// "账号框到密码框"的可用间距被吃掉，密码框会被键盘遮住。
+// 因此按屏幕宽度折算成等效 rpx 数值，基准为 375px 宽时的 120px。
+const CURSOR_SPACING_RPX = 240
+const BASE_WINDOW_WIDTH = 375
+
 Page({
   data: {
     username: '',
     password: '',
     isSuperAdminLogin: false,
+    cursorSpacing: 120,
     roles: [
       { key: 'chef', label: '下单人员', iconClass: 'icon-chef-primary' },
       { key: 'store_manager', label: '店长', iconClass: 'icon-store-primary' },
@@ -16,9 +24,25 @@ Page({
     selectedRole: 'chef'
   },
 
+  onLoad() {
+    this.setData({ cursorSpacing: this.computeCursorSpacing() })
+  },
+
   onShow() {
     // 不预填任何账号，避免向使用者公示测试账号
     this.setData({ username: '', password: '' })
+  },
+
+  // 按屏幕宽度折算 cursor-spacing（px）
+  computeCursorSpacing() {
+    let windowWidth = BASE_WINDOW_WIDTH
+    try {
+      const info = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync()
+      windowWidth = (info && info.windowWidth) || BASE_WINDOW_WIDTH
+    } catch (e) {
+      windowWidth = BASE_WINDOW_WIDTH
+    }
+    return Math.round(CURSOR_SPACING_RPX * windowWidth / 750)
   },
 
   onInput(e) {

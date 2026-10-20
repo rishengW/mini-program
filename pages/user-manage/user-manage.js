@@ -24,7 +24,7 @@ Page({
   },
 
   onShow() {
-  if (!authGuard.requireLogin()) return
+    if (!authGuard.requireLogin()) return
     this.loadData()
   },
 
@@ -36,8 +36,9 @@ Page({
       cloud.callFunction('authService', { action: 'getStores' }),
       cloud.callFunction('getSuppliers', {})
     ])
-    if (usersResult.code === 0 && storesResult.code === 0) {
-      const stores = storesResult.data || []
+    // L35：users 成功即展示；stores/suppliers 失败降级为原始 ID 显示，不再整页丢弃
+    if (usersResult.code === 0) {
+      const stores = storesResult.code === 0 ? (storesResult.data || []) : []
       const suppliers = (suppliersResult.code === 0 ? suppliersResult.data : []).map(cloud.normalizeSupplier)
       const usersData = usersResult.data.map(u => {
         const store = stores.find(s => s.storeId === u.defaultStoreId)
@@ -48,8 +49,9 @@ Page({
         return { ...u, displayStoreName }
       })
       this.setData({ users: usersData, stores, suppliers })
+      if (storesResult.code !== 0) util.showToast('门店列表加载失败，门店列暂显示原始 ID')
     } else {
-      util.showToast(usersResult.msg || storesResult.msg || '账号数据加载失败')
+      util.showToast(usersResult.msg || '账号数据加载失败')
     }
     util.hideLoading()
   },

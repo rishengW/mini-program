@@ -38,7 +38,7 @@
         <text>{{item.typeLabel}}</text>
       </view>
       <view wx:if="{{item.hasAbnormal}}" class="tag tag-danger">{{item.abnormalLabel}}</view>
-      <view wx:if="{{item.status === 'superseded'}}" class="tag tag-grey">已作废</view>
+      <view wx:if="{{item.statusText && item.status !== 'generated'}}" class="tag tag-{{item.statusType}}">{{item.statusText}}</view>
       <view class="report-version">v{{item.fileVersion || 1}}</view>
     </view>
     <view class="report-meta">

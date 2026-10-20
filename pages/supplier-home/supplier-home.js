@@ -1,6 +1,7 @@
 // pages/supplier-home/supplier-home.js
 const cloud = require('../../utils/cloud')
 const util = require('../../utils/util')
+const meta = require('../../utils/meta')
 const authGuard = require('../../utils/auth-guard')
 
 // 微信订阅消息模板 ID：小程序后台申请通过后填入；为空时不拉起授权弹窗
@@ -14,15 +15,17 @@ Page({
     userName: '',
     unreadCount: 0,
     latestMessage: null,
-    stats: [
-      { key: 'pending', label: '待确认', iconClass: 'icon-clock-warning', value: 0 },
-      { key: 'confirmed', label: '已确认', iconClass: 'icon-check-success', value: 0 },
-      { key: 'shipped', label: '已发货', iconClass: 'icon-truck-primary', value: 0 }
-    ]
+    // L23：文案收敛到 meta.supplierConfirmMap 单源
+    stats: ['pending', 'confirmed', 'shipped'].map(key => ({
+      key,
+      label: meta.getSupplierConfirmInfo(key).text,
+      iconClass: { pending: 'icon-clock-warning', confirmed: 'icon-check-success', shipped: 'icon-truck-primary' }[key],
+      value: 0
+    }))
   },
 
   onShow() {
-  if (!authGuard.requireLogin()) return
+    if (!authGuard.requireLogin()) return
     // 隐藏微信原生"返回首页"按钮：跳到登录页后仍需重新输账号密码，容易误导
     if (wx.hideHomeButton) wx.hideHomeButton()
     const app = getApp()
@@ -66,8 +69,9 @@ Page({
     wx.navigateTo({ url: '/pages/supplier-messages/supplier-messages' })
   },
 
+  // L21：与 goMessages 同目标，保留入口兼容（通知条 bindtap 的是这个名字），实现收敛一处
   goMessageCenter() {
-    wx.navigateTo({ url: '/pages/supplier-messages/supplier-messages' })
+    this.goMessages()
   },
 
   // 新订单微信服务通知：一次性订阅（授权一次可推一条），进门户时静默拉起；
@@ -118,17 +122,8 @@ Page({
     if (!confirmed) return
     const app = getApp()
     await cloud.callFunction('authService', { action: 'logout' })
-    app.globalData.isLoggedIn = false
-    app.globalData.userInfo = null
-    app.globalData.currentStore = null
-    app.globalData.supplierInfo = null
-    app.globalData.authToken = ''
-    wx.removeStorageSync('userInfo')
-    wx.removeStorageSync('currentStore')
-    wx.removeStorageSync('supplierInfo')
-    wx.removeStorageSync('authToken')
-    wx.removeStorageSync('sessionExpiresAt')
-    wx.removeStorageSync('account_history')
+    // P2-67：登出清理统一走 app.clearSession()，键位新增不再漏清
+    app.clearSession()
     wx.reLaunch({ url: '/pages/login/login' })
   }
 })

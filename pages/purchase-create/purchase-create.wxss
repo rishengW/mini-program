@@ -58,15 +58,16 @@
 
 /* 数量控制 */
 .qty-control { display: flex; align-items: center; }
+/* P2-74：数量控件命中区域 56→64rpx，降低连点误触 */
 .qty-btn {
-  width: 56rpx; height: 56rpx;
+  width: 64rpx; height: 64rpx;
   display: flex; align-items: center; justify-content: center;
   background: #F0F2F5; border-radius: 8rpx;
   font-size: 32rpx; color: #595959; font-weight: 600;
 }
 .qty-btn:active { background: #E0E2E5; }
 .qty-input {
-  width: 100rpx; height: 56rpx;
+  width: 100rpx; height: 64rpx;
   text-align: center; font-size: 30rpx; font-weight: 600;
   margin: 0 8rpx; background: #F0F2F5; border-radius: 8rpx;
 }
@@ -99,12 +100,12 @@
 .manual-meta { display: block; font-size: 22rpx; color: #8C8C8C; margin-top: 2rpx; }
 .qty-control-sm { display: flex; align-items: center; margin-right: 12rpx; }
 .qty-btn-sm {
-  width: 44rpx; height: 44rpx;
+  width: 56rpx; height: 56rpx;
   display: flex; align-items: center; justify-content: center;
   background: #F0F2F5; border-radius: 6rpx; font-size: 28rpx; color: #595959;
 }
 .qty-input-sm {
-  width: 64rpx; height: 44rpx; text-align: center;
+  width: 64rpx; height: 56rpx; text-align: center;
   font-size: 26rpx; font-weight: 600; margin: 0 6rpx;
   background: #F0F2F5; border-radius: 6rpx;
 }
@@ -136,7 +137,7 @@
 /* 商品种数汇总：放在备注卡片内（移出底部操作栏，避免与按钮争抢宽度） */
 .remark-summary { font-size: 24rpx; color: #8C8C8C; margin-top: 12rpx; }
 /* 操作栏只有按钮：两个按钮等宽铺满整栏 */
-.submit-btns { display: flex; gap: 12rpx; flex: 1; }
+.submit-btns { display: flex; gap: 20rpx; flex: 1; }
 .submit-btns .btn { flex: 1; }
 
 /* 弹窗 */

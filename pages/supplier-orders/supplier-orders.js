@@ -4,13 +4,11 @@ const util = require('../../utils/util')
 const cloud = require('../../utils/cloud')
 const authGuard = require('../../utils/auth-guard')
 
-const TABS = [
-  { key: 'pending', label: '待确认' },
-  { key: 'confirmed', label: '已确认' },
-  { key: 'shipped', label: '已发货' },
-  { key: 'done', label: '已完成' },
-  { key: 'all', label: '全部' }
-]
+// L23：tab 文案收敛到 meta.supplierConfirmMap 单源，不再本地硬编码
+const TABS = ['pending', 'confirmed', 'shipped', 'done', 'all'].map(key => ({
+  key,
+  label: key === 'all' ? '全部' : meta.getSupplierConfirmInfo(key).text
+}))
 
 Page({
   data: {
@@ -25,7 +23,7 @@ Page({
   },
 
   onLoad(options = {}) {
-  if (!authGuard.requireLogin()) return
+    if (!authGuard.requireLogin()) return
     if (options.status && TABS.some(t => t.key === options.status)) {
       this.setData({ activeTab: options.status })
     }
@@ -72,6 +70,8 @@ Page({
     })
     this.setData({ loading: false })
     if (!res || res.code !== 0) {
+      // P2-69：首页加载失败清空旧数据，避免陈旧列表被误认为最新
+      if (page === 1) this.setData({ orders: [], total: 0 })
       util.showToast((res && res.msg) || '订单加载失败，请稍后重试')
       return
     }

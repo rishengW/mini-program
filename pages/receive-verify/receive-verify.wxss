@@ -2,6 +2,16 @@
 
 .order-info { margin-top: 8rpx; }
 
+/* P2-63：手动商品专用单提示条 */
+.manual-order-banner {
+  margin-top: 16rpx;
+  padding: 12rpx 16rpx;
+  background: #FFF7E6;
+  border-radius: 8rpx;
+  font-size: 24rpx;
+  color: #FA8C16;
+}
+
 .verify-item {
   padding: 20rpx 0;
   border-bottom: 1rpx solid #F0F0F0;

@@ -19,12 +19,9 @@ Page({
   },
 
   async onShow() {
+    // L12：requireLogin 已保证登录态（未登录会跳登录页），原 isLoggedIn 二重判断恒假，已删
     if (!authGuard.requireLogin()) return
     const app = getApp()
-    if (!app.globalData.isLoggedIn) {
-      wx.redirectTo({ url: '/pages/login/login' })
-      return
-    }
 
     const user = app.globalData.userInfo
     // 供货商有独立门户，误入门店首页时直接转走
@@ -118,12 +115,15 @@ Page({
 
   goStore() { wx.navigateTo({ url: '/pages/store-switch/store-switch' }) },
 
+  // L36：下拉刷新（与采购/报表页口径一致）
+  async onPullDownRefresh() {
+    try { await this.onShow() } finally { wx.stopPullDownRefresh() }
+  },
+
   // 门店管理（仅超管可见入口，后端各 store 操作同样校验超管身份）
   openStoreManage() {
     wx.navigateTo({ url: '/pages/store-manage/store-manage' })
   },
-
-  stopBubble() {},
 
   // 顶部铃铛入口：进消息中心（tabBar 页面需用 switchTab）
   goMessages() {
@@ -139,15 +139,8 @@ Page({
     await cloud.callFunction('authService', {
       action: 'logout',
     })
-    app.globalData.isLoggedIn = false
-    app.globalData.userInfo = null
-    app.globalData.currentStore = null
-    app.globalData.authToken = ''
-    wx.removeStorageSync('userInfo')
-    wx.removeStorageSync('currentStore')
-    wx.removeStorageSync('authToken')
-    wx.removeStorageSync('sessionExpiresAt')
-    wx.removeStorageSync('account_history')
+    // P2-67：登出清理统一走 app.clearSession()，键位新增不再漏清
+    app.clearSession()
     wx.reLaunch({ url: '/pages/login/login' })
   },
 

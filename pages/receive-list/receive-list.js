@@ -68,8 +68,9 @@ Page({
       receivedBy: receipt.receivedBy || receipt.received_by || '',
       receiptStatus: receipt.receiptStatus || receipt.receipt_status || '',
       hasAbnormal: (receipt.receiptStatus || receipt.receipt_status) === 'abnormal',
-      statusText: (receipt.receiptStatus || receipt.receipt_status) === 'abnormal' ? '收货异常' : '已收货',
-      statusType: (receipt.receiptStatus || receipt.receipt_status) === 'abnormal' ? 'danger' : 'success',
+      // L23：状态文案/色收敛到 meta.statusMap 单源（receipt_status 的 abnormal 对应订单态 receipt_abnormal）
+      statusText: meta.getStatusInfo((receipt.receiptStatus || receipt.receipt_status) === 'abnormal' ? 'receipt_abnormal' : 'received').text,
+      statusType: meta.getStatusInfo((receipt.receiptStatus || receipt.receipt_status) === 'abnormal' ? 'receipt_abnormal' : 'received').type,
       // 清单 #7：报表生成失败的收货单带缺报表标记
       missingReports: !!receipt.missing_reports,
       // #11 拍板（2026-09-24）：缺价行标记——档案商品 0 价且非手动，提示补账

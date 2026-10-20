@@ -72,7 +72,10 @@ Page({
     // #18（2026-09-24 拍板）：本店店长可代改/代提交本店任何人的草稿（含离职员工遗留草稿）
     const canEdit = order.orderStatus === 'draft' && (
       ['super_admin', 'purchaser'].includes(currentUser.role) ||
-      order.createdById === (currentUser.userId || currentUser.id) ||
+      // P2-52：旧数据 created_by 存姓名时 normalize 后 createdById 为空，回退按姓名快照比对
+      (order.createdById
+        ? order.createdById === (currentUser.userId || currentUser.id)
+        : (!!order.createdBy && order.createdBy === currentUser.name)) ||
       (currentUser.role === 'store_manager' && !!order.storeId && order.storeId === currentUser.defaultStoreId)
     )
     // 驳回的单子原样保留，可复制为新草稿改后重提（B7）

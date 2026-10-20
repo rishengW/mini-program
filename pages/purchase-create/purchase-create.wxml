@@ -109,8 +109,9 @@
   <!-- 8. 底部提交 -->
   <view class="submit-bar">
     <view class="submit-btns">
-      <button class="btn btn-outline btn-sm" bindtap="saveDraft">存草稿</button>
-      <button class="btn btn-primary btn-sm" bindtap="submitRequest">提交申请</button>
+      <!-- P2-74：主操作命中区域升到全局 .btn 的 88rpx，不再用 60rpx 的 btn-sm -->
+      <button class="btn btn-outline" disabled="{{isSubmitting}}" bindtap="saveDraft">存草稿</button>
+      <button class="btn btn-primary" loading="{{isSubmitting}}" disabled="{{isSubmitting}}" bindtap="submitRequest">提交申请</button>
     </view>
   </view>
 

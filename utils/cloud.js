@@ -149,7 +149,9 @@ function normalizePurchaseOrder(order = {}) {
     storeName: order.storeName || order.store_name || '',
     orderDate,
     deliveryDate,
-    createdById: order.createdById || order.created_by_id || order.created_by || '',
+    // P2-52：旧数据的 created_by 可能存的是姓名而非 user_id——与姓名快照相同即判定为旧数据，不进 createdById 兜底链
+    createdById: order.createdById || order.created_by_id ||
+      (order.created_by && order.created_by !== (order.created_by_name || order.createdByName) ? order.created_by : '') || '',
     createdBy: order.createdByName || order.created_by_name || order.createdBy || order.created_by || '',
     orderStatus: order.orderStatus || order.order_status || '',
     // S9：手动商品专用单与凭证核销状态

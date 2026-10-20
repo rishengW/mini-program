@@ -10,7 +10,7 @@ Page({
   },
 
   onShow() {
-  if (!authGuard.requireLogin()) return
+    if (!authGuard.requireLogin()) return
     const app = getApp()
     const user = app.globalData.userInfo || {}
     if (!app.globalData.isLoggedIn) {
@@ -35,7 +35,7 @@ Page({
     }
     const prices = (res.data || []).map(item => ({
       ...item,
-      priceText: '¥' + (Number(item.price) || 0).toFixed(2)
+      priceText: util.formatMoney(item.price)
     }))
     this.setData({ prices })
   }

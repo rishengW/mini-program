@@ -65,6 +65,8 @@ Page({
   },
 
   async loadReports(page = 1, append = false) {
+    // P2-31：请求序号防竞态——刷新/切筛选后旧请求的后至响应直接丢弃
+    const seq = (this._reqSeq = (this._reqSeq || 0) + 1)
     const app = getApp()
     const role = (app.globalData.userInfo && app.globalData.userInfo.role) || 'purchaser'
     const storeId = app.globalData.currentStore && app.globalData.currentStore.storeId
@@ -79,18 +81,23 @@ Page({
       pageSize: PAGE_SIZE
     })
 
+    if (seq !== this._reqSeq) return
     if (result.code === 0) {
       const newReports = (result.data || []).map(r => {
         const typeInfo = meta.getReportTypeInfo(r.reportType || r.report_type)
         const abnormalSummary = r.abnormalSummary || r.abnormal_summary || ''
+        const nr = cloud.normalizeReport(r)
         return {
-          ...cloud.normalizeReport(r),
+          ...nr,
           hasAbnormal: r.hasAbnormal !== undefined ? !!r.hasAbnormal : !!r.has_abnormal,
           abnormalSummary,
           abnormalLabel: `收货异常${abnormalSummary ? ` · ${abnormalSummary}` : ''}`,
           typeLabel: typeInfo.label,
           typeIconClass: typeInfo.iconClass,
-          typeColor: typeInfo.color
+          typeColor: typeInfo.color,
+          // P2-55：报表状态文案走 meta 单源，wxml 不再硬编码 'superseded'
+          statusText: meta.getStatusInfo(nr.status).text,
+          statusType: meta.getStatusInfo(nr.status).type
         }
       })
       const reports = append ? this.data.reports.concat(newReports) : newReports

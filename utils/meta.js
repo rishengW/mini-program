@@ -16,7 +16,24 @@ const statusMap = {
   resolved: { text: '已解决', type: 'success' },
   closed: { text: '已关闭', type: 'grey' },
   cancelled: { text: '已作废', type: 'grey' },
-  generated: { text: '已生成', type: 'success' }
+  generated: { text: '已生成', type: 'success' },
+  superseded: { text: '已作废', type: 'grey' }
+}
+
+// 手动单凭证核销状态（purchase_order.verify_status；P2-53：与 abnormal 的 pending 分开成字典，不再混用 statusMap）
+const verifyStatusMap = {
+  none: { text: '待提交凭证', type: 'grey' },
+  pending: { text: '待核销', type: 'warning' },
+  approved: { text: '已核销', type: 'success' },
+  rejected: { text: '已驳回', type: 'danger' }
+}
+
+// 收货异常类型（receipt_item.abnormals[].type；P2-54：补 missing_price，各页不再自建）
+const abnormalTypeMap = {
+  shortage: { text: '短收', type: 'warning' },
+  quality: { text: '质量问题', type: 'danger' },
+  wrong_item: { text: '错货', type: 'danger' },
+  missing_price: { text: '缺价', type: 'warning' }
 }
 
 // 供货商对订单的确认状态（写在 purchase_order.supplier_confirmations 上）
@@ -64,4 +81,12 @@ function getSupplierConfirmInfo(status) {
   return supplierConfirmMap[status] || { text: status || '未知', type: 'grey' }
 }
 
-module.exports = { statusMap, reportTypeMap, supplierConfirmMap, getStatusInfo, getReportTypeInfo, getSupplierConfirmInfo, getCategoryIconBase }
+function getVerifyStatusInfo(status) {
+  return verifyStatusMap[status] || { text: status || '未知', type: 'grey' }
+}
+
+function getAbnormalTypeInfo(type) {
+  return abnormalTypeMap[type] || { text: type || '异常', type: 'grey' }
+}
+
+module.exports = { statusMap, reportTypeMap, supplierConfirmMap, verifyStatusMap, abnormalTypeMap, getStatusInfo, getReportTypeInfo, getSupplierConfirmInfo, getVerifyStatusInfo, getAbnormalTypeInfo, getCategoryIconBase }

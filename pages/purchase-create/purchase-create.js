@@ -273,7 +273,10 @@ Page({
   },
   onManualQtyInput(e) {
     const idx = e.currentTarget.dataset.index
-    this.setData({ [`manualItems[${idx}].qty`]: parseFloat(e.detail.value) || 1 })
+    // P2-39：与 onProductQtyInput 口径一致——原值入列（允许 0/小数），
+    // 不再用 `|| 1` 兜底（它会把 0 改写成 1、输入 0.5 时首字符 0 被回写成 1.5）；非法数量在提交时统一拦截
+    const v = parseFloat(e.detail.value)
+    this.setData({ [`manualItems[${idx}].qty`]: Number.isFinite(v) ? v : 0 })
   },
   removeManualItem(e) {
     const items = [...this.data.manualItems]
@@ -295,148 +298,166 @@ Page({
 
   async _saveOrder(orderStatus) {
     if (this.data.isSubmitting) return
-    if (!this.data.deliveryDate) { util.showToast('请选择到货日期'); return }
-
-    // 收集数量>0的库存商品
-    const qtyMap = this._qtyMap || {}
-    const selectedProducts = []
-    Object.keys(qtyMap).forEach(pid => {
-      if (qtyMap[pid] > 0) {
-        const p = (this.data.products || []).find(x => x.productId === pid)
-        if (p) selectedProducts.push({ ...p, qty: qtyMap[pid] })
-      }
-    })
-
-    const allItems = [...selectedProducts, ...this.data.manualItems]
-    if (allItems.length === 0) { util.showToast('请至少填写一种商品的数量'); return }
-
-    // S9 拍板（2026-09-22 升级）：自动拆单——同时选了档案商品与手动商品时，
-    // 自动生成两张采购单（档案单 + 手动单），无需用户分开下单。
-    const hasManual = this.data.manualItems.length > 0
-    const hasCatalog = selectedProducts.length > 0
-
-    const app = getApp()
-    const store = app.globalData.currentStore || {}
-    const user = app.globalData.userInfo || {}
-    if (!store.storeId && !store.id) {
-      util.showToast('当前未选择门店，请先切换门店')
-      return
-    }
-
-    const buildPayload = (items, orderId, reqSuffix = '') => ({
-      storeId: store.storeId || store.id,
-      storeName: store.storeName || store.name,
-      orderId,
-      orderDate: this.data.orderDate,
-      // 选了时分的按 YYYY-MM-DD HH:mm 存储；未选保持纯日期，与旧记录格式一致
-      deliveryDate: this.data.deliveryTime ? `${this.data.deliveryDate} ${this.data.deliveryTime}` : this.data.deliveryDate,
-      createdBy: user.userId || user.id || user.name || user.username,
-      createdByName: user.name || user.username,
-      items,
-      remark: this.data.remark,
-      orderStatus,
-      // 幂等键：本次进入页面的一次「保存/提交」动作内所有请求共用（含失败重试），
-      // 服务端按 request_id 查重，请求超时后重试不会重复建单。
-      // P1-1：键中拼入动作类型（draft/submitted）——"存草稿"超时后改点"提交"
-      // 不再命中草稿的幂等记录而被静默吞掉；拆单时档案/手动单再带 :c/:m 子键
-      requestId: this.requestId + ':' + orderStatus + reqSuffix
-    })
-
-    const confirmed = await util.showConfirm(orderStatus === 'draft' ? '确认保存采购草稿？' : '确认提交门店采购申请？')
-    if (!confirmed) return
-
+    // P2-37：置位提前到确认弹窗之前——原实现在弹窗确认后才置位，弹窗期间双击可重入
     this.setData({ isSubmitting: true })
-    util.showLoading(hasManual && hasCatalog ? '拆单提交中...' : orderStatus === 'draft' ? '保存中...' : '提交中...')
+    // P2-38：全段 try/finally——任一环节抛异常都必须复位标志位与 Loading 遮罩，否则页面卡死
+    try {
+      if (!this.data.deliveryDate) { util.showToast('请选择到货日期'); return }
 
-    const toPayloadItems = list => list.map(item => {
-      const l1 = (this.data.categoryL1List || []).find(c => c.id === item.categoryL1)
-      const catL1Name = l1 ? l1.name : item.categoryL1
-      const cat2 = (this.data.categories || []).find(c => c.id === item.categoryId)
-      const catName = cat2 ? `${catL1Name}-${cat2.name}` : catL1Name
-      return {
-        productId: item.productId || item.tempId,
-        productName: item.name,
-        category: catName,
-        unit: item.unit,
-        supplierId: item.defaultSupplierId || item.supplierId || null,
-        orderQty: item.qty,
-        isManual: !!item.isManual,
-        remark: item.remark || ''
-      }
-    })
-
-    let result
-    if (hasManual && hasCatalog) {
-      // 自动拆单：先提/更新档案商品单（沿用草稿单号），成功后再新建手动商品专用单。
-      // catalogOrderId 仅草稿状态可复用：已提交的档案单后端拒绝再编辑，
-      // 本轮新选的档案商品按追加采购新建单，幂等子键递增（:c2/:c3）——
-      // 沿用 :c 会幂等命中首单，本轮商品被静默丢弃
-      const catalogReusable = !this.catalogOrderSubmitted
-      const catalogId = this.editingOrderId || (catalogReusable ? this.catalogOrderId || undefined : undefined)
-      const catalogSuffix = catalogReusable ? ':c' : ':c' + (++this.catalogSeq)
-      const catalogResult = await cloud.callFunction('createPurchaseOrder', buildPayload(toPayloadItems(selectedProducts), catalogId, catalogSuffix))
-      if (!catalogResult || catalogResult.code !== 0) {
-        util.hideLoading()
-        this.setData({ isSubmitting: false })
-        util.showToast((catalogResult && catalogResult.msg) || '采购单提交失败')
-        return
-      }
-      // 档案单已落库：记录其单号（手动单失败重试时复用，防止重复建档案单），
-      // 清空编辑草稿号与档案商品数量，此后本页重试都只针对手动单
-      const catalogOrderNo = (catalogResult.data && catalogResult.data.orderId) || catalogId || ''
-      if (catalogOrderNo) this.catalogOrderId = catalogOrderNo
-      this.catalogOrderSubmitted = orderStatus === 'submitted'
-      this.editingOrderId = ''
-      this._qtyMap = {}
-      this.filterProducts()
-      const manualResult = await cloud.callFunction('createPurchaseOrder', buildPayload(toPayloadItems(this.data.manualItems), this.manualOrderId || undefined, ':m'))
-      if (!manualResult || manualResult.code !== 0) {
-        util.hideLoading()
-        this.setData({ isSubmitting: false })
-        const reason = (manualResult && manualResult.msg) || '未知错误'
-        wx.showModal({
-          title: '部分提交成功',
-          content: orderStatus === 'draft'
-            ? `商品草稿已保存（${catalogOrderNo}），但手动商品草稿保存失败（${reason}）。手动商品仍保留在本页，直接再次点击「存草稿」即可，不会重复创建商品草稿。`
-            : `商品采购单已提交（${catalogOrderNo}），但手动商品单提交失败（${reason}）。手动商品仍保留在本页，直接再次点击「提交」即可，不会重复创建商品采购单。`,
-          showCancel: false
-        })
-        return
-      }
-      this.manualOrderId = (manualResult.data && manualResult.data.orderId) || ''
-      const warnings = [catalogResult.data && catalogResult.data.reportWarning, manualResult.data && manualResult.data.reportWarning].filter(Boolean)
-      result = { code: 0, data: { ...(catalogResult.data || {}), splitOrder: true, reportWarning: warnings.join('；') || undefined } }
-    } else {
-      // 拆单部分失败后的重试 / 纯手动单再次保存：沿用已建手动单号，避免重复建单。
-      // 纯手动单沿用 :m 子键，与拆单时的手动请求同一幂等键，超时重试可被服务端查重
-      // P1-14：reuseId 按本次提交的路径分流——手动路径只复用手动单号，
-      // 档案路径只复用编辑草稿号/档案单号；否则手动单号会被误当作编辑目标，
-      // 把档案商品写进手动专用单（或反向），两单数据互相污染
-      const reuseId = (hasManual && !hasCatalog)
-        ? (this.manualOrderId || undefined)
-        : (this.editingOrderId || this.catalogOrderId || undefined)
-      const retrySuffix = hasManual && !hasCatalog ? ':m' : ''
-      result = await cloud.callFunction('createPurchaseOrder', buildPayload(toPayloadItems(allItems), reuseId, retrySuffix))
-    }
-
-    util.hideLoading()
-    this.setData({ isSubmitting: false })
-    if (result.code === 0) {
-      // 整单成功：重置幂等键，用户若在同一页面发起下一笔新订单不会误命中本次记录
-      this.requestId = 'REQ' + Date.now() + Math.random().toString(36).slice(2, 8)
-      const warning = result.data && result.data.reportWarning
-      wx.showModal({
-        title: orderStatus === 'draft' ? '草稿已保存' : '提交成功',
-        content: warning
-          ? warning
-          : (result.data && result.data.splitOrder
-              ? '已自动拆为两张采购单：商品采购单 + 手动商品专用单（手动单金额待凭证核销）'
-              : (orderStatus === 'draft' ? '采购草稿已保存到数据库' : '采购申请已提交，下单报表已自动生成')),
-        showCancel: false,
-        success() { wx.navigateBack() }
+      // 收集数量>0的库存商品
+      const qtyMap = this._qtyMap || {}
+      const selectedProducts = []
+      Object.keys(qtyMap).forEach(pid => {
+        if (qtyMap[pid] > 0) {
+          const p = (this.data.products || []).find(x => x.productId === pid)
+          if (p) selectedProducts.push({ ...p, qty: qtyMap[pid] })
+        }
       })
-    } else {
-      util.showToast(result.msg || '提交失败')
+
+      const allItems = [...selectedProducts, ...this.data.manualItems]
+      if (allItems.length === 0) { util.showToast('请至少填写一种商品的数量'); return }
+      // P2-39：数量输入框已允许 0/小数原值入列，非法数量在提交前统一拦截
+      if (this.data.manualItems.some(i => !(Number(i.qty) > 0))) { util.showToast('手动商品数量需大于 0'); return }
+
+      // S9 拍板（2026-09-22 升级）：自动拆单——同时选了档案商品与手动商品时，
+      // 自动生成两张采购单（档案单 + 手动单），无需用户分开下单。
+      const hasManual = this.data.manualItems.length > 0
+      const hasCatalog = selectedProducts.length > 0
+
+      const app = getApp()
+      const store = app.globalData.currentStore || {}
+      const user = app.globalData.userInfo || {}
+      if (!store.storeId && !store.id) {
+        util.showToast('当前未选择门店，请先切换门店')
+        return
+      }
+
+      const buildPayload = (items, orderId, reqSuffix = '') => ({
+        storeId: store.storeId || store.id,
+        storeName: store.storeName || store.name,
+        orderId,
+        orderDate: this.data.orderDate,
+        // 选了时分的按 YYYY-MM-DD HH:mm 存储；未选保持纯日期，与旧记录格式一致
+        deliveryDate: this.data.deliveryTime ? `${this.data.deliveryDate} ${this.data.deliveryTime}` : this.data.deliveryDate,
+        createdBy: user.userId || user.id || user.name || user.username,
+        createdByName: user.name || user.username,
+        items,
+        remark: this.data.remark,
+        orderStatus,
+        // 幂等键：本次进入页面的一次「保存/提交」动作内所有请求共用（含失败重试），
+        // 服务端按 request_id 查重，请求超时后重试不会重复建单。
+        // P1-1：键中拼入动作类型（draft/submitted）——"存草稿"超时后改点"提交"
+        // 不再命中草稿的幂等记录而被静默吞掉；拆单时档案/手动单再带 :c/:m 子键
+        requestId: this.requestId + ':' + orderStatus + reqSuffix
+      })
+
+      const confirmed = await util.showConfirm(orderStatus === 'draft' ? '确认保存采购草稿？' : '确认提交门店采购申请？')
+      if (!confirmed) return
+
+      util.showLoading(hasManual && hasCatalog ? '拆单提交中...' : orderStatus === 'draft' ? '保存中...' : '提交中...')
+
+      const toPayloadItems = list => list.map(item => {
+        const l1 = (this.data.categoryL1List || []).find(c => c.id === item.categoryL1)
+        const catL1Name = l1 ? l1.name : item.categoryL1
+        const cat2 = (this.data.categories || []).find(c => c.id === item.categoryId)
+        const catName = cat2 ? `${catL1Name}-${cat2.name}` : catL1Name
+        return {
+          productId: item.productId || item.tempId,
+          productName: item.name,
+          category: catName,
+          unit: item.unit,
+          supplierId: item.defaultSupplierId || item.supplierId || null,
+          orderQty: item.qty,
+          isManual: !!item.isManual,
+          remark: item.remark || ''
+        }
+      })
+
+      let result
+      if (hasManual && hasCatalog) {
+        // 自动拆单：先提/更新档案商品单（沿用草稿单号），成功后再新建手动商品专用单。
+        // catalogOrderId 仅草稿状态可复用：已提交的档案单后端拒绝再编辑，
+        // 本轮新选的档案商品按追加采购新建单，幂等子键递增（:c2/:c3）——
+        // 沿用 :c 会幂等命中首单，本轮商品被静默丢弃
+        const catalogReusable = !this.catalogOrderSubmitted
+        const catalogId = this.editingOrderId || (catalogReusable ? this.catalogOrderId || undefined : undefined)
+        const catalogSuffix = catalogReusable ? ':c' : ':c' + (++this.catalogSeq)
+        const catalogResult = await cloud.callFunction('createPurchaseOrder', buildPayload(toPayloadItems(selectedProducts), catalogId, catalogSuffix))
+        if (!catalogResult || catalogResult.code !== 0) {
+          // P2-65：档案单失败时手动单未创建——明确告知"未生成任何单据、可安全重试"，与反向情形提示对称
+          wx.showModal({
+            title: orderStatus === 'draft' ? '草稿保存失败' : '提交失败',
+            content: `商品采购单保存失败（${(catalogResult && catalogResult.msg) || '未知错误'}），手动商品单未创建。本次未生成任何单据，可直接重试，不会重复建单。`,
+            showCancel: false
+          })
+          return
+        }
+        // 档案单已落库：记录其单号（手动单失败重试时复用，防止重复建档案单），
+        // 清空编辑草稿号与档案商品数量，此后本页重试都只针对手动单
+        const catalogOrderNo = (catalogResult.data && catalogResult.data.orderId) || catalogId || ''
+        if (catalogOrderNo) this.catalogOrderId = catalogOrderNo
+        this.catalogOrderSubmitted = orderStatus === 'submitted'
+        this.editingOrderId = ''
+        this._qtyMap = {}
+        this.filterProducts()
+        const manualResult = await cloud.callFunction('createPurchaseOrder', buildPayload(toPayloadItems(this.data.manualItems), this.manualOrderId || undefined, ':m'))
+        if (!manualResult || manualResult.code !== 0) {
+          const reason = (manualResult && manualResult.msg) || '未知错误'
+          wx.showModal({
+            title: '部分提交成功',
+            content: orderStatus === 'draft'
+              ? `商品草稿已保存（${catalogOrderNo}），但手动商品草稿保存失败（${reason}）。手动商品仍保留在本页，直接再次点击「存草稿」即可，不会重复创建商品草稿。`
+              : `商品采购单已提交（${catalogOrderNo}），但手动商品单提交失败（${reason}）。手动商品仍保留在本页，直接再次点击「提交」即可，不会重复创建商品采购单。`,
+            showCancel: false
+          })
+          return
+        }
+        this.manualOrderId = (manualResult.data && manualResult.data.orderId) || ''
+        const warnings = [catalogResult.data && catalogResult.data.reportWarning, manualResult.data && manualResult.data.reportWarning].filter(Boolean)
+        // P2-64：拆单成功提示带出两个单号，用户可立刻定位手动单去传凭证
+        result = { code: 0, data: { ...(catalogResult.data || {}), splitOrder: true, splitNos: { catalog: catalogOrderNo, manual: this.manualOrderId }, reportWarning: warnings.join('；') || undefined } }
+      } else {
+        // 拆单部分失败后的重试 / 纯手动单再次保存：沿用已建手动单号，避免重复建单。
+        // 纯手动单沿用 :m 子键，与拆单时的手动请求同一幂等键，超时重试可被服务端查重
+        // P1-14：reuseId 按本次提交的路径分流——手动路径只复用手动单号，
+        // 档案路径只复用编辑草稿号/档案单号；否则手动单号会被误当作编辑目标，
+        // 把档案商品写进手动专用单（或反向），两单数据互相污染
+        const reuseId = (hasManual && !hasCatalog)
+          ? (this.manualOrderId || undefined)
+          : (this.editingOrderId || this.catalogOrderId || undefined)
+        const retrySuffix = hasManual && !hasCatalog ? ':m' : ''
+        result = await cloud.callFunction('createPurchaseOrder', buildPayload(toPayloadItems(allItems), reuseId, retrySuffix))
+      }
+
+      if (result.code === 0) {
+        // 整单成功：重置幂等键与拆单/编辑残留（P2-40）——若 navigateBack 未离开本页，
+        // 残留单号会被当作 reuseId 传给后端，报"只有草稿订单可以编辑或提交"
+        this.requestId = 'REQ' + Date.now() + Math.random().toString(36).slice(2, 8)
+        this.manualOrderId = ''
+        this.catalogOrderId = ''
+        this.catalogOrderSubmitted = false
+        this.editingOrderId = ''
+        this.catalogSeq = 1
+        const warning = result.data && result.data.reportWarning
+        wx.showModal({
+          title: orderStatus === 'draft' ? '草稿已保存' : '提交成功',
+          content: warning
+            ? warning
+            : (result.data && result.data.splitOrder
+                ? `已自动拆为两张采购单：\n商品采购单 ${result.data.splitNos.catalog}\n手动商品专用单 ${result.data.splitNos.manual}（金额待凭证核销）`
+                : (orderStatus === 'draft' ? '采购草稿已保存到数据库' : '采购申请已提交，下单报表已自动生成')),
+          showCancel: false,
+          success() { wx.navigateBack() }
+        })
+      } else {
+        util.showToast(result.msg || '提交失败')
+      }
+    } catch (err) {
+      console.error('[purchase-create] 提交异常:', err)
+      util.showToast('提交失败，请稍后重试')
+    } finally {
+      util.hideLoading()
+      this.setData({ isSubmitting: false })
     }
   }
 })

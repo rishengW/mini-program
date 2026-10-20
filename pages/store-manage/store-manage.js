@@ -12,7 +12,7 @@ Page({
   },
 
   onShow() {
-  if (!authGuard.requireLogin()) return
+    if (!authGuard.requireLogin()) return
     this.loadData()
   },
 

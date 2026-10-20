@@ -29,6 +29,13 @@ Page({
 
   onShow() {
     if (!authGuard.requireLogin()) return
+    // P2-66：前端角色门禁——管理功能页仅采购主管/超管可进入（后端仍二次校验写操作）
+    const user = getApp().globalData.userInfo || {}
+    if (!['super_admin', 'purchaser'].includes(user.role)) {
+      util.showToast('当前角色无权访问商品管理')
+      setTimeout(() => wx.navigateBack(), 800)
+      return
+    }
     this.loadData()
   },
 
@@ -163,6 +170,8 @@ Page({
 
   async uploadImportFile(file) {
     if (!/\.xlsx$/i.test(file.name)) return util.showToast('请选择 .xlsx 文件')
+    if (this._submitting) return
+    this._submitting = true
     wx.showLoading({ title: '导入中...', mask: true })
     try {
       const up = await wx.cloud.uploadFile({
@@ -187,6 +196,8 @@ Page({
     } catch (e) {
       wx.hideLoading()
       util.showToast('导入失败：' + (e.message || '未知错误'))
+    } finally {
+      this._submitting = false
     }
   },
 

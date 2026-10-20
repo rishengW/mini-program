@@ -23,6 +23,13 @@ Page({
 
   onLoad(options) {
     if (!authGuard.requireLogin()) return
+    // P2-66：前端角色门禁——管理功能页仅采购主管/超管可进入（后端仍二次校验写操作）
+    const user = getApp().globalData.userInfo || {}
+    if (!['super_admin', 'purchaser'].includes(user.role)) {
+      util.showToast('当前角色无权访问价格管理')
+      setTimeout(() => wx.navigateBack(), 800)
+      return
+    }
     this._initialSupplierId = options.supplierId || ''
   },
 

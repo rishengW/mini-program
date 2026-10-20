@@ -70,5 +70,6 @@
   "sitemapLocation": "sitemap.json",
   "cloud": true,
   "lazyCodeLoading": "requiredComponents",
+  "darkmode": false,
   "__usePrivacyCheck__": true
 }

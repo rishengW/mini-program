@@ -89,8 +89,12 @@ Page({
             action: 'markAllMessagesRead',
         })
         if (result.code !== 0) return util.showToast(result.msg || '消息状态更新失败')
-        const messages = this.data.messages.map(m => ({ ...m, read: true }))
-        this.setData({ messages, unreadCount: 0 })
+        // L28：与 readMessage 同款的 path 局部更新，不再 map 全量重建长列表
+        const update = { unreadCount: 0 }
+        this.data.messages.forEach((m, i) => {
+            if (!m.read) update[`messages[${i}].read`] = true
+        })
+        this.setData(update)
         util.showSuccess('全部已读')
     }
 })

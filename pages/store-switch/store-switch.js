@@ -7,7 +7,7 @@ Page({
   data: { stores: [], currentStoreId: '' },
 
   async onLoad() {
-  if (!authGuard.requireLogin()) return
+    if (!authGuard.requireLogin()) return
     const app = getApp()
     // 供货商账号没有门店概念，误入时送回供货商门户
     const user = app.globalData.userInfo || {}

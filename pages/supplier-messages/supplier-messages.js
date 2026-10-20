@@ -10,11 +10,12 @@ Page({
   },
 
   async onShow() {
-  if (!authGuard.requireLogin()) return
+    if (!authGuard.requireLogin()) return
     const app = getApp()
     const user = app.globalData.userInfo || {}
-    if (!app.globalData.isLoggedIn || user.role !== 'supplier') {
-      wx.reLaunch({ url: '/pages/login/login' })
+    // P2-68：与 supplier-home/supplier-orders 口径统一——非供货商角色回首页，而非登录页
+    if (user.role !== 'supplier') {
+      wx.reLaunch({ url: '/pages/index/index' })
       return
     }
     await this.loadMessages()

@@ -59,6 +59,16 @@ function getRelativeTime(dateStr) {
 }
 
 /**
+ * 金额格式化（L34：统一 '¥' + 两位小数口径，各页不再内联）
+ * @param {number|string} amount
+ * @param {boolean} withSymbol 是否带 ¥ 前缀，默认 true
+ */
+function formatMoney(amount, withSymbol = true) {
+    const text = (Number(amount) || 0).toFixed(2)
+    return withSymbol ? '¥' + text : text
+}
+
+/**
  * 提示
  */
 function showToast(title, icon = 'none') {
@@ -118,6 +128,7 @@ function showPrompt(content, placeholder = '', title = '提示') {
 module.exports = {
     formatDate,
     getRelativeTime,
+    formatMoney,
     showToast,
     showSuccess,
     showLoading,

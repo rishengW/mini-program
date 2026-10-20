@@ -8,7 +8,7 @@
 |---|---|---|---|
 | `chef` | 下单人员 | 门店 | 创建采购单、查看自己创建的订单（无验收资格） |
 | `store_manager` | 店长 | 门店 | 收货验收、异常处理、报表；**无审核权**（清单 #12：审核仅管理员） |
-| `purchaser` | 管理员 | 否（跨店） | 全局管理：商品/供应商/价格/用户、审核、作废 |
+| `purchaser` | 采购主管 | 否（跨店） | 全局管理：商品/供应商/价格/用户、审核、作废（2026-10-19 起界面名称由「管理员」改为「采购主管」） |
 | `super_admin` | 超级管理员 | 否 | 唯一 `admin` 账号，不可删除不可改角色 |
 | `supplier` | 供货商 | 供货商档案 | 门户：确认接单、标记发货、收货对账、协议价 |
 
@@ -21,7 +21,7 @@
 - **B2 先审批后收货**：订单必须审核通过才能收货（`createReceipt` 状态白名单无 `submitted`）。
 - **B3 分批收货**：同一订单可多张收货单（`batch_no`/`is_final`），本批未收齐订单为 `partial_received`，收齐才 `received`。
 - **B4/B6 行级异常隔离**：短收只标记异常行，正常行照常结算；异常处理完由管理员 `settleReceipt` 补结算。
-- **B8 作废/取消（2026-09-28 口径更新）**：审批前管理员可作废（`cancelOrder`）；审批后仅管理员（purchaser/super_admin）可申请取消（`requestCancel`，防重复申请条件更新）或作废，下单人员/店长无取消权限；驳回单可复制为新草稿（B7）。
+- **B8 作废/取消（2026-09-28 口径更新）**：审批前管理员可作废（`cancelOrder`）；审批后仅管理员（purchaser/super_admin）可申请取消（`requestCancel`，防重复申请条件更新）或作废，下单人员/店长无取消权限；挂起的取消申请可由管理员驳回清除（`rejectCancel`，条件更新防并发），不再永久挂「待确认取消」标记；驳回单可复制为新草稿（B7）。
 - **供货商链路（S1–S8）**：动作级白名单（确认接单限审批前、标记发货放宽到审批后含 `partial_received`）；审核改量重置供货商确认；`partial_received` 不算已完成；详情页按供货商分组展示确认标签。
 - **S9 手动商品专用单（2026-09-22 拍板，同日升级为自动拆单）**：手动商品可与档案商品同单填写，提交时前端**自动拆为两单**——档案商品单 + 手动商品专用单（幂等键拆 `:c`/`:m` 子键，部分失败保留已建单号，重试不重复建单；`createPurchaseOrder` 后端保留禁混单兜底校验）。两单各自走审批与报表：手动单只出门店下单报表并打标「线下采购，凭证核销」，不进供应商订货汇总。手动单走**特殊审批**（不核协议价）；收货无价为预期行为（跳过协议价查询、不标异常、不进带价报表与补结算）；收货后**上传付款凭证**（云存储 `vouchers/`），管理员**核销回填实付金额**（`dataService.verifyManualOrder`，状态 `none → pending → approved/rejected`，条件更新防并发重复核销）后单据闭环；待核销单留在管理员待办催办。供货商端全程不可见。协议价体系只服务档案商品（价格管理页支持首次定价）。
 
@@ -40,7 +40,7 @@
 
 ## 安全加固（2026-09-28 实施留痕）
 
-并发与安全审查发现的问题已全部修复（详见 `review.md` 与提交 `ffb5bf4`/`9350b9d`/`d48b17c`）：
+并发与安全审查发现的问题已全部修复（修复留痕见提交 `ffb5bf4`/`9350b9d`/`d48b17c`；后续公司级复查见 `审查报告-2026-09-30.md`）：
 
 - **会话安全**：启动时异步调 `authService.validate` 服务端裁决会话（`app.js`），失败自动清本地登录态；`utils/cloud.js` 统一拦截 `-401`（清会话 + 防抖跳登录）；除登录页外 25 个页面全部接入 `utils/auth-guard.js` 登录守卫。
 - **并发竞态**：`createReceipt` 超收校验与批次号生成移入事务内；`confirmSupplierOrder`/`dataService.auditOrder` 改条件更新/事务内复查，拒绝重复确认与重复审核；报表版本号改 `report_version_counter` 原子计数器（4 个云函数）；业务 ID（RCP/U/P/SUP/MSG/storeId）加随机后缀或撞号重试。
@@ -49,6 +49,17 @@
 - **配置卫生**：`sitemap.json` 全站 disallow；移除无效的 `permission.scope.camera`；新增 `.gitignore`（忽略 `_tmp_test/` 等含测试口令的本地目录，**入库口令需轮换**）。
 
 完整决策留痕见 [业务模糊点确认清单.md](业务模糊点确认清单.md)。
+
+### 2026-10-19 修复批次
+
+- **角色命名**：`purchaser` 界面名称由「管理员」改为「采购主管」（登录页、用户管理、`authService` ROLE_LABELS、种子脚本同步）。存量账号库存 `role_label` 为旧值——`updateUser` 写库取服务端 `ROLE_LABELS`，故需**先部署 `authService`**，再在用户管理页重新保存该账号一次即刷新。
+- **报表下载收口**：`getReports`/`getReportDetail` 不再下发 `file_url`（改回 `has_file` 标记），下载一律走 `getReportFileUrl` 按 `reportId` 鉴权（`fileId` 入参仅兼容旧客户端），防止拿到 fileID 绕过鉴权直取临时链接。**三件套须一起部署**，且前端包需同步上传（前端改用 `has_file` 判断下载入口）。
+- **消息隔离**：供应商定向消息（写库不带 `store_id`）不再被「store_id 为空」分支漏发给厨师/店长/管理员；消息带 `bizId`，消息中心点击可正常跳转。
+- **末位超管守卫**：停用/降级最后一名在岗超管被拦截（对任意超管账号生效，而非仅 `admin`），防管理入口锁死；改角色即清会话。
+- **查询修复**：`getProducts` 关键词下推数据库正则（修复超 200 种商品后搜不到）；`getSupplierOrders` 分页取全量（修复超 1000 行旧订单静默消失、计数失真）+ 时间戳比较修复跨月排序错乱。
+- **其他**：期望到货时间支持精确到时分（`YYYY-MM-DD HH:mm`）；`receipt_abnormal` 允许继续补收（与事务内白名单口径一致）；`importProducts` fileID → cloudPath 解析修正。
+- **采购列表页**：状态 tab 去掉数字徽标（大数字溢出被横向滚动容器裁剪）、加高点击区；补分页底部「正在加载…/没有更多了」提示与底部留白（避开悬浮新建按钮）。
+- **B5 前端体验批次（25/30 项）**：按《修复计划-2026-10-03》B5 执行——防重入补齐（purchase-create 全段 try/finally、product-manage 三处）、状态字典单源收敛到 `meta.js`（核销态/异常类型/报表 superseded）、分页竞态防护（3 个列表页）、失败态与空态互斥、命中区域加大等。未做 4 项（首页调用合并、分页骨架重构、setData 裁剪、Excel 模板）详见 `log.md` 2026-10-19 节与《修复计划》§0 进度表。
 
 ## 供货商新订单通知（三层触达）
 
@@ -104,7 +115,7 @@ seed-data/             初始数据与导入说明（见 seed-data/README.md）
 ## 部署与初始化
 
 1. 微信开发者工具导入项目（`project.config.json`），开通云开发环境。
-2. 上传 `cloudfunctions/` 下全部云函数；2026-09-28 安全修复后**以下 6 个需重新部署**（云端安装依赖）：`authService`、`dataService`、`createReceipt`、`confirmSupplierOrder`、`createPurchaseOrder`、`generateSummaryReport`。建议一次全部部署，避免新旧版本混跑。
+2. 上传 `cloudfunctions/` 下全部云函数（云端安装依赖），建议一次全部部署，避免新旧版本混跑。2026-10 修复批次涉及 **10 个云函数需重新部署**：`authService`、`createPurchaseOrder`、`createReceipt`、`dataService`、`getProducts`、`getReports`、`getReportDetail`、`getReportFileUrl`、`getSupplierOrders`、`importProducts`。其中 `getReports`/`getReportDetail`/`getReportFileUrl` 为联动改动须一起部署；前端小程序包需同步上传。
 3. 按 `seed-data/README.md` 导入初始数据（含初始账号与建议索引：`app_user.username` 唯一索引等）。
 4. 小程序后台申请**订阅消息模板**，模板 ID 填入上表两处占位符。
 5. 云数据库需建集合：`store`、`app_user`、`category`、`supplier`、`product`、`supplier_product_price`、`purchase_order`、`purchase_order_item`、`receipt`、`receipt_item`、`report_file`、`message`、`abnormal_record`。
@@ -116,5 +127,6 @@ seed-data/             初始数据与导入说明（见 seed-data/README.md）
 - [采购流程图.html](采购流程图.html)：全流程泳道图（含 S9 手动单凭证核销支线，浏览器打开查看）
 - [业务模糊点确认清单.md](业务模糊点确认清单.md)：业务口径拍板与实现留痕（通用 B1–B12 / 供货商 S1–S9）
 - [log.md](log.md)：开发日志
-- [review.md](review.md)：代码审查记录
+- [审查报告-2026-09-30.md](审查报告-2026-09-30.md)：公司级代码审查（153 项缺陷分级清单）
+- [修复计划-2026-10-03.md](修复计划-2026-10-03.md)：缺陷分批修复计划（B1–B6，编号锚定审查报告）
 - [seed-data/README.md](seed-data/README.md)：初始数据导入说明

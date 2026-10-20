@@ -53,6 +53,8 @@ Page({
   },
 
   async loadData(page, append) {
+    // P2-31：请求序号防竞态——刷新/切筛选后旧请求的后至响应直接丢弃，不覆盖新列表
+    const seq = (this._reqSeq = (this._reqSeq || 0) + 1)
     const app = getApp()
     const user = app.globalData.userInfo || {}
     const store = app.globalData.currentStore || {}
@@ -69,6 +71,7 @@ Page({
     if (this.data.activeFilter !== 'all') params.orderStatus = this.data.activeFilter
 
     const result = await cloud.callFunction('getPurchaseOrders', params)
+    if (seq !== this._reqSeq) return
     if (!result || result.code !== 0) {
       // 失败态置位，避免页面渲染成"暂无采购申请"误导无数据
       this.setData({ isLoading: false, isLoadingMore: false, loadFailed: page === 1 })

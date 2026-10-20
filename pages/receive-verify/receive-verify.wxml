@@ -10,6 +10,8 @@
       <text>单号: {{order.orderNo}}</text>
       <text style="margin-left:20rpx;">到货日期: {{order.deliveryDate}}</text>
     </view>
+    <!-- P2-63：手动单与档案单验收口径不同，须明示——不核协议价、0 价为预期、金额走凭证核销 -->
+    <view wx:if="{{order.isManual}}" class="manual-order-banner">本单为手动商品专用单：收货不核协议价、不进带价报表，金额以付款凭证核销为准</view>
   </view>
 
   <!-- 逐项验收 -->
@@ -68,7 +70,7 @@
     <view class="card-title">现场照片（选填）</view>
     <view class="photo-hint">未上传照片也可以提交验收</view>
     <view class="photo-grid">
-      <view wx:for="{{photos}}" wx:key="index" class="photo-item">
+      <view wx:for="{{photos}}" wx:key="*this" class="photo-item">
         <image src="{{item}}" mode="aspectFill" class="photo-img"></image>
         <view class="photo-del" catchtap="deletePhoto" data-index="{{index}}">✕</view>
       </view>

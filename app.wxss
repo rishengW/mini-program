@@ -174,11 +174,12 @@ page {
   width: 100%;
 }
 
+/* P2-74：小型按钮命中区域 60→68rpx */
 .btn-sm {
-  height: 60rpx;
+  height: 68rpx;
   font-size: 24rpx;
   padding: 0 24rpx;
-  line-height: 60rpx;
+  line-height: 68rpx;
 }
 
 .btn-group {

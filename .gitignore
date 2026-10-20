@@ -16,3 +16,6 @@ Thumbs.db
 
 # 口令表输出目录（明文口令，严禁入库）
 .atomcode-tmp/
+
+# 本地流程图草稿（P2-81：从 .git/info/exclude 迁回，本地 exclude 不随仓库分发）
+采购流程图-2026-09-20.html

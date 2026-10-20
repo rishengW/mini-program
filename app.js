@@ -69,9 +69,9 @@ App({
     })
   },
 
-  // 清除本地登录态（供会话失效时复用）
+  // 清除本地登录态（供会话失效时复用；P2-67：键位单源维护，各登出入口统一调这里）
   clearSession() {
-    ;['userInfo', 'authToken', 'sessionExpiresAt', 'currentStore', 'supplierInfo'].forEach(key => {
+    ;['userInfo', 'authToken', 'sessionExpiresAt', 'currentStore', 'supplierInfo', 'account_history'].forEach(key => {
       try { wx.removeStorageSync(key) } catch (e) { /* ignore */ }
     })
     this.globalData.isLoggedIn = false

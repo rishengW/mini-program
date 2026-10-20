@@ -61,7 +61,7 @@
       <view class="modal-title">导入结果</view>
       <view class="import-summary">{{importResult.summary}}</view>
       <scroll-view scroll-y class="import-lines">
-        <view wx:for="{{importResult.lines}}" wx:key="index" class="import-line">{{item}}</view>
+        <view wx:for="{{importResult.lines}}" wx:key="*this" class="import-line">{{item}}</view>
       </scroll-view>
       <view class="btn-group" style="margin-top:32rpx;">
         <button class="btn btn-primary flex-1" bindtap="closeImportResult">知道了</button>

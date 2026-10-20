@@ -4,7 +4,7 @@
   <!-- 门店 & 用户 -->
   <view class="store-header">
     <view class="store-info" bindtap="goStore">
-      <view class="store-name"><view class="icon icon-sm icon-pin-white store-pin"></view>{{storeName}} <text style="font-size: 24rpx; color: rgba(255,255,255,0.8);">切换 ▸</text></view>
+      <view class="store-name"><view class="icon icon-sm icon-pin-white store-pin"></view><text class="store-name-text">{{storeName}}</text><text class="store-switch">切换 ▸</text></view>
       <view class="user-info text-sm">
         {{userName}} · {{roleLabel}}
       </view>
