@@ -29,11 +29,6 @@
   margin-bottom: 4rpx;
 }
 
-.login-subtitle {
-  font-size: 24rpx;
-  opacity: 0.85;
-}
-
 .login-card {
   width: 88%;
   margin-top: 12rpx;
