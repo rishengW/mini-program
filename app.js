@@ -50,11 +50,12 @@ App({
   },
 
   // 启动/切回前台时向服务端校验会话（异步，不阻塞首屏）。
-  // 失败/401 时清除本地会话并重置 globalData，强制用户重新登录。
+  // 仅在服务端明确判定会话失效（code -401）时清除本地会话；
+  // 其余错误（云函数未部署、内部异常、网络故障）一律保持本地登录态。
   // 返回 Promise：会话是否仍然有效。登录页据此等待校验落定再决定去留，
   // 避免"本地存储说有效、服务端说无效"时先闪一下首页再被踢回登录页。
   validateSessionOnLaunch(authToken) {
-    if (!wx.cloud) return Promise.resolve(false)
+    if (!wx.cloud) return Promise.resolve(true)
     // 冷启动时 onLaunch 与 onShow 紧邻触发，会连发两次校验；此处复用同一个 Promise
     if (this._sessionValidation) return this._sessionValidation
     this._validatingSession = true
@@ -74,11 +75,17 @@ App({
         }
         return true
       }
-      // 服务端已判定会话失效（改密/停用/被挤下线）：清本地态并立刻回登录页，
-      // 否则用户会停在首页看到一片空数据（业务请求的 401 兜底要等下一次请求才触发）
-      this.clearSession()
-      this.redirectToLogin('登录已过期，请重新登录')
-      return false
+      if (r.code === -401) {
+        // 服务端明确判定会话失效（改密/停用/被挤下线）：清本地态并立刻回登录页，
+        // 否则用户会停在首页看到一片空数据（业务请求的 401 兜底要等下一次请求才触发）
+        this.clearSession()
+        this.redirectToLogin('登录已过期，请重新登录')
+        return false
+      }
+      // 其他错误码（-1 等）：云函数未部署 validate action、内部异常等，
+      // 属于服务侧故障而非会话失效，保留本地登录态，避免用户被无故踢回登录页
+      console.warn('[app] 会话校验返回异常，保留本地登录态:', r.code, r.msg)
+      return true
     }, () => {
       // 网络异常时保持本地登录态，由具体请求的 401 处理兜底
       return true
