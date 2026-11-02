@@ -9,7 +9,7 @@
 | `chef` | 下单人员 | 门店 | 创建采购单、查看自己创建的订单（无验收资格） |
 | `store_manager` | 店长 | 门店 | 收货验收、异常处理、报表；**无审核权**（清单 #12：审核仅管理员） |
 | `purchaser` | 采购主管 | 否（跨店） | 全局管理：商品/供应商/价格/用户、审核、作废（2026-10-19 起界面名称由「管理员」改为「采购主管」） |
-| `super_admin` | 超级管理员 | 否 | 唯一 `admin` 账号，不可删除不可改角色 |
+| `super_admin` | 超级管理员 | 否 | 唯一 `admin` 账号，不可物理删除、不可改角色（可停用，见 #17 软删除） |
 | `supplier` | 供货商 | 供货商档案 | 门户：确认接单、标记发货、收货对账、协议价 |
 
 代码位置：`cloudfunctions/authService/index.js`（角色白名单、会话管理、B12 多设备登录）。
@@ -72,7 +72,7 @@
 
 ## 供货商新订单通知（三层触达）
 
-采购单**审核通过**后自动下推给相关供货商（`dataService.notifySuppliersNewOrder`）：
+采购单**审核通过**后由 `dataService.auditOrder` 内部自动下推给相关供货商（`notifySuppliersNewOrder` 为 `auditOrder` 内部函数，不暴露为独立 action）：
 
 1. **微信服务通知**（订阅消息）：`cloud.openapi.subscribeMessage.send`，跳转供货商订单页；一次性订阅，授权额度内推送，失败/未订阅静默降级。
 2. **供货商首页通知条**：门户顶部显示未读数 + 最新一条消息，点击进供货商消息中心（`supplier-messages` 独立页）。
@@ -97,10 +97,13 @@ pages/                 小程序页面（门店端 + 供货商门户）
   supplier-prices/     协议价查询
   supplier-messages/   供货商消息中心（订单通知，按人 read_by 已读）
   purchase-*           采购单创建/列表/详情
+  approval-list/       待审核列表（管理员，含快速通过/驳回）
+  approval-detail/     审核详情（逐行改量、驳回必填原因）
   receive-*            收货验收/收货记录
   report-*             报表列表/详情/历史
   message/             消息中心（tabBar）
   abnormal-list/       异常记录处理
+  *-manage/            管理页（product/supplier/price/user/store，仅管理员）
 cloudfunctions/        云函数（每目录一个，独立部署）
 utils/                 cloud.js（调用封装/数据规整）、meta.js（状态字典）、util.js、auth-guard.js（登录守卫）、date.js（日期解析单源）
 seed-data/             初始数据与导入说明（见 seed-data/README.md）
@@ -116,6 +119,8 @@ seed-data/             初始数据与导入说明（见 seed-data/README.md）
 | `confirmSupplierOrder` | 供货商确认接单/标记发货（token 校验 + 动作级状态白名单） |
 | `getSupplierOrders` / `getSupplierReceipts` | 供货商视角订单/收货（只含自己供货的明细） |
 | `getProductPrices` / `updateProductPrice` | 协议价查询/调整（仅当天生效日期） |
+| `getProducts` / `getSuppliers` | 商品/供应商查询（关键词 `db.RegExp` 下推，停用项仅管理员可见） |
+| `importProducts` | 商品批量导入（Excel fileID → cloudPath 解析，仅管理员） |
 | `createReceipt` | 收货验收（分批、行级异常、价格快照、③④⑤⑥ 报表） |
 | `getPurchaseOrders` / `getPurchaseOrderDetail` / `getReceipts` | 门店端查询 |
 | `getReports` / `getReportDetail` / `getReportFileUrl` | 报表查询/下载 |
