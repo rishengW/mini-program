@@ -22,8 +22,8 @@ Page({
       { key: 'purchaser', label: '采购主管', iconClass: 'icon-chart-primary' },
       { key: 'supplier', label: '供货商', iconClass: 'icon-truck-primary' }
     ],
-    selectedRole: 'chef',
-    selectedRoleLabel: '下单人员',
+    selectedRole: '',
+    selectedRoleLabel: '',
     // 是否已展开账号密码输入栏：初始只显示角色按钮，点击角色后滑动闪现
     formExpanded: false
   },

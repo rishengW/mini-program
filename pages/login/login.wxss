@@ -84,7 +84,8 @@
 
 /* 角色入口：2x2 方块网格，图标在上、角色名在下。
    flex:1 + rows 1fr 让两行均分面板高度，按钮填满按钮区域。
-   左右内边距 2rpx + 按钮 border-box：确保滑出后按钮边框落在面板内侧、
+   max-height 兜底：防止另一侧面板内容变高时把按钮拉得过高。
+   左右内边距 8rpx + 按钮 border-box：确保滑出后按钮边框落在面板内侧、
    被卡片 overflow:hidden 裁掉，不在输入栏页面边缘露边 */
 .role-entry-list {
   display: grid;
@@ -100,6 +101,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  max-height: 280rpx;
   padding: 24rpx 0;
   border-radius: 16rpx;
   border: 2rpx solid #E8E8E8;
@@ -179,9 +181,12 @@
   font-size: 28rpx;
 }
 
+/* 超管入口与「返回选择角色」拉开间距并加分隔线，避免误点 */
 .login-alt {
   text-align: center;
-  margin-top: 16rpx;
+  margin-top: 20rpx;
+  padding-top: 20rpx;
+  border-top: 1rpx solid #F0F0F0;
 }
 
 .login-alt-green {
@@ -192,84 +197,6 @@
 .login-alt-grey {
   color: #8C8C8C;
   font-size: 28rpx;
-}
-
-.history-card {
-  width: 88%;
-  margin-top: 32rpx;
-  background: #ffffff;
-  border-radius: 24rpx;
-  padding: 32rpx;
-  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.05);
-}
-
-.history-title {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #262626;
-  margin-bottom: 24rpx;
-}
-
-.history-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20rpx 0;
-  border-bottom: 1rpx solid #F0F0F0;
-}
-.history-item:last-child {
-  border-bottom: none;
-}
-
-.history-info {
-  display: flex;
-  align-items: center;
-  flex: 1;
-}
-
-.history-avatar {
-  width: 72rpx;
-  height: 72rpx;
-  border-radius: 36rpx;
-  background: #00873E;
-  color: #ffffff;
-  font-size: 32rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: 20rpx;
-  font-weight: 600;
-}
-
-.history-detail {
-  flex: 1;
-}
-
-.history-name {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #262626;
-}
-
-.history-role {
-  font-size: 20rpx;
-  color: #8C8C8C;
-  background: #F5F7FA;
-  padding: 2rpx 10rpx;
-  border-radius: 8rpx;
-  margin-left: 8rpx;
-}
-
-.history-username {
-  font-size: 24rpx;
-  color: #8C8C8C;
-  margin-top: 4rpx;
-}
-
-.history-close {
-  padding: 10rpx;
-  color: #BFBFBF;
-  font-size: 32rpx;
 }
 
 .login-footer {
