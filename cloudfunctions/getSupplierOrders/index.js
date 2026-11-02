@@ -134,14 +134,38 @@ exports.main = async (event = {}) => {
     const total = filtered.length
     const pageOrders = filtered.slice((page - 1) * pageSize, page * pageSize)
 
-    // 5. 只嵌入该供货商自己的明细
+    // 5. 只嵌入该供货商自己的明细，且订单与明细都按字段白名单投影。
+    // 原实现直接 ...order 原样展开，会把 supplier_confirmations（含其他供应商的
+    // 确认/发货状态与操作人）、verify_*（内部付款核销金额与凭证 fileID）、
+    // audit_remark（内部审核意见）、created_by*（内部员工）一并下发给供货商。
+    // 门户展示只需下列字段；新增字段必须显式加进白名单，默认不外发。
     const itemsByOrder = {}
     myItems.forEach(item => {
       if (!itemsByOrder[item.purchase_order_id]) itemsByOrder[item.purchase_order_id] = []
-      itemsByOrder[item.purchase_order_id].push(item)
+      itemsByOrder[item.purchase_order_id].push({
+        item_id: item.item_id,
+        purchase_order_id: item.purchase_order_id,
+        product_id: item.product_id,
+        product_name_snapshot: item.product_name_snapshot,
+        category_snapshot: item.category_snapshot,
+        unit_snapshot: item.unit_snapshot,
+        supplier_id: item.supplier_id,
+        supplier_name: item.supplier_name,
+        order_qty: item.order_qty,
+        is_manual: !!item.is_manual,
+        remark: item.remark || ''
+      })
     })
     const data = pageOrders.map(order => ({
-      ...order,
+      purchase_order_id: order.purchase_order_id,
+      order_no: order.order_no,
+      store_name: order.store_name,
+      order_date: order.order_date,
+      delivery_date: order.delivery_date,
+      order_status: order.order_status,
+      my_confirm_status: order.my_confirm_status,
+      remark: order.remark || '',
+      created_at: order.created_at,
       items: itemsByOrder[order.purchase_order_id] || []
     }))
 

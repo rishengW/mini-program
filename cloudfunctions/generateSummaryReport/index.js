@@ -174,6 +174,11 @@ exports.main = async (event = {}) => {
     if (!['daily', 'monthly'].includes(period)) return { code: -1, msg: '汇总类型无效' }
     const date = String(event.date || '')
     if (!isDate(date)) return { code: -1, msg: '日期格式无效，应为 YYYY-MM-DD' }
+    // 日期上界：不允许生成未来日期/未来月份的汇总（UTC+8 口径，与 createReceipt 一致）。
+    // 原实现无入参上界，可被构造任意日期反复生成刷量。
+    const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10)
+    if (period === 'daily' && date > today) return { code: -1, msg: '不能生成未来日期的汇总报表' }
+    if (period === 'monthly' && date.slice(0, 7) > today.slice(0, 7)) return { code: -1, msg: '不能生成未来月份的汇总报表' }
 
     const isGlobal = ['purchaser', 'super_admin'].includes(user.role)
     let storeId = event.storeId
@@ -188,6 +193,43 @@ exports.main = async (event = {}) => {
     const storeRes = await db.collection('store').where({ store_id: storeId }).limit(1).get()
     if (!storeRes.data.length) return { code: -1, msg: '门店不存在' }
     const storeName = storeRes.data[0].store_name || storeId
+
+    const reportType = period === 'daily' ? 'store_daily_summary_report' : 'store_monthly_summary_report'
+    const relatedDate = date // 月汇总也存传入日期
+
+    // 幂等 + 防刷：同门店同类型同日期已有有效报表时默认直接复用，
+    // 不再重复上传 CSV、重复写 report_file（原实现每次调用都新增文件，可被刷量耗尽配额）。
+    // 收货数据变化后确需重出时传 force=true；force 路径带 60 秒限频，防连点/脚本刷写。
+    const existingRes = await db.collection('report_file')
+      .where({
+        report_type: reportType,
+        report_scope: 'store',
+        scope_id: storeId,
+        related_date: relatedDate,
+        status: _.neq('superseded')
+      })
+      .orderBy('generated_at', 'desc')
+      .limit(1)
+      .get()
+    const existing = existingRes.data[0]
+    if (existing) {
+      if (event.force !== true) {
+        return {
+          code: 0,
+          data: {
+            reportId: existing.report_id,
+            fileName: existing.file_name,
+            totalAmount: existing.total_amount,
+            itemCount: existing.item_count,
+            existed: true
+          }
+        }
+      }
+      const lastTs = new Date(existing.generated_at).getTime()
+      if (Number.isFinite(lastTs) && Date.now() - lastTs < 60 * 1000) {
+        return { code: -1, msg: '该汇总刚刚已生成过，请 1 分钟后再重新生成' }
+      }
+    }
 
     const receipts = await getStoreReceipts(storeId, period, date)
     const items = receipts.length ? await loadReceiptItems(receipts) : []
@@ -217,8 +259,14 @@ exports.main = async (event = {}) => {
       const agg = productMap[key]
       agg.orderQty = Math.round((agg.orderQty + (Number(item.order_qty_snapshot) || 0)) * 1000) / 1000
       agg.receivedQty = Math.round((agg.receivedQty + (Number(item.received_qty) || 0)) * 1000) / 1000
-      // 逐行舍入到分再累加
-      const subtotal = Math.round((Number(item.received_qty) || 0) * (Number(item.price_snapshot) || 0) * 100) / 100
+      // 逐行舍入到分再累加。
+      // 金额口径与结算对齐：质量/错货等不可付款行（payable_flag=false）不产生应付金额，
+      // 与 dataService 出账过滤（payable_flag !== false && price_snapshot > 0）保持一致，
+      // 否则汇总合计会大于实际应付、对账对不平。
+      // 注意：数量列不受此影响——实收数量反映物流事实，金额才反映结算口径。
+      const subtotal = item.payable_flag === false
+        ? 0
+        : Math.round((Number(item.received_qty) || 0) * (Number(item.price_snapshot) || 0) * 100) / 100
       agg.amount = Math.round((agg.amount + subtotal) * 100) / 100
     })
     const rows = Object.values(productMap)
@@ -233,8 +281,6 @@ exports.main = async (event = {}) => {
     })
     csv += [csvField('合计'), csvField(''), csvField(''), csvField(''), csvField(''), csvField(''), csvField(totalAmount.toFixed(2))].join(',') + '\n'
 
-    const reportType = period === 'daily' ? 'store_daily_summary_report' : 'store_monthly_summary_report'
-    const relatedDate = date // 月汇总也存传入日期
     const version = await getNextVersion(reportType, storeId, relatedDate)
     const pathDate = period === 'daily' ? date : date.slice(0, 7)
     // 文件名不含单号，并发生成同门店同日汇总会取到相同版本号，加随机后缀避免同路径互相覆盖
@@ -244,7 +290,7 @@ exports.main = async (event = {}) => {
       fileContent: Buffer.from(String.fromCharCode(0xFEFF) + csv, 'utf-8')
     })
 
-    await db.collection('report_file').add({
+    const addRes = await db.collection('report_file').add({
       data: {
         report_id: `RPT_${period === 'daily' ? 'DS' : 'MS'}_${storeId}_${date}_v${version}`,
         report_type: reportType,
@@ -264,9 +310,20 @@ exports.main = async (event = {}) => {
       }
     })
 
+    // 重出后把同 key 的旧版本标为已替代：列表/详情/下载三处统一过滤 superseded，
+    // 避免新旧两版汇总同时可见、被重复对账。历史无 status 字段的记录不受影响。
+    await db.collection('report_file').where({
+      report_type: reportType,
+      report_scope: 'store',
+      scope_id: storeId,
+      related_date: relatedDate,
+      _id: _.neq(addRes._id)
+    }).update({ data: { status: 'superseded', superseded_at: db.serverDate() } })
+
     return {
       code: 0,
       data: {
+        reportId: `RPT_${period === 'daily' ? 'DS' : 'MS'}_${storeId}_${date}_v${version}`,
         fileID: uploadRes.fileID,
         fileName,
         totalAmount,

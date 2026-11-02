@@ -69,6 +69,11 @@ exports.main = async (event = {}) => {
     }
 
     const report = reportRes.data[0]
+    // 已替代版本不再展开明细：行数据是按当前原始单据实时重算的，
+    // 与旧版 CSV 快照口径不同，展示出来会与下载文件对不上
+    if (report.status === 'superseded') {
+      return { code: -1, msg: '该报表已被新版本替代，请在报表列表查看最新版本' }
+    }
     const isGlobal = ['super_admin', 'purchaser'].includes(user.role)
     if (!isGlobal) {
       if (!['chef', 'store_manager'].includes(user.role)) return { code: -403, msg: '当前账号无权查看报表' }
@@ -111,7 +116,9 @@ exports.main = async (event = {}) => {
         // 正常解析：RCP + 时间戳 + 随机 hex
         receiptIdFilter = { receipt_id: receiptId }
       } else {
-        // 兜底：report_id 格式异常时维持原行为，至少返回数据
+        // 兜底：report_id 格式异常时按订单取，但必须守住来源单号——
+        // orderId 为空时 where 条件会退化成宽松查询，可能命中其他门店的收货单
+        if (!orderId) return { code: -1, msg: '报表来源单据信息缺失，无法展开明细' }
         receiptIdFilter = { purchase_order_id: orderId }
       }
       const receiptRes = await db.collection('receipt')

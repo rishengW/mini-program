@@ -85,6 +85,10 @@ exports.main = async (event = {}) => {
       query.scope_id = user.default_store_id
     }
 
+    // 被新版本替代的报表（superseded）不进列表：补结算/补价/重出汇总后，
+    // 新旧两版同时可见会被重复对账。neq 对无 status 字段的历史记录同样命中，不影响旧数据。
+    query.status = _.neq('superseded')
+
     const page = Math.max(1, Math.min(1000, Math.floor(Number(event.page) || 1)))
     const pageSize = Math.min(50, Math.max(1, Math.floor(Number(event.pageSize) || 20)))
     const countRes = await db.collection('report_file').where(query).count()

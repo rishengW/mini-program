@@ -50,6 +50,10 @@ exports.main = async (event = {}) => {
       : await db.collection('report_file').where({ file_url: fileId }).limit(1).get()
     if (!reportRes.data.length || !reportRes.data[0].file_url) return { code: -1, msg: '报表文件不存在' }
     const report = reportRes.data[0]
+    // 已替代版本不再提供下载：旧版金额可能已被补充账单修正，继续下载会造成重复对账
+    if (report.status === 'superseded') {
+      return { code: -1, msg: '该报表已被新版本替代，请在报表列表查看最新版本' }
+    }
     if (!['super_admin', 'purchaser'].includes(user.role)) {
       if (!['chef', 'store_manager'].includes(user.role) || report.report_scope !== 'store' || report.scope_id !== user.default_store_id) {
         return { code: -403, msg: '无权下载该报表文件' }

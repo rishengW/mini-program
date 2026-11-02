@@ -297,8 +297,12 @@ exports.main = async (event = {}) => {
       if (historyQty + receivedQty > orderQty) {
         return { code: -1, msg: `商品${orderItem.product_name_snapshot}累计实收超过下单量，请检查后重试` }
       }
+      // 字段白名单：不再 ...inputItem 原样展开。
+      // 商品/供应商/数量/价格/付款资格一律以服务端数据或后续服务端计算为准，
+      // 客户端只能提交「实收数量 + 验收异常标记 + 备注」三类业务输入。
+      // 异常标记必须显式布尔化（仅接受 true）：透传会让 isShortage/isMissingPrice/
+      // priceSnapshot/payableFlag 等服务端字段被客户端污染，进而操纵 payable_flag 与异常台账。
       canonicalItems.push({
-        ...inputItem,
         orderItemId,
         productId: orderItem.product_id,
         productName: orderItem.product_name_snapshot,
@@ -306,7 +310,10 @@ exports.main = async (event = {}) => {
         isManual: !!orderItem.is_manual,
         orderQty,
         unit: orderItem.unit_snapshot,
-        receivedQty
+        receivedQty,
+        isQualityIssue: inputItem.isQualityIssue === true,
+        isWrongItem: inputItem.isWrongItem === true,
+        remark: typeof inputItem.remark === 'string' ? inputItem.remark.slice(0, 200) : ''
       })
     }
     items = canonicalItems

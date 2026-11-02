@@ -145,19 +145,39 @@ Page({
         const date = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
         const period = res.tapIndex === 0 ? 'daily' : 'monthly'
         const app = getApp()
-        util.showLoading('生成中...')
-        const result = await cloud.callFunction('generateSummaryReport', {
-          period,
-          date,
-          storeId: (app.globalData.currentStore && app.globalData.currentStore.storeId) || ''
-        })
-        wx.hideLoading()
-        if (!result || result.code !== 0) {
-          util.showToast((result && result.msg) || '汇总报表生成失败')
-          return
+        const storeId = (app.globalData.currentStore && app.globalData.currentStore.storeId) || ''
+        // 云函数对已存在的汇总做幂等复用（existed=true），force=true 才会真正重出并带 60 秒限频
+        const doGenerate = async (force) => {
+          util.showLoading('生成中...')
+          const result = await cloud.callFunction('generateSummaryReport', {
+            period,
+            date,
+            storeId,
+            force: force === true
+          })
+          wx.hideLoading()
+          if (!result || result.code !== 0) {
+            util.showToast((result && result.msg) || '汇总报表生成失败')
+            return
+          }
+          if (result.data && result.data.existed) {
+            // 幂等命中：明确告知已存在，由用户决定是否重出，避免"点了生成却拿到旧数据"
+            wx.showModal({
+              title: '该汇总已生成过',
+              content: '同门店同日期已有汇总报表。若收货数据有变化，可重新生成，旧版将被标记为已替代。',
+              confirmText: '重新生成',
+              cancelText: '查看列表',
+              success: modalRes => {
+                if (modalRes.confirm) doGenerate(true)
+                else that.reload()
+              }
+            })
+            return
+          }
+          util.showSuccess('汇总报表已生成')
+          that.reload()
         }
-        util.showSuccess('汇总报表已生成')
-        that.reload()
+        doGenerate(false)
       }
     })
   },
