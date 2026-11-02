@@ -22,7 +22,10 @@ Page({
       { key: 'purchaser', label: '采购主管', iconClass: 'icon-chart-primary' },
       { key: 'supplier', label: '供货商', iconClass: 'icon-truck-primary' }
     ],
-    selectedRole: 'chef'
+    selectedRole: 'chef',
+    selectedRoleLabel: '下单人员',
+    // 是否已展开账号密码输入栏：初始只显示角色按钮，点击角色后滑动闪现
+    formExpanded: false
   },
 
   onLoad() {
@@ -31,7 +34,8 @@ Page({
 
   onShow() {
     // 不预填任何账号，避免向使用者公示测试账号
-    this.setData({ username: '', password: '' })
+    // 每次进入登录页都回到初始态：只显示角色按钮，输入栏收起
+    this.setData({ username: '', password: '', formExpanded: false })
     // 会话仍有效时不显示登录页，直接进入对应门户。
     // 冷启动入口是 pages[0]=login（app.json），这里负责"让路"，
     // 否则有效会话也会停在登录页要求重新登录。
@@ -77,19 +81,29 @@ Page({
     this.setData({ [field]: e.detail.value })
   },
 
+  // 点击角色入口：选中该角色并滑动展开账号密码输入栏
   selectRole(e) {
     const roleKey = e.currentTarget.dataset.role
+    const role = this.data.roles.find(r => r.key === roleKey)
     this.setData({
       selectedRole: roleKey,
+      selectedRoleLabel: role ? role.label : '',
+      formExpanded: true,
       username: '',
       password: ''
     })
+  },
+
+  // 从账号密码输入栏滑回角色按钮面板
+  backToRoles() {
+    this.setData({ formExpanded: false, username: '', password: '' })
   },
 
   toggleSuperAdmin() {
     const isSuper = !this.data.isSuperAdminLogin
     this.setData({
       isSuperAdminLogin: isSuper,
+      formExpanded: false,
       username: '',
       password: ''
     })
