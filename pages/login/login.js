@@ -35,7 +35,7 @@ Page({
   onShow() {
     // 不预填任何账号，避免向使用者公示测试账号
     // 每次进入登录页都回到初始态：只显示角色按钮，输入栏收起
-    this.setData({ username: '', password: '', formExpanded: false })
+    this.setData({ username: '', password: '', formExpanded: false, selectedRole: '', selectedRoleLabel: '' })
     // 会话仍有效时不显示登录页，直接进入对应门户。
     // 冷启动入口是 pages[0]=login（app.json），这里负责"让路"，
     // 否则有效会话也会停在登录页要求重新登录。
@@ -94,9 +94,9 @@ Page({
     })
   },
 
-  // 从账号密码输入栏滑回角色按钮面板
+  // 从账号密码输入栏滑回角色按钮面板（清选中态，回到干净初始）
   backToRoles() {
-    this.setData({ formExpanded: false, username: '', password: '' })
+    this.setData({ formExpanded: false, username: '', password: '', selectedRole: '', selectedRoleLabel: '' })
   },
 
   toggleSuperAdmin() {
@@ -105,7 +105,9 @@ Page({
       isSuperAdminLogin: isSuper,
       formExpanded: false,
       username: '',
-      password: ''
+      password: '',
+      selectedRole: '',
+      selectedRoleLabel: ''
     })
   },
 
