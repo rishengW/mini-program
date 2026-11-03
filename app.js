@@ -63,6 +63,10 @@ App({
       name: 'authService',
       data: { action: 'validate', authToken }
     }).then(res => {
+      // 校验在途期间用户可能已用另一账号重新登录（authToken 已换）：
+      // 旧 token 的校验结果对新会话不再适用，直接丢弃 —— 否则 code 0 会用旧用户信息
+      // 覆盖新会话的 globalData/存储，-401 还会 clearSession 把新登录踢下线
+      if (this.globalData.authToken !== authToken) return true
       const r = (res && res.result) || {}
       if (r.code === 0) {
         // 服务端会话有效，用服务端返回的用户信息刷新本地缓存

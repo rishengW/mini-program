@@ -35,9 +35,12 @@ Page({
   },
 
   onShow() {
-    // 不预填任何账号，避免向使用者公示测试账号
-    // 每次进入登录页都回到初始态：只显示角色按钮，输入栏收起，超管层收起
-    this.setData({ username: '', password: '', formExpanded: false, isSuperAdminLogin: false, selectedRole: '', selectedRoleLabel: '' })
+    // 不预填任何账号，避免向使用者公示测试账号。
+    // 初始态（输入栏/超管层收起、角色未选中、账号密码为空）由 data 默认值保证：
+    // 离开登录页的路径（switchTab/reLaunch）都会销毁页面实例，再次进入必是全新实例。
+    // 这里不做表单重置 —— onShow 在应用从后台切回前台时也会触发，
+    // 重置会把用户输到一半的账号密码清掉（如切去密码管理器复制密码回来）。
+    //
     // 会话仍有效时不显示登录页，直接进入对应门户。
     // 冷启动入口是 pages[0]=login（app.json），这里负责"让路"，
     // 否则有效会话也会停在登录页要求重新登录。
@@ -51,18 +54,32 @@ Page({
   // 若直接跳首页，用户会先看到首页空数据，再被 401 兜底踢回登录页（闪屏）。
   async redirectIfLoggedIn() {
     if (!authGuard.isLoggedIn()) return
+    // 重入守卫：onShow 在切回前台时会再触发，校验在途时多次调用会叠在
+    // 同一个 Promise 上，落定后各发一次跳转（重复导航）
+    if (this._redirecting) return
+    this._redirecting = true
     const app = getApp()
-    if (typeof app.validateSessionOnLaunch === 'function') {
-      const valid = await app.validateSessionOnLaunch(app.globalData.authToken)
-      if (valid === false) return
-    }
-    // 校验期间会话可能已被清掉，再确认一次登录态
-    if (!authGuard.isLoggedIn()) return
-    const user = app.globalData.userInfo || {}
-    if (user.role === 'supplier') {
-      wx.reLaunch({ url: '/pages/supplier-home/supplier-home' })
-    } else {
-      wx.switchTab({ url: '/pages/index/index' })
+    // 记下进入时的 token：校验在途期间用户可能已用另一账号手动登录，
+    // token 变了说明会话已换人，跳转由新登录的 handleLoginSuccess 负责，这里不再插手
+    const tokenAtStart = app.globalData.authToken
+    try {
+      if (typeof app.validateSessionOnLaunch === 'function') {
+        const valid = await app.validateSessionOnLaunch(tokenAtStart)
+        if (valid === false) return
+      }
+      if (app.globalData.authToken !== tokenAtStart) return
+      // 校验期间会话可能已被清掉，再确认一次登录态
+      if (!authGuard.isLoggedIn()) return
+      const user = app.globalData.userInfo || {}
+      if (user.role === 'supplier') {
+        wx.reLaunch({ url: '/pages/supplier-home/supplier-home' })
+      } else {
+        wx.switchTab({ url: '/pages/index/index' })
+      }
+    } finally {
+      // 跳转成功后页面即被销毁，复位无副作用；
+      // 提前 return（校验失败/会话换人）时复位，让后续 onShow 能再次尝试
+      this._redirecting = false
     }
   },
 
