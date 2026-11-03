@@ -2,32 +2,35 @@
 <view class="login-page">
   <view class="login-header">
     <image class="login-logo" src="/assets/icons/login-logo.jpg" mode="aspectFit" />
-    <view class="login-title">门店采购系统</view>
+    <view class="login-title">新蓝湾门店采购系统</view>
   </view>
 
-  <!-- 普通角色登录 -->
-  <block wx:if="{{!isSuperAdminLogin}}">
-    <view class="login-card">
-      <!-- 水平滑动切换：面板1=角色按钮，面板2=账号密码输入栏
-           点击角色后整条轨道向左平移一个面板宽：
-           按钮向左移出视口（不再出现），输入栏从右滑入取代其位置 -->
-      <view class="login-slider">
-        <view class="login-slider-track {{formExpanded ? 'track-shifted' : ''}}">
+  <view class="login-card login-card--fill">
+    <!-- 水平滑动切换：面板1=角色按钮，面板2=账号密码输入栏
+         点击角色后整条轨道向左平移一个面板宽：
+         按钮向左移出视口（不再出现），输入栏从右滑入取代其位置 -->
+    <view class="login-slider">
+      <view class="login-slider-track {{formExpanded ? 'track-shifted' : ''}}">
 
-          <!-- 面板1：角色入口按钮 -->
-          <view class="login-panel">
-            <view class="role-entry-list">
-              <view wx:for="{{roles}}" wx:key="key"
-                class="role-entry {{selectedRole === item.key ? 'role-entry-active' : ''}}"
-                bindtap="selectRole" data-role="{{item.key}}">
-                <view class="role-entry-icon icon {{item.iconClass}}"></view>
-                <view class="role-entry-name">{{item.label}}</view>
-              </view>
+        <!-- 面板1：角色入口按钮 + 底部超管入口 -->
+        <view class="login-panel">
+          <view class="role-entry-list">
+            <view wx:for="{{roles}}" wx:key="key"
+              class="role-entry {{selectedRole === item.key ? 'role-entry-active' : ''}}"
+              bindtap="selectRole" data-role="{{item.key}}">
+              <view class="role-entry-icon icon {{item.iconClass}}"></view>
+              <view class="role-entry-name">{{item.label}}</view>
             </view>
           </view>
 
-          <!-- 面板2：账号密码输入栏（取代按钮位置） -->
-          <view class="login-panel">
+          <view class="login-alt" bindtap="toggleSuperAdmin">
+            <text class="login-alt-green">超级管理员登录</text>
+          </view>
+        </view>
+
+        <!-- 面板2：账号密码输入栏（取代按钮位置） -->
+        <view class="login-panel">
+          <view class="login-form-body">
             <view class="login-form-title">{{selectedRoleLabel}}登录</view>
 
             <view class="form-group">
@@ -41,45 +44,42 @@
             </view>
 
             <button class="btn btn-primary btn-block login-btn" bindtap="login">进入系统</button>
-
-            <view class="login-back" bindtap="backToRoles">
-              <text class="login-back-text">‹ 返回选择角色</text>
-            </view>
-
-            <view class="login-alt" bindtap="toggleSuperAdmin">
-              <text class="login-alt-green">超级管理员登录</text>
-            </view>
           </view>
 
+          <view class="login-back" bindtap="backToRoles">
+            <text class="login-back-text">‹ 返回选择角色</text>
+          </view>
+        </view>
+
+      </view>
+
+      <!-- 超管登录层：绝对定位铺满滑块，默认停在右侧视口外，
+           切到超管时从右滑入盖住角色面板，与角色切换同一套横向动效 -->
+      <view class="superadmin-layer {{isSuperAdminLogin ? 'superadmin-layer-show' : ''}}">
+        <view class="login-form-body">
+          <view class="login-form-title">超级管理员登录</view>
+
+          <view class="form-group">
+            <view class="form-label">超级账号</view>
+            <input class="form-input" placeholder="请输入超级管理员账号" value="{{username}}" bindinput="onInput" data-field="username" cursor-spacing="{{cursorSpacing}}" />
+          </view>
+
+          <view class="form-group">
+            <view class="form-label">密码</view>
+            <input class="form-input" password placeholder="请输入密码" value="{{password}}" bindinput="onInput" data-field="password" cursor-spacing="{{cursorSpacing}}" />
+          </view>
+
+          <button class="btn btn-primary btn-block login-btn" bindtap="login">安全登录</button>
+        </view>
+
+        <view class="login-back" bindtap="toggleSuperAdmin">
+          <text class="login-back-text">‹ 返回普通角色登录</text>
         </view>
       </view>
     </view>
-  </block>
-
-  <!-- 超级管理员登录：从面板2底部入口切换进入 -->
-  <block wx:else>
-    <view class="login-card">
-      <view class="login-card-title">超级管理员登录</view>
-
-      <view class="form-group">
-        <view class="form-label">超级账号</view>
-        <input class="form-input" placeholder="请输入超级管理员账号" value="{{username}}" bindinput="onInput" data-field="username" cursor-spacing="{{cursorSpacing}}" />
-      </view>
-
-      <view class="form-group">
-        <view class="form-label">密码</view>
-        <input class="form-input" password placeholder="请输入密码" value="{{password}}" bindinput="onInput" data-field="password" cursor-spacing="{{cursorSpacing}}" />
-      </view>
-
-      <button class="btn btn-primary btn-block login-btn" bindtap="login">安全登录</button>
-
-      <view class="login-alt" bindtap="toggleSuperAdmin">
-        <text class="login-alt-grey">返回普通角色登录</text>
-      </view>
-    </view>
-  </block>
+  </view>
 
   <view class="login-footer">
-    <text class="text-tertiary text-sm">门店采购系统</text>
+    <text class="text-tertiary text-sm">{{appVersion}}</text>
   </view>
 </view>

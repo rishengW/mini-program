@@ -16,6 +16,8 @@ Page({
     password: '',
     isSuperAdminLogin: false,
     cursorSpacing: 120,
+    // 底部落款版本号：与云函数 package.json 的 1.0.0 对齐，发版时改这一处
+    appVersion: 'v1.0.0',
     roles: [
       { key: 'chef', label: '下单人员', iconClass: 'icon-chef-primary' },
       { key: 'store_manager', label: '店长', iconClass: 'icon-store-primary' },
@@ -34,8 +36,8 @@ Page({
 
   onShow() {
     // 不预填任何账号，避免向使用者公示测试账号
-    // 每次进入登录页都回到初始态：只显示角色按钮，输入栏收起
-    this.setData({ username: '', password: '', formExpanded: false, selectedRole: '', selectedRoleLabel: '' })
+    // 每次进入登录页都回到初始态：只显示角色按钮，输入栏收起，超管层收起
+    this.setData({ username: '', password: '', formExpanded: false, isSuperAdminLogin: false, selectedRole: '', selectedRoleLabel: '' })
     // 会话仍有效时不显示登录页，直接进入对应门户。
     // 冷启动入口是 pages[0]=login（app.json），这里负责"让路"，
     // 否则有效会话也会停在登录页要求重新登录。
