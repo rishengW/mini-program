@@ -50,9 +50,10 @@ Page({
       return status ? meta.getSupplierConfirmInfo(status) : null
     }
     // 供应商确认门禁（2026-11-04 拍板）：管理员可代确认，作为供应商不会用系统的逃生通道。
-    // 状态口径与 confirmSupplierOrder 的 CONFIRMABLE_ORDER_STATUS 对齐
+    // 状态口径与 confirmSupplierOrder 的 CONFIRMABLE_ORDER_STATUS 对齐（含 partial_received：
+    // 部分收货中必须保留代确认出口，否则 B 未确认的多单场景死锁——业务模糊清单 S10）
     const canProxyConfirm = ['purchaser', 'super_admin'].includes(currentUser.role) &&
-      ['approved', 'report_generated', 'to_receive'].includes(order.orderStatus)
+      ['approved', 'report_generated', 'to_receive', 'partial_received'].includes(order.orderStatus)
     let supplierGroups = null
     if (currentUser.role === 'chef') {
       // chef 不见供应商身份（后端不下发供货商名称）：维持平铺，逐行标签

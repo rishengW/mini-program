@@ -9,7 +9,11 @@ const db = cloud.database()
 // 动作级状态白名单（S1 拍板）：确认接单/标记发货都必须在内部审核通过之后——
 // 审核可能改量（approveQty）或驳回，审核前供货商看到/确认的数量都可能是作废数字。
 // S8 追加：partial_received（部分收货中）也允许补标发货，剩余批次未到前供货商可维持发货标记。
-const CONFIRMABLE_ORDER_STATUS = ['approved', 'report_generated', 'to_receive']
+// 2026-11-04 死锁修复：confirm 同样放开 partial_received（与 ship 同理）——多单场景 A 已收货
+// （订单滑入部分收货）而 B 始终不确认时，B 的行被收货门禁锁死、B 补确认与管理员代确认
+// 又被本白名单拒、订单亦不可作废，四条路全断（业务模糊清单 S10）。确认接单不代表货物
+// 离库，部分收货中补确认无副作用。
+const CONFIRMABLE_ORDER_STATUS = ['approved', 'report_generated', 'to_receive', 'partial_received']
 const SHIPPABLE_ORDER_STATUS = ['approved', 'report_generated', 'to_receive', 'partial_received']
 const ACTION_STATUS = { confirm: 'confirmed', ship: 'shipped' }
 
