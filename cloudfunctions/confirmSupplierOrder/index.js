@@ -87,6 +87,21 @@ exports.main = async (event = {}) => {
       .get()
     if (!itemRes.data.length) return { code: -403, msg: '该订单不包含贵司供货的商品' }
 
+    // 幂等防降级（2026-11-04）：现有确认状态不劣于本次动作时跳过写入——
+    // 重复 confirm/ship 是空操作；尤其 proxy 代确认不得覆盖供应商本人的确认留痕
+    // （proxy 记录只应落在"供应商从未确认"的节点）。读取与下方条件更新之间存在
+    // 毫秒级窗口：并发 confirm+ship 交错理论上可能回写降级，但两态都过收货门禁、
+    // 影响仅限展示标签，与旧实现同类，不做事务级强一致。
+    const orderRes = await db.collection('purchase_order')
+      .where({ purchase_order_id: orderId })
+      .limit(1)
+      .get()
+    const existing = (((orderRes.data[0] || {}).supplier_confirmations) || {})[supplierId]
+    const CONFIRM_RANK = { confirmed: 1, shipped: 2 }
+    if (existing && (CONFIRM_RANK[existing.status] || 0) >= (CONFIRM_RANK[status] || 0)) {
+      return { code: 0, data: { orderId, supplierId, status: existing.status }, msg: '该供应商已是确认/发货状态，无需重复操作' }
+    }
+
     // 用条件更新实现原子"检查状态+写入"，避免读-判-写竞态（并发作废/收货后仍写入确认）
     const updateData = { updated_at: db.serverDate() }
     const confirmation = {

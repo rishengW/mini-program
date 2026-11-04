@@ -320,14 +320,17 @@ exports.main = async (event = {}) => {
 
     // 供应商确认门禁（2026-11-04 拍板）：确认接单是收货的硬前置，
     // 流程节点留痕后出问题可定界（下单→审核→供应商确认→收货）。
-    // 按行拦截：本批实收>0 的档案行，其所属供应商须已 confirmed/shipped；
+    // 按行拦截：本批实收>0 或带质量/错货异常标记的档案行，其所属供应商须已 confirmed/shipped
+    // （与前端 receive-verify 对未确认供应商整行锁定同口径：数量禁输 + 异常标记禁勾。
+    //  shortage 由服务端按数量推导、missing_price 仅产生于实收>0，均被实收条件覆盖，
+    //  此处只显式补客户端可勾的 quality/wrong_item，防 crafted 请求绕过标记）；
     // 旧单豁免：订单无 supplier_confirmations 字段（功能上线前创建）整单不拦；
     // 手动行无供应商不拦。确认状态单调递增（pending→confirmed→shipped），
     // 预检通过后到事务提交前不会反转，故此处预检即最终判断，事务内不重复校验。
     const confirmations = order.supplier_confirmations
     if (confirmations && typeof confirmations === 'object') {
       const blockedSupplierIds = [...new Set(items
-        .filter(item => item.receivedQty > 0 && item.supplierId &&
+        .filter(item => (item.receivedQty > 0 || item.isQualityIssue || item.isWrongItem) && item.supplierId &&
           !['confirmed', 'shipped'].includes((confirmations[item.supplierId] || {}).status))
         .map(item => item.supplierId))]
       if (blockedSupplierIds.length) {
