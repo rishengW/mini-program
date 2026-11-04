@@ -11,6 +11,9 @@ Page({
     activeType: 'all',
     filterDate: '',
     typeTabs: [],
+    // chef 只看得了一类报表（后端强制 store_order_report），
+    // 「全部」与「下单报表」两个 tab 内容恒等，对他隐藏整条 tab 栏
+    showTypeTabs: true,
     reports: [],
     page: 1,
     hasMore: true,
@@ -44,6 +47,7 @@ Page({
 
     if (role === 'chef') {
       tabs.push({ value: 'store_order_report', label: '下单报表', iconBase: 'clipboard' })
+      this.setData({ showTypeTabs: false, activeType: 'store_order_report' })
     } else if (role === 'store_manager') {
       tabs.push(
         { value: 'store_order_report', label: '下单报表', iconBase: 'clipboard' },

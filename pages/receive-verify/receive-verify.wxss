@@ -12,6 +12,19 @@
   color: #FA8C16;
 }
 
+/* 供应商确认门禁：未确认行的锁定呈现（与手动单提示条同色系，同属"流程阻断"语义） */
+.pending-supplier-banner {
+  margin-bottom: 16rpx;
+  padding: 12rpx 16rpx;
+  background: #FFF7E6;
+  border-radius: 8rpx;
+  font-size: 24rpx;
+  color: #FA8C16;
+}
+.verify-item-locked .verify-form {
+  opacity: 0.45;
+}
+
 .verify-item {
   padding: 20rpx 0;
   border-bottom: 1rpx solid #F0F0F0;

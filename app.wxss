@@ -259,6 +259,15 @@ page {
   margin: 20rpx 0;
 }
 
+/* ========== 行内操作链接 ========== */
+/* 列表项内的文字操作入口（查看/补生成/补价补账等）。
+   原仅 report-list 页面级定义，receive-list 引用同名类无样式、渲染成普通文本 */
+.action-link {
+  color: var(--color-primary);
+  font-size: 26rpx;
+  font-weight: 500;
+}
+
 /* ========== 数字高亮 ========== */
 .text-primary {
   color: var(--color-primary);

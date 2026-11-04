@@ -1,5 +1,13 @@
 <!-- pages/purchase-detail/purchase-detail.wxml -->
 <view class="container">
+  <!-- 加载失败态：失败时不再渲染初始空数据（白字状态卡/商品清单 (0)），给重试出口 -->
+  <view wx:if="{{loadFailed}}" class="empty-state">
+    <view class="empty-state-icon icon icon-xxl icon-alert-danger"></view>
+    <view class="empty-state-text">采购订单加载失败</view>
+    <button class="btn btn-primary btn-sm" style="margin-top:24rpx;" bindtap="retryLoad">重试</button>
+  </view>
+
+  <block wx:else>
   <view class="status-card status-bg-{{detail.statusType}}">
     <view class="status-icon">
       <view wx:if="{{detail.orderStatus === 'draft'}}" class="icon icon-xl icon-edit-white"></view>
@@ -47,7 +55,10 @@
       <block wx:for="{{supplierGroups}}" wx:for-item="group" wx:key="supplierId">
         <view class="supplier-group-header">
           <view class="supplier-group-name"><view class="icon icon-sm icon-inline icon-factory-grey"></view>{{group.supplierName}}</view>
-          <text wx:if="{{group.confirmText}}" class="tag tag-{{group.confirmType}}">{{group.confirmText}}</text>
+          <view class="flex-row" style="gap:12rpx;">
+            <text wx:if="{{group.confirmText}}" class="tag tag-{{group.confirmType}}">{{group.confirmText}}</text>
+            <text wx:if="{{group.canProxy}}" class="proxy-confirm-link" catchtap="proxyConfirm" data-supplier-id="{{group.supplierId}}" data-supplier-name="{{group.supplierName}}">代确认</text>
+          </view>
         </view>
         <view wx:for="{{group.items}}" wx:key="itemId" class="goods-row {{item.isManual ? 'manual-goods-row' : ''}}">
           <view class="goods-info">
@@ -143,4 +154,5 @@
     <button class="btn btn-outline flex-1" bindtap="verifyDecide" data-approve="false">驳回凭证</button>
     <button class="btn btn-primary flex-1" bindtap="verifyDecide" data-approve="true">核销通过</button>
   </view>
+  </block>
 </view>

@@ -17,10 +17,11 @@
   <!-- 逐项验收 -->
   <view class="card">
     <view class="card-title">商品验收</view>
+    <view wx:if="{{hasPendingSuppliers}}" class="pending-supplier-banner">部分商品的供应商尚未确认接单，对应行已锁定不可收货；可联系供应商确认，或由管理员在订单详情页代确认</view>
     <view class="photo-hint">分批收货：本次实收数量（留空/0 表示本批不收该行）</view>
-    <view wx:for="{{items}}" wx:key="itemId" class="verify-item">
+    <view wx:for="{{items}}" wx:key="itemId" class="verify-item {{item.supplierPending ? 'verify-item-locked' : ''}}">
       <view class="verify-header">
-        <view class="verify-product-name">{{item.productName}}</view>
+        <view class="verify-product-name">{{item.productName}}<text wx:if="{{item.supplierPending}}" class="tag tag-warning" style="margin-left:12rpx;">待供应商确认</text></view>
         <view class="text-sm text-tertiary">订单: ×{{item.orderQty}} {{item.unit}}</view>
       </view>
       <!-- P1-17：分批收货时展示该行历史累计与剩余量，供验收人对照填写 -->
@@ -32,7 +33,8 @@
         <view class="verify-row">
           <text class="verify-label">实收数量</text>
           <view class="verify-input-wrap">
-            <input class="verify-input" type="digit" value="{{item.receivedQty}}" 
+            <input class="verify-input" type="digit" value="{{item.receivedQty}}"
+                   disabled="{{item.supplierPending}}"
                    bindinput="onReceivedQtyInput" data-index="{{index}}" />
             <text class="verify-unit">{{item.unit}}</text>
           </view>

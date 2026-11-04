@@ -1460,7 +1460,11 @@ async function requestCancel(event) {
     .get()
   const order = orderResult.data[0]
   if (!order) return { code: -1, msg: '采购订单不存在' }
-  if (!['submitted', 'approved', 'report_generated', 'partial_received'].includes(order.order_status)) {
+  // B8 口径对齐（2026-11-04）：partial_received 移出白名单——已有收货的订单
+  // 不可申请取消（cancelOrder 同样拒绝），应走异常处理流程；与前端
+  // purchase-detail 的 canRequestCancel 口径（approved/report_generated）对齐，
+  // 消除「能申请、必被驳回」的死信路径
+  if (!['submitted', 'approved', 'report_generated'].includes(order.order_status)) {
     return { code: -1, msg: '当前状态的订单无法申请取消' }
   }
   // 门店归属校验：全局角色可跨门店，门店角色仅可对本门店订单提交取消申请

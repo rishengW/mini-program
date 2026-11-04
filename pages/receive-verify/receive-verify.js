@@ -76,6 +76,10 @@ Page({
       return
     }
 
+    // 供应商确认门禁（2026-11-04 拍板）：未确认接单的供应商，其商品行本批锁定不可收。
+    // 旧单（无 supplier_confirmations 字段）与手动行不拦，与 createReceipt 口径一致
+    const confirmations = (result.data && result.data.supplier_confirmations) || null
+
     const items = order.items.map(item => {
       // P1-17：分批收货时展示每行「已收 X / 剩余 Y」，默认本批上限为剩余量
       const receivedTotal = Number(item.received_total) || 0
@@ -89,6 +93,8 @@ Page({
         orderQty: item.orderQty,
         receivedTotal,
         remainingQty,
+        supplierPending: !!(confirmations && item.supplierId &&
+          !['confirmed', 'shipped'].includes((confirmations[item.supplierId] || {}).status)),
         // B3 分批收货：默认本批不收该行，数量留空/0 表示本批不收
         receivedQty: 0,
         priceSnapshot: 0,
@@ -99,7 +105,8 @@ Page({
         remark: ''
       }
     })
-    this.setData({ order, items })
+    const hasPendingSuppliers = items.some(i => i.supplierPending)
+    this.setData({ order, items, hasPendingSuppliers })
   },
 
   onReceivedQtyInput(e) {
@@ -111,6 +118,9 @@ Page({
 
   toggleCheck(e) {
     const { index, field } = e.currentTarget.dataset
+    const target = this.data.items[index]
+    // 供应商未确认的行整行锁定：数量与异常标记都不可填（本批收不了）
+    if (target && target.supplierPending) return
     this.setData({ [`items[${index}].${field}`]: !this.data.items[index][field] })
   },
 
@@ -166,6 +176,11 @@ Page({
     }
     // B3 分批收货：只提交本次实收>0 或有异常标记的行，其余行本批不收
     const submitItems = items.filter(item => item.receivedQty > 0 || item.isShortage || item.isQualityIssue || item.isWrongItem)
+    // 兜底：待确认行正常进不了 submitItems（输入禁用+标记锁定），双保险拦一道
+    if (submitItems.some(item => item.supplierPending)) {
+      util.showToast('部分商品待供应商确认接单，暂不可收货')
+      return
+    }
     if (submitItems.length === 0) {
       util.showToast('请填写本次实收数量后再提交')
       return

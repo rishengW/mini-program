@@ -51,15 +51,30 @@ exports.main = async (event = {}) => {
   try {
     const user = await getSessionUser(event.authToken)
     if (!user) return { code: -401, msg: '登录已过期，请重新登录' }
-    if (user.role !== 'supplier') return { code: -403, msg: '当前账号无权操作采购订单' }
-    const supplierId = user.default_supplier_id
-    if (!supplierId) return { code: -403, msg: '账号未关联供货商，请联系管理员' }
+    // 2026-11-04 拍板：确认接单是收货硬前置。供应商不会用系统时，
+    // 管理员（超管/采购主管）可代确认；proxy 留痕，定界时缺口仍落在供应商节点
+    const isSupplier = user.role === 'supplier'
+    const isAdminProxy = ['super_admin', 'purchaser'].includes(user.role)
+    if (!isSupplier && !isAdminProxy) return { code: -403, msg: '当前账号无权操作采购订单' }
 
     const { orderId, action } = event || {}
     const status = ACTION_STATUS[action]
     if (!orderId) return { code: -1, msg: '订单信息缺失' }
     if (!status) return { code: -1, msg: '不支持的操作类型' }
     const allowedStatus = action === 'ship' ? SHIPPABLE_ORDER_STATUS : CONFIRMABLE_ORDER_STATUS
+
+    let supplierId = ''
+    let proxy = false
+    if (isSupplier) {
+      supplierId = user.default_supplier_id
+      if (!supplierId) return { code: -403, msg: '账号未关联供货商，请联系管理员' }
+    } else {
+      // 代确认只放开 confirm：发货代表货物已离库，必须由供货商本人标记，不可代操作
+      if (action !== 'confirm') return { code: -1, msg: '管理员仅可代确认接单，发货须由供货商操作' }
+      supplierId = String(event.supplierId || '')
+      if (!supplierId) return { code: -1, msg: '缺少供应商信息' }
+      proxy = true
+    }
 
     // 该订单必须真的包含此供货商的商品，防止越权确认别人的订单
     const itemRes = await db.collection('purchase_order_item')
@@ -70,11 +85,17 @@ exports.main = async (event = {}) => {
 
     // 用条件更新实现原子"检查状态+写入"，避免读-判-写竞态（并发作废/收货后仍写入确认）
     const updateData = { updated_at: db.serverDate() }
-    updateData[`supplier_confirmations.${supplierId}`] = {
+    const confirmation = {
       status,
       updated_at: db.serverDate(),
       updated_by: user.user_id || user._id
     }
+    // 代确认留痕：定界时能看到该节点是管理员补录而非供应商本人操作
+    if (proxy) {
+      confirmation.proxy = true
+      confirmation.proxy_by_name = user.name || user.username || ''
+    }
+    updateData[`supplier_confirmations.${supplierId}`] = confirmation
     const condRes = await db.collection('purchase_order')
       .where({ purchase_order_id: orderId, order_status: _.in(allowedStatus) })
       .update({ data: updateData })

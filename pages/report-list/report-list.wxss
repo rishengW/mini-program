@@ -120,8 +120,4 @@
   border-top: 1rpx solid #F0F0F0;
 }
 
-.action-link {
-  color: #00873E;
-  font-size: 26rpx;
-  font-weight: 500;
-}
+/* .action-link 已上移到 app.wxss 全局定义（receive-list 等页面同样需要），此处不再重复 */

@@ -7,8 +7,8 @@
       <text style="margin-left:16rpx;" bindtap="goHistory">历史报表 ▸</text>
     </view>
   </view>
-  <!-- 报表类型筛选 -->
-  <view class="filter-section">
+  <!-- 报表类型筛选（chef 只有一类报表，整条 tab 栏不渲染） -->
+  <view class="filter-section" wx:if="{{showTypeTabs}}">
     <scroll-view class="type-tabs" scroll-x>
       <view wx:for="{{typeTabs}}" wx:key="value"
             class="type-tab {{activeType === item.value ? 'type-tab-active' : ''}}"

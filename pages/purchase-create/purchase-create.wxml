@@ -78,7 +78,8 @@
   <view class="section-card">
     <view class="form-row">
       <text class="form-row-label">采购日期</text>
-      <picker mode="date" value="{{orderDate}}" bindchange="onOrderDateChange">
+      <!-- 采购日期：允许补录历史（backfilled 打标），不许未来日期（与后端校验一致） -->
+      <picker mode="date" value="{{orderDate}}" end="{{today}}" bindchange="onOrderDateChange">
         <text class="form-row-value">{{orderDate}} ▾</text>
       </picker>
     </view>

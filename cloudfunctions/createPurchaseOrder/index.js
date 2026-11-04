@@ -180,6 +180,12 @@ exports.main = async (event = {}) => {
     if (!isDate(actualDate) || !isDateOrDateTime(actualDeliveryDate) || actualDeliveryDate < actualDate) {
       return { code: -1, msg: '采购日期或期望到货日期无效' }
     }
+    // 2026-11-04 拍板：采购日期不许晚于今天——补录历史日期保留（#16 backfilled 打标），
+    // 未来日期封掉：提前备货应下「今天」的单并填未来期望到货日，
+    // 否则报表会把单据归档到未来日期，对账口径混乱
+    if (actualDate > today) {
+      return { code: -1, msg: '采购日期不能晚于今天；如需提前备货，请按今天下单并填写期望到货日期' }
+    }
 
     // 幂等防御：前端请求超时但服务端实际成功时，用户重试会带同一 requestId。
     // 命中同用户已建的单则直接返回该单号，不再重复建单。
@@ -351,6 +357,10 @@ exports.main = async (event = {}) => {
       ? (existingOrder.created_by_name || user.name || user.username || '')
       : (user.name || user.username || '')
     if (orderStatus === 'submitted') orderData.submitted_at = db.serverDate()
+    // 供应商确认门禁（2026-11-04 拍板）：确认接单是收货的硬前置。
+    // 历史草稿无 supplier_confirmations 字段，提交时补初始化以进入新口径；
+    // 已有确认记录的（正常不会走到编辑路径）保留原值，不被重置
+    if (existingOrder) orderData.supplier_confirmations = existingOrder.supplier_confirmations || {}
 
     // The order header and all lines must commit together. A failed write
     // must never leave a submitted order without (or with half of) its lines.
@@ -383,6 +393,9 @@ exports.main = async (event = {}) => {
           data: {
             purchase_order_id: orderNo, order_no: orderNo,
             ...orderData,
+            // 新单初始化供应商确认集合：收货按行校验「该供应商已确认接单」（createReceipt），
+            // 无此字段的历史在途单豁免新门禁（旧单豁免拍板），故必须落字段而非依赖缺省
+            supplier_confirmations: {},
             created_by: orderData.created_by,
             created_by_name: orderData.created_by_name,
             created_at: db.serverDate()

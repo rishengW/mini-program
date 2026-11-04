@@ -1,4 +1,9 @@
 // 云函数 updateProductPrice - 更新供应商商品价格
+//
+// 结算价格口径（#10「结算取收货日现价」，权威注释在 createReceipt 价格查询处）：
+// 改价只影响「收货日 >= 新价生效日」的收货行——已完成的收货按当时的快照价结算，
+// 不会被改价回溯改写。收货时无协议价的行由 missing_price 异常跟进，
+// 补价后走 repriceReceipt 补出账单。对账争议时以收货行 price_snapshot 字段为准。
 const cloud = require('wx-server-sdk')
 const crypto = require('crypto')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })

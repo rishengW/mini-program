@@ -317,6 +317,31 @@ exports.main = async (event = {}) => {
       })
     }
     items = canonicalItems
+
+    // 供应商确认门禁（2026-11-04 拍板）：确认接单是收货的硬前置，
+    // 流程节点留痕后出问题可定界（下单→审核→供应商确认→收货）。
+    // 按行拦截：本批实收>0 的档案行，其所属供应商须已 confirmed/shipped；
+    // 旧单豁免：订单无 supplier_confirmations 字段（功能上线前创建）整单不拦；
+    // 手动行无供应商不拦。确认状态单调递增（pending→confirmed→shipped），
+    // 预检通过后到事务提交前不会反转，故此处预检即最终判断，事务内不重复校验。
+    const confirmations = order.supplier_confirmations
+    if (confirmations && typeof confirmations === 'object') {
+      const blockedSupplierIds = [...new Set(items
+        .filter(item => item.receivedQty > 0 && item.supplierId &&
+          !['confirmed', 'shipped'].includes((confirmations[item.supplierId] || {}).status))
+        .map(item => item.supplierId))]
+      if (blockedSupplierIds.length) {
+        const supRes = await db.collection('supplier')
+          .where({ supplier_id: _.in(blockedSupplierIds) })
+          .limit(100)
+          .get()
+        const supNameMap = {}
+        ;(supRes.data || []).forEach(s => { supNameMap[s.supplier_id] = s.supplier_name })
+        const blockedNames = blockedSupplierIds.map(id => supNameMap[id] || id).join('、')
+        return { code: -1, msg: `供应商尚未确认接单，不可收货：${blockedNames}。请联系供应商确认，或由管理员在订单详情页代确认` }
+      }
+    }
+
     // 本批至少要收一件商品（或有异常标记），避免空批次
     const hasReceivedAny = items.some(item => item.receivedQty > 0)
     const hasMarkedAny = items.some(item => getItemAbnormalTypes(item).length > 0)
@@ -573,6 +598,31 @@ exports.main = async (event = {}) => {
       await transaction.collection('purchase_order')
         .doc(order._id)
         .update({ data: { order_status: nextStatus, updated_at: db.serverDate() } })
+
+      // 2026-11-04 拍板：补收收齐且本批无新异常 → 订单进入 received，
+      // 此前挂起的数量/质量类异常（shortage/quality/wrong_item）视为已被补收解决，
+      // 自动置「已解决」并从待处理/处理中消失，订单上不再提示收货异常。
+      // 缺价（missing_price）不在此列：补收解决不了价格问题，仍走补价补账流程（repriceReceipt）。
+      // 与订单状态同事务提交：收货成功而异常未关闭（或反之）不会出现中间态。
+      if (nextStatus === 'received') {
+        const pendingAbnRes = await transaction.collection('abnormal_record')
+          .where({ purchase_order_id: purchaseOrderId, status: _.in(['pending', 'processing']) })
+          .limit(1000)
+          .get()
+        for (let k = 0; k < pendingAbnRes.data.length; k++) {
+          const rec = pendingAbnRes.data[k]
+          if (rec.type === 'missing_price') continue
+          await transaction.collection('abnormal_record').doc(rec._id).update({
+            data: {
+              status: 'resolved',
+              resolution: '补收收齐，系统自动关闭',
+              resolved_by: '系统（补收收齐自动关闭）',
+              resolved_at: db.serverDate(),
+              updated_at: db.serverDate()
+            }
+          })
+        }
+      }
 
       // The message is part of the same transaction as the receipt, so a
       // committed receipt always appears in the message center.  A stable id

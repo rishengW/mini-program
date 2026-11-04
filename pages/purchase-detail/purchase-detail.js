@@ -5,7 +5,7 @@ const cloud = require('../../utils/cloud')
 const authGuard = require('../../utils/auth-guard')
 
 Page({
-  data: { detail: { items: [] }, canReceive: false, canEdit: false, canCancel: false, voucherImages: [] },
+  data: { detail: { items: [] }, canReceive: false, canEdit: false, canCancel: false, voucherImages: [], loadFailed: false },
 
   onLoad(options = {}) {
     if (!authGuard.requireLogin()) return
@@ -25,9 +25,13 @@ Page({
     })
     util.hideLoading()
     if (!result || result.code !== 0) {
+      // 失败必须置失败态：否则页面停在初始空数据，渲染出
+      // status-bg-undefined 白字状态卡 + 「商品清单 (0)」的假页面
+      this.setData({ loadFailed: true })
       util.showToast((result && result.msg) || '采购订单加载失败，请稍后重试')
       return
     }
+    this.setData({ loadFailed: false })
 
     const order = cloud.normalizePurchaseOrder(result.data)
     const statusInfo = meta.getStatusInfo(order.orderStatus)
@@ -37,11 +41,18 @@ Page({
     const confirmations = result.data.supplier_confirmations || {}
     const showConfirm = !['draft', 'rejected', 'cancelled'].includes(order.orderStatus)
     const isDone = ['received', 'receipt_abnormal', 'completed'].includes(order.orderStatus)
-    const confirmTagOf = supplierId => {
-      if (!showConfirm || !supplierId) return null
-      const status = isDone ? 'done' : ((confirmations[supplierId] || {}).status || 'pending')
-      return meta.getSupplierConfirmInfo(status)
+    const confirmStatusOf = supplierId => {
+      if (!showConfirm || !supplierId) return ''
+      return isDone ? 'done' : ((confirmations[supplierId] || {}).status || 'pending')
     }
+    const confirmTagOf = supplierId => {
+      const status = confirmStatusOf(supplierId)
+      return status ? meta.getSupplierConfirmInfo(status) : null
+    }
+    // 供应商确认门禁（2026-11-04 拍板）：管理员可代确认，作为供应商不会用系统的逃生通道。
+    // 状态口径与 confirmSupplierOrder 的 CONFIRMABLE_ORDER_STATUS 对齐
+    const canProxyConfirm = ['purchaser', 'super_admin'].includes(currentUser.role) &&
+      ['approved', 'report_generated', 'to_receive'].includes(order.orderStatus)
     let supplierGroups = null
     if (currentUser.role === 'chef') {
       // chef 不见供应商身份（后端不下发供货商名称）：维持平铺，逐行标签
@@ -56,11 +67,14 @@ Page({
         const sid = item.supplierId || ''
         if (!groups[sid]) {
           const tag = confirmTagOf(sid)
+          const confirmStatus = confirmStatusOf(sid)
           groups[sid] = {
             supplierId: sid,
             supplierName: item.supplierName || (sid ? sid : '未指定供应商'),
             confirmText: tag ? tag.text : '',
             confirmType: tag ? tag.type : '',
+            // 待确认时给管理员暴露「代确认」入口（门禁逃生通道）
+            canProxy: canProxyConfirm && confirmStatus === 'pending',
             items: []
           }
         }
@@ -142,6 +156,30 @@ Page({
       canSubmitVoucher,
       canVerify
     })
+  },
+
+  // 2026-11-04：管理员代供应商确认接单（供应商确认门禁的逃生通道，proxy 留痕）
+  async proxyConfirm(e) {
+    if (this._submitting) return
+    const { supplierId, supplierName } = e.currentTarget.dataset
+    if (!supplierId) return
+    const confirmed = await util.showConfirm(`以管理员身份代「${supplierName}」确认接单？系统将记录代确认人，该供应商的商品行随即允许收货。`)
+    if (!confirmed) return
+    this._submitting = true
+    util.showLoading('代确认中...')
+    const result = await cloud.callFunction('confirmSupplierOrder', {
+      orderId: this.orderId,
+      action: 'confirm',
+      supplierId
+    })
+    util.hideLoading()
+    this._submitting = false
+    if (result && result.code === 0) {
+      util.showSuccess('已代确认接单')
+      this.loadData()
+    } else {
+      util.showToast((result && result.msg) || '代确认失败')
+    }
   },
 
   // 清单 #7 订单侧补救：订货报表生成失败后，管理员手动补生成（后端仅 purchaser/super_admin）
@@ -451,5 +489,11 @@ Page({
     wx.navigateTo({
       url: '/pages/receive-verify/receive-verify?orderId=' + d.purchaseOrderId + '&storeId=' + d.storeId
     })
+  },
+
+  // 加载失败后重试（页面未开下拉刷新，这是失败态下唯一的恢复入口）
+  retryLoad() {
+    this.setData({ loadFailed: false })
+    this.loadData()
   }
 })
