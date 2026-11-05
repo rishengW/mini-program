@@ -1118,6 +1118,37 @@ async function repriceReceipt(event) {
   const receiptId = String(event.receiptId || '').trim()
   if (!receiptId) return { code: -1, msg: '缺少收货单号' }
 
+  // F3（2026-11-05）并发锁：与 regenerateReceiptReports 共用 regen_lock——
+  // 本函数会改 receipt_item 价格快照/付款资格并调 regenerate 重出报表，
+  // 两者必须互斥；锁带时间戳，超 10 分钟视为崩溃残留允许接管自愈。
+  const receiptRes = await db.collection('receipt').where({ receipt_id: receiptId }).limit(1).get()
+  const receipt = receiptRes.data[0]
+  if (!receipt) return { code: -1, msg: '收货单不存在' }
+  const staleCutoff = Date.now() - 10 * 60 * 1000
+  const lockRes = await db.collection('receipt').where(_.or([
+    { _id: receipt._id, regen_lock: _.neq(true) },
+    { _id: receipt._id, regen_lock_at: _.lt(staleCutoff) }
+  ])).update({
+    data: { regen_lock: true, regen_lock_at: Date.now(), updated_at: db.serverDate() }
+  })
+  if (!lockRes.stats || lockRes.stats.updated === 0) {
+    return { code: -1, msg: '该收货单报表正在补生成/补价中，请勿重复操作' }
+  }
+  try {
+    return await repriceReceiptLocked(event, receiptId, auth)
+  } finally {
+    try {
+      await db.collection('receipt').doc(receipt._id).update({
+        data: { regen_lock: false, regen_lock_at: null, updated_at: db.serverDate() }
+      })
+    } catch (e) {
+      console.error('[repriceReceipt] 释放补价锁失败:', e)
+    }
+  }
+}
+
+// F3：repriceReceipt 的持锁主体（锁由入口函数管理）
+async function repriceReceiptLocked(event, receiptId, auth) {
   const itemRes = await db.collection('receipt_item')
     .where({ receipt_id: receiptId })
     .limit(1000)
@@ -1170,7 +1201,9 @@ async function repriceReceipt(event) {
   }
 
   // 重走 ③④⑤⑥ 报表（复用补生成逻辑，账单按新快照补出）
-  const regen = await regenerateReceiptReports(event)
+  // _lockHeld：锁已由本函数入口持有，regenerate 跳过抢锁避免自我死锁
+  //（dispatcher 会剔除客户端伪造的该标记，仅内部调用可达此路径）
+  const regen = await regenerateReceiptReports({ ...event, _lockHeld: true })
   if (regen.code !== 0) return regen
   return {
     code: 0,
@@ -1192,6 +1225,42 @@ async function regenerateReceiptReports(event) {
   const receipt = receiptRes.data[0]
   if (!receipt) return { code: -1, msg: '收货单不存在' }
 
+  // F3（2026-11-05）并发锁：与 settleReceipt 同款 CAS 抢占——补生成/补价重出
+  // 期间并发触发会产生重复报表版本（report_id 恒 _RG 且不标 superseded，旧版新版
+  // 并存计入）。repriceReceipt 内部调用时锁已由调用方持有（_lockHeld），此处跳过
+  // 抢锁；dispatcher 会剔除客户端伪造的 _lockHeld，外部直达调用必走抢锁。
+  // 锁带时间戳，超 10 分钟视为上次执行崩溃残留，允许接管自愈。
+  const lockHeldByCaller = event._lockHeld === true
+  if (!lockHeldByCaller) {
+    const staleCutoff = Date.now() - 10 * 60 * 1000
+    const lockRes = await db.collection('receipt').where(_.or([
+      { _id: receipt._id, regen_lock: _.neq(true) },
+      { _id: receipt._id, regen_lock_at: _.lt(staleCutoff) }
+    ])).update({
+      data: { regen_lock: true, regen_lock_at: Date.now(), updated_at: db.serverDate() }
+    })
+    if (!lockRes.stats || lockRes.stats.updated === 0) {
+      return { code: -1, msg: '该收货单报表正在补生成/补价中，请勿重复操作' }
+    }
+  }
+
+  try {
+    return await regenerateReceiptReportsLocked(event, receipt, receiptId)
+  } finally {
+    if (!lockHeldByCaller) {
+      try {
+        await db.collection('receipt').doc(receipt._id).update({
+          data: { regen_lock: false, regen_lock_at: null, updated_at: db.serverDate() }
+        })
+      } catch (e) {
+        console.error('[regenerateReceiptReports] 释放补生成锁失败:', e)
+      }
+    }
+  }
+}
+
+// F3：regenerateReceiptReports 的持锁主体（锁由入口函数管理，不直接暴露）
+async function regenerateReceiptReportsLocked(event, receipt, receiptId) {
   const itemRes = await db.collection('receipt_item')
     .where({ receipt_id: receiptId })
     .limit(1000)
@@ -1733,7 +1802,10 @@ exports.main = async (event = {}) => {
       case 'getOrderStats': return await getOrderStats(event)
       case 'settleReceipt': return await settleReceipt(event)
       case 'repriceReceipt': return await repriceReceipt(event)
-      case 'regenerateReceiptReports': return await regenerateReceiptReports(event)
+      case 'regenerateReceiptReports':
+        // F3：剔除客户端伪造的内部持锁标记——外部直达调用必须走抢锁
+        delete event._lockHeld
+        return await regenerateReceiptReports(event)
       case 'regenerateOrderReports': return await regenerateOrderReports(event)
       case 'cancelOrder': return await cancelOrder(event)
       case 'requestCancel': return await requestCancel(event)
