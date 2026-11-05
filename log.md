@@ -332,3 +332,6 @@
   质量/错货的数量补齐解决不了换货索赔，自动关闭会把未决索赔从待处理列表埋掉；
   missing_price 维持原口径走 repriceReceipt。createReceipt 查询加 type:'shortage' 过滤
 - 需重新部署 createReceipt 生效（其余 18 个函数已于当日本机 IDE 部署完毕）
+- getReportDetail missing_price 修复（cd0bdd3）：缺价行页面曾显示「正常」（字典缺类型 +
+  receipt_item 不落 is_missing_price 字段），改按收货时同条件推导，与 CSV 构建器同口径；
+  与 createReceipt（#25）同属待重传函数
