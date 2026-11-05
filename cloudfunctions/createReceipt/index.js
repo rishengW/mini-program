@@ -546,19 +546,19 @@ exports.main = async (event = {}) => {
         .doc(order._id)
         .update({ data: { order_status: nextStatus, updated_at: db.serverDate() } })
 
-      // 2026-11-04 拍板：补收收齐且本批无新异常 → 订单进入 received，
-      // 此前挂起的数量/质量类异常（shortage/quality/wrong_item）视为已被补收解决，
-      // 自动置「已解决」并从待处理/处理中消失，订单上不再提示收货异常。
-      // 缺价（missing_price）不在此列：补收解决不了价格问题，仍走补价补账流程（repriceReceipt）。
+      // 2026-11-04 拍板 + 2026-11-05 修订（清单 #25）：补收收齐且本批无新异常 →
+      // 订单进入 received，此前挂起的【少货（shortage）】异常视为已被补收解决，
+      // 自动置「已解决」。质量/错货（quality/wrong_item）不在此列：数量补齐解决不了
+      // 换货与索赔，仍走人工处理结案（衔接 #15 责任人口径）；缺价（missing_price）
+      // 同样不走自动关闭，仍走补价补账流程（repriceReceipt）。
       // 与订单状态同事务提交：收货成功而异常未关闭（或反之）不会出现中间态。
       if (nextStatus === 'received') {
         const pendingAbnRes = await transaction.collection('abnormal_record')
-          .where({ purchase_order_id: purchaseOrderId, status: _.in(['pending', 'processing']) })
+          .where({ purchase_order_id: purchaseOrderId, status: _.in(['pending', 'processing']), type: 'shortage' })
           .limit(1000)
           .get()
         for (let k = 0; k < pendingAbnRes.data.length; k++) {
           const rec = pendingAbnRes.data[k]
-          if (rec.type === 'missing_price') continue
           await transaction.collection('abnormal_record').doc(rec._id).update({
             data: {
               status: 'resolved',
