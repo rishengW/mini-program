@@ -26,7 +26,7 @@ async function getSessionUser(authToken) {
   if (!authToken) return null
   const tokenHash = hashToken(authToken)
   const result = await db.collection('app_user')
-    .where({ status: 1, sessions: { token_hash: tokenHash } })
+    .where({ status: 1, 'sessions.token_hash': tokenHash })
     .limit(1)
     .get()
   let user = result.data[0]

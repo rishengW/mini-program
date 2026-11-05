@@ -22,8 +22,9 @@ async function getSessionUser(authToken) {
   if (!authToken) return null
   const tokenHash = hashToken(authToken)
   // B12 多设备会话：先查 sessions 数组（每设备一条），兼容旧单会话字段
+  // 数组元素字段必须点路径匹配：{sessions:{token_hash:x}} 整对象相等永远不中（2026-11-05 修复）
   const result = await db.collection('app_user')
-    .where({ status: 1, sessions: { token_hash: tokenHash } })
+    .where({ status: 1, 'sessions.token_hash': tokenHash })
     .limit(1)
     .get()
   let user = result.data[0]
