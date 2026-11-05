@@ -326,3 +326,9 @@
 - 全部 19 个云函数需重新部署（目录新增 shared/ 子目录；dataService 多文件结构）
 - 前端 submit-guard 改动随小程序包上传生效
 - 本次待部署清单叠加此前 F1/F2/F3/S10：仍为全部 19 个云函数
+
+### #25 拍板收窄（5e56aa4，2026-11-05）
+- 补收收齐自动关闭异常从「shortage/quality/wrong_item 一刀切」收窄为**仅 shortage**：
+  质量/错货的数量补齐解决不了换货索赔，自动关闭会把未决索赔从待处理列表埋掉；
+  missing_price 维持原口径走 repriceReceipt。createReceipt 查询加 type:'shortage' 过滤
+- 需重新部署 createReceipt 生效（其余 18 个函数已于当日本机 IDE 部署完毕）
