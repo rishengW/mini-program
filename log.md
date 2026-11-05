@@ -281,3 +281,48 @@
 - F2：`createReceipt`；F3：`dataService`
 - 连同 11-04 S10 修复（`confirmSupplierOrder`/`createReceipt`），本次待部署清单：
   19 个会话函数 + confirmSupplierOrder + createReceipt + dataService
+
+---
+
+## 2026-11-05 解耦四项（前端防重入 / dataService 拆分 / 云函数共享模块 / 报表构建器）
+
+按用户批准的顺序执行，commit：3d2c0f2 → 6e303f1 → aba7a5d → fdd8375。
+
+### ① 前端防重入（3d2c0f2）
+- 新增 `utils/submit-guard.js`：submitGuard(page, task) 重入返回 undefined；try/finally
+  释放（旧手写模式异常路径会卡死锁）；锁字段沿用 `_submitting` 与旧模式兼容
+- 补 6 处无防护写操作：abnormal-list 3（start/resolve/close）+ user-manage 3
+  （resetPassword/saveUser/toggleUserStatus）；重入时不动 loading（由进行中的那次收尾）
+- 旧手写模式（9 页 _submitting + 2 页 isSubmitting）保留不动，新代码一律走守卫
+
+### ② dataService 单体拆分（6e303f1）
+- 1822 行单体 → 11 个域模块 + 薄 dispatcher（同目录多文件，整目录上传，部署方式不变）：
+  _shared（db/会话/角色）/messages/notify/report-utils/catalog/approval/abnormal/settle/
+  cancel/verify/stats + index.js（23 case 不变）
+- 保真验证：拆分前后全部代码行排序 diff 业务 0 差异（仅 77 行结构行）；函数清单 41/41；
+  node --check 12/12
+- 保真 diff 抓到并修正一处搬运笔误：settle.js ⑥ 明细/合计行曾误混入 ⑤ 的「下单数量」列，
+  已对齐 HEAD/createReceipt 的 8 列口径
+
+### ③ 云函数共享模块（aba7a5d）
+- 源头 scripts/cloud-shared/（session/csv-utils/report-version/store-query 四模块，自包含
+  cloud.init）+ scripts/sync-shared.js 复制到各函数 shared/ 副本（--check 校验）；
+  副本 git 追踪，部署机 pull 即可直接上传
+- 19 个函数删 getSessionUser/hashToken 本地副本；4 函数删 csvField/safePathPart/
+  getNextVersion 副本；2 处 getStoreManagerId 副本同收；dataService 内部 re-export
+- 副本差异留痕：authService 旧版 legacy 脏数据场景放行 → 共享版从严；hashToken
+  空值兜底补齐
+- 52 份副本 → 4 个源头；node --check 全过；副本一致性校验 19×4 通过
+
+### ④ 报表 CSV 构建器统一（fdd8375）
+- scripts/cloud-shared/receipt-reports.js：buildReceiptReports 单源构建 ③④⑤⑥
+- createReceipt 报表段 ~150 行 → 构建器调用；settle.js _RG 主体同（DB 行经
+  adaptReceiptItem 适配，missing_price 按收货时同条件重新推导）
+- 顺带修复 _RG 口径漂移 4 处：缺价行曾显示「正常」、infoHead 少两列、缺
+  abnormal_summary、shortage 文案「短收」→「少货/缺货」
+- 行为测试 24/24（scripts/_tmp_test/test-receipt-reports.js，mock 云环境锁定关键口径）
+
+### 部署提醒（未做）
+- 全部 19 个云函数需重新部署（目录新增 shared/ 子目录；dataService 多文件结构）
+- 前端 submit-guard 改动随小程序包上传生效
+- 本次待部署清单叠加此前 F1/F2/F3/S10：仍为全部 19 个云函数
