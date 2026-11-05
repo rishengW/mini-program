@@ -2,6 +2,7 @@
 const cloud = require('../../utils/cloud')
 const util = require('../../utils/util')
 const authGuard = require('../../utils/auth-guard')
+const { submitGuard } = require('../../utils/submit-guard')
 
 Page({
   data: {
@@ -129,12 +130,13 @@ Page({
     if (!confirmed) return
 
     util.showLoading()
-    const app = getApp()
-    const res = await cloud.callFunction('authService', {
+    // submitGuard：防连点重复发起（重入返回 undefined；loading 由进行中的那次收尾，此处不动）
+    const res = await submitGuard(this, () => cloud.callFunction('authService', {
       action: 'resetPassword',
       id: resetItem.id,
       newPassword: resetForm.newPassword
-    })
+    }))
+    if (res === undefined) return
     util.hideLoading()
 
     if (res.code === 0) {
@@ -206,14 +208,11 @@ Page({
       defaultSupplierId: form.role === 'supplier' ? form.defaultSupplierId : null
     }
 
-    const app = getApp()
-    let res
-    if (editItem) {
-      res = await cloud.callFunction('authService', { action: 'updateUser', id: editItem.id, ...payload })
-    } else {
-      res = await cloud.callFunction('authService', { action: 'createUser', ...payload })
-    }
-
+    // submitGuard：防连点重复发起（重入返回 undefined；loading 由进行中的那次收尾，此处不动）
+    const res = await submitGuard(this, () => editItem
+      ? cloud.callFunction('authService', { action: 'updateUser', id: editItem.id, ...payload })
+      : cloud.callFunction('authService', { action: 'createUser', ...payload }))
+    if (res === undefined) return
     util.hideLoading()
     if (res.code === 0) {
       util.showSuccess('保存成功')
@@ -236,11 +235,12 @@ Page({
     if (!confirmed) return
 
     util.showLoading()
-    const res = await cloud.callFunction('authService', {
+    const res = await submitGuard(this, () => cloud.callFunction('authService', {
       action: 'setUserStatus',
       id: item.id,
       status: disabling ? 0 : 1
-    })
+    }))
+    if (res === undefined) return
     util.hideLoading()
 
     if (res.code === 0) {

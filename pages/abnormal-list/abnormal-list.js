@@ -3,6 +3,7 @@ const cloud = require('../../utils/cloud')
 const util = require('../../utils/util')
 const meta = require('../../utils/meta')
 const authGuard = require('../../utils/auth-guard')
+const { submitGuard } = require('../../utils/submit-guard')
 
 Page({
   data: {
@@ -48,11 +49,12 @@ Page({
   async handleAbnormal(e) {
     const confirmed = await util.showConfirm('确认开始处理该异常？')
     if (!confirmed) return
-    const app = getApp()
-    const result = await cloud.callFunction('dataService', {
+    // submitGuard：防连点重复发起（重入返回 undefined 直接忽略）
+    const result = await submitGuard(this, () => cloud.callFunction('dataService', {
       action: 'startAbnormal',
       id: e.currentTarget.dataset.id
-    })
+    }))
+    if (result === undefined) return
     if (result.code !== 0) return util.showToast(result.msg || '异常处理状态更新失败')
     util.showSuccess('已标记为处理中')
     await this.onShow()
@@ -78,13 +80,13 @@ Page({
     // 付款裁决：少货/异常行处理后是否按实收转回可付款（补结算时纳入）
     const payConfirmed = await util.showConfirm('该异常行是否按实收数量转回可付款？（补结算时纳入账单）\n「取消」则维持不可付款')
     const paymentDecision = payConfirmed ? 'pay_received' : 'reject'
-    const app = getApp()
-    const result = await cloud.callFunction('dataService', {
+    const result = await submitGuard(this, () => cloud.callFunction('dataService', {
       action: 'resolveAbnormal',
       id: e.currentTarget.dataset.id,
       resolution,
       paymentDecision
-    })
+    }))
+    if (result === undefined) return
     if (!result || result.code !== 0) {
       util.showToast((result && result.msg) || '异常解决状态更新失败')
       return
@@ -96,11 +98,11 @@ Page({
   async closeAbnormal(e) {
     const confirmed = await util.showConfirm('确认关闭该异常记录？关闭后不可继续处理。')
     if (!confirmed) return
-    const app = getApp()
-    const result = await cloud.callFunction('dataService', {
+    const result = await submitGuard(this, () => cloud.callFunction('dataService', {
       action: 'closeAbnormal',
       id: e.currentTarget.dataset.id
-    })
+    }))
+    if (result === undefined) return
     if (!result || result.code !== 0) {
       util.showToast((result && result.msg) || '异常关闭失败')
       return
