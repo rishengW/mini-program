@@ -1,50 +1,11 @@
 // 报表工具域（2026-11-05 拆分自 dataService/index.js）：
 // CSV 转义/路径安全/版本取号（CAS），以及审核改量后的下单类报表重算。
-// 注意：csvField/safePathPart/getNextVersion 与 createReceipt 等函数中的副本
-// 口径必须保持一致（跨函数共享留待解耦第 3 项统一）。
+// csvField/safePathPart/getNextVersion 已收敛到跨函数共享模块（源头 scripts/cloud-shared/，
+// sync-shared.js 同步副本），此处 re-export，本目录模块仍统一从 ./report-utils 取（导出名不变）。
 const { db, _, cloud } = require('./_shared')
 const { createMessage, resolveActiveRecipient } = require('./messages')
-
-// ===== 报表重算（审核改量后调用） =====
-// 以下三个辅助函数与 createPurchaseOrder 中的实现保持一致（云函数各自独立部署，无法共享模块）。
-function csvField(val) {
-  let s = String(val == null ? '' : val)
-  // 防公式注入：以 = + - @ 开头的值在 Excel/WPS 里会被当作公式执行
-  if (/^[=+\-@]/.test(s)) s = "'" + s
-  return '"' + s.replace(/"/g, '""') + '"'
-}
-
-function safePathPart(value) {
-  return String(value || '').replace(/[\\/:*?"<>|]/g, '_').slice(0, 80) || '未命名'
-}
-
-async function getNextVersion(reportType, scopeId, relatedDate) {
-  // P0-4：CAS 取号——读旧值 → 条件更新（count 仍等于旧值才写旧值+1）→ updated===1 才算抢到。
-  // 原「_.inc 后回读」是两步操作，并发双方会回读到同一个最终值 → 版本号跳号、report_id 碰撞。
-  const counterId = `${reportType}_${scopeId}_${relatedDate}`
-  const counters = db.collection('report_version_counter')
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const doc = await counters.doc(counterId).get().catch(() => null)
-    const current = doc && doc.data ? Number(doc.data.count) : null
-    if (current !== null && Number.isFinite(current) && current >= 0) {
-      // 条件更新独占版本号：并发方抢先写入后 where 不再命中（updated===0），重读重试
-      const casRes = await counters.where({ _id: counterId, count: current })
-        .update({ data: { count: current + 1, updated_at: db.serverDate() } })
-      if (casRes.stats && casRes.stats.updated === 1) return current + 1
-      continue
-    }
-    try {
-      // 计数器不存在：创建 count=1；_id 撞车说明并发方已建，重试走 CAS 路径
-      await counters.add({ data: { _id: counterId, count: 1, updated_at: db.serverDate() } })
-      return 1
-    } catch (err) {
-      // 空 catch 会把「集合不存在/无权限」和「并发撞 _id」压成同一张脸，排查时
-      // 只剩一句无信息量的「计数器更新失败」。仅在最后一次重试时带出真实原因。
-      if (attempt === 4) console.error('[dataService][getNextVersion] 计数器创建失败:', counterId, err)
-    }
-  }
-  throw new Error('getNextVersion: 计数器更新失败')
-}
+const { csvField, safePathPart } = require('./shared/csv-utils')
+const { getNextVersion } = require('./shared/report-version')
 
 // 审核改量后，按批准数量重新生成下单类报表：旧版本标记 superseded（保留审计痕迹），
 // 新版本按审核后数量生成。尽力而为：审核事务已提交，报表失败只记日志并返回警告。

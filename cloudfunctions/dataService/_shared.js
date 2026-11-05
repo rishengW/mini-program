@@ -12,9 +12,9 @@ const MANAGEMENT_ROLES = ['super_admin', 'purchaser']
 // S9 凭证提交：店长是线下持凭证的人，可提交；核销裁决仍限管理员/采购员
 const VOUCHER_SUBMIT_ROLES = ['super_admin', 'purchaser', 'store_manager']
 
-function hashToken(token) {
-  return crypto.createHash('sha256').update(String(token || '')).digest('hex')
-}
+// 会话校验收敛到跨函数共享模块（源头 scripts/cloud-shared/session.js，sync-shared.js 同步）；
+// 此处 re-export，本目录各模块仍统一从 ./_shared 取依赖
+const { hashToken, getSessionUser } = require('./shared/session')
 
 // fileID（cloud://{env}.{bucket}/{cloudPath}）→ cloudPath；非法格式返回空串。
 // 200cb63 引入的凭证归属校验曾直接对完整 fileID 做 startsWith，导致带凭证提交必然被拒。
@@ -23,34 +23,7 @@ function cloudPathOfFileId(fileId) {
   return match ? match[1] : ''
 }
 
-async function getSessionUser(authToken) {
-  if (!authToken) return null
-  const tokenHash = hashToken(authToken)
-  // B12 多设备会话：先查 sessions 数组（每设备一条），兼容旧单会话字段
-  // 数组元素字段必须点路径匹配：{sessions:{token_hash:x}} 整对象相等永远不中（2026-11-05 修复）
-  const result = await db.collection('app_user')
-    .where({ status: 1, 'sessions.token_hash': tokenHash })
-    .limit(1)
-    .get()
-  let user = result.data[0]
-  if (!user) {
-    const legacy = await db.collection('app_user')
-      .where({ session_token_hash: tokenHash, status: 1 })
-      .limit(1)
-      .get()
-    user = legacy.data[0]
-  }
-  if (!user) return null
-  if (Array.isArray(user.sessions) && user.sessions.length) {
-    const session = user.sessions.find(s => s && s.token_hash === tokenHash)
-    if (!session || !session.expires_at) return null
-    const expiresAt = new Date(session.expires_at).getTime()
-    return Number.isFinite(expiresAt) && expiresAt > Date.now() ? user : null
-  }
-  if (!user.session_expires_at) return null
-  const legacyExpires = new Date(user.session_expires_at).getTime()
-  return Number.isFinite(legacyExpires) && legacyExpires > Date.now() ? user : null
-}
+// （getSessionUser 本地副本已删除——见上方 require）
 
 async function requireUser(event, roles) {
   const user = await getSessionUser(event.authToken)

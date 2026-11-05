@@ -23,19 +23,9 @@ async function createMessage(data) {
   })
 }
 
-// 查询门店店长 user_id（清单 #5 消息定向口径）。查不到返回 ''（回退门店广播）。
-async function getStoreManagerId(storeId) {
-  try {
-    const res = await db.collection('app_user')
-      .where({ role: 'store_manager', default_store_id: storeId, status: 1 })
-      .limit(1)
-      .get()
-    return (res.data[0] && (res.data[0].user_id || res.data[0]._id)) || ''
-  } catch (err) {
-    console.warn('[dataService] 查询门店店长失败，消息回退门店广播:', err)
-    return ''
-  }
-}
+// 门店店长查询收敛到共享模块（2026-11-05；源头 scripts/cloud-shared/store-query.js，
+// sync-shared.js 同步），此处 re-export 保持本文件导出名不变
+const { getStoreManagerId } = require('./shared/store-query')
 
 // 定向给单据创建人的消息：创建人已停用/不存在（离职，#17）时改发本店店长，
 // 仍查不到则回退 ''（门店广播），避免消息落进死信箱（2026-09-24 拍板）。

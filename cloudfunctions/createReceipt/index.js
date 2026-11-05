@@ -6,49 +6,14 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 const _ = db.command
 
-function hashToken(token) {
-  return crypto.createHash('sha256').update(String(token || '')).digest('hex')
-}
+// （hashToken 本地副本已删除——见下方 shared/session require）
 
-async function getSessionUser(authToken) {
-  if (!authToken) return null
-  const tokenHash = hashToken(authToken)
-  // B12 多设备会话：先查 sessions 数组（每设备一条），兼容旧单会话字段
-  // 数组元素字段必须点路径匹配：{sessions:{token_hash:x}} 整对象相等永远不中（2026-11-05 修复）
-  const result = await db.collection('app_user')
-    .where({ status: 1, 'sessions.token_hash': tokenHash })
-    .limit(1)
-    .get()
-  let user = result.data[0]
-  if (!user) {
-    const legacy = await db.collection('app_user')
-      .where({ session_token_hash: tokenHash, status: 1 })
-      .limit(1)
-      .get()
-    user = legacy.data[0]
-  }
-  if (!user) return null
-  if (Array.isArray(user.sessions) && user.sessions.length) {
-    const session = user.sessions.find(s => s && s.token_hash === tokenHash)
-    if (!session || !session.expires_at) return null
-    const expiresAt = new Date(session.expires_at).getTime()
-    return Number.isFinite(expiresAt) && expiresAt > Date.now() ? user : null
-  }
-  if (!user.session_expires_at) return null
-  const legacyExpires = new Date(user.session_expires_at).getTime()
-  return Number.isFinite(legacyExpires) && legacyExpires > Date.now() ? user : null
-}
+// 会话校验收敛到跨函数共享模块（2026-11-05 解耦第 3 项；源头 scripts/cloud-shared/session.js，
+// 由 scripts/sync-shared.js 同步副本，勿再恢复本地副本——F1 就是 19 份副本各自漂移的教训）
+const { hashToken, getSessionUser } = require('./shared/session')
 
-function csvField(val) {
-  let s = String(val == null ? '' : val)
-  // 防公式注入：以 = + - @ 开头的值在 Excel/WPS 里会被当作公式执行
-  if (/^[=+\-@]/.test(s)) s = "'" + s
-  return '"' + s.replace(/"/g, '""') + '"'
-}
-
-function safePathPart(value) {
-  return String(value || '').replace(/[\\/:*?"<>|]/g, '_').slice(0, 80) || '未命名'
-}
+// CSV 工具收敛到共享模块（2026-11-05；源头 scripts/cloud-shared/csv-utils.js，sync-shared.js 同步）
+const { csvField, safePathPart } = require('./shared/csv-utils')
 
 // fileID（cloud://{env}.{bucket}/{cloudPath}）→ cloudPath；非法格式返回空串。
 // 200cb63 引入的归属校验曾直接对完整 fileID 做 startsWith，导致带附件提交必然被拒。
@@ -78,49 +43,14 @@ function getItemAbnormalNames(item) {
   return getItemAbnormalTypes(item).map(type => ABNORMAL_TYPE_NAMES[type] || type)
 }
 
-async function getNextVersion(reportType, scopeId, relatedDate) {
-  // P0-4：CAS 取号——读旧值 → 条件更新（count 仍等于旧值才写旧值+1）→ updated===1 才算抢到。
-  // 原「_.inc 后回读」是两步操作，并发双方会回读到同一个最终值 → 版本号跳号、report_id 碰撞。
-  const counterId = `${reportType}_${scopeId}_${relatedDate}`
-  const counters = db.collection('report_version_counter')
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const doc = await counters.doc(counterId).get().catch(() => null)
-    const current = doc && doc.data ? Number(doc.data.count) : null
-    if (current !== null && Number.isFinite(current) && current >= 0) {
-      // 条件更新独占版本号：并发方抢先写入后 where 不再命中（updated===0），重读重试
-      const casRes = await counters.where({ _id: counterId, count: current })
-        .update({ data: { count: current + 1, updated_at: db.serverDate() } })
-      if (casRes.stats && casRes.stats.updated === 1) return current + 1
-      continue
-    }
-    try {
-      // 计数器不存在：创建 count=1；_id 撞车说明并发方已建，重试走 CAS 路径
-      await counters.add({ data: { _id: counterId, count: 1, updated_at: db.serverDate() } })
-      return 1
-    } catch (err) {
-      // 空 catch 会把「集合不存在/无权限」和「并发撞 _id」压成同一张脸，排查时
-      // 只剩一句无信息量的「计数器更新失败」。仅在最后一次重试时带出真实原因。
-      if (attempt === 4) console.error('[createReceipt][getNextVersion] 计数器创建失败:', counterId, err)
-    }
-  }
-  throw new Error('getNextVersion: 计数器更新失败')
-}
+// 报表版本取号收敛到共享模块（2026-11-05；源头 scripts/cloud-shared/report-version.js）
+const { getNextVersion } = require('./shared/report-version')
 
 // Backfill the notification for receipts created by an older deployment.
 // 门店内消息可见口径（清单 #5）：异常类消息定向给店长（处理责任人），
 // 正常类消息保留门店广播。查询门店店长的 user_id，查不到则回退广播（''）。
-async function getStoreManagerId(storeId) {
-  try {
-    const res = await db.collection('app_user')
-      .where({ role: 'store_manager', default_store_id: storeId, status: 1 })
-      .limit(1)
-      .get()
-    return (res.data[0] && (res.data[0].user_id || res.data[0]._id)) || ''
-  } catch (err) {
-    console.warn('[createReceipt] 查询门店店长失败，消息回退门店广播:', err)
-    return ''
-  }
-}
+// 门店店长查询收敛到共享模块（2026-11-05；源头 scripts/cloud-shared/store-query.js）
+const { getStoreManagerId } = require('./shared/store-query')
 
 // 查询超级管理员 user_id（全局唯一账号）。报表补生成仅 purchaser/super_admin
 // 可执行（清单 #7），失败通知定向给能行动的人；store_id 保留供店长兜底查看。

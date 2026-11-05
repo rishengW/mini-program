@@ -42,9 +42,11 @@ function verifyPassword(password, user) {
   return actual.length === expected.length && crypto.timingSafeEqual(actual, expected)
 }
 
-function hashToken(token) {
-  return crypto.createHash('sha256').update(String(token)).digest('hex')
-}
+// 会话校验收敛到跨函数共享模块（2026-11-05 解耦第 3 项；源头 scripts/cloud-shared/session.js）。
+// 行为差异留痕：本地旧版在「legacy 单会话字段命中但 sessions 数组非空且不含该 token」的
+// 脏数据场景下会放行，共享版从严拒绝（要求重新登录）——有意收紧；
+// 本地 hashToken 为 String(token)，共享版 String(token||'')（空值更稳，现有调用点均非空）。
+const { hashToken, getSessionUser } = require('./shared/session')
 
 function publicUser(user) {
   return {
@@ -103,32 +105,8 @@ async function getDefaultStore(user) {
   return result.data[0] || null
 }
 
-async function getSessionUser(authToken) {
-  if (!authToken) return null
-  const tokenHash = hashToken(authToken)
-  const result = await db.collection(USER_COLLECTION)
-    .where({ status: 1, 'sessions.token_hash': tokenHash })
-    .limit(1)
-    .get()
-  let user = result.data[0]
-  if (!user) {
-    // 兼容旧单会话字段（未重新登录的历史设备）
-    const legacy = await db.collection(USER_COLLECTION)
-      .where({ session_token_hash: tokenHash, status: 1 })
-      .limit(1)
-      .get()
-    user = legacy.data[0]
-    if (!user || !user.session_expires_at) return null
-    const legacyExpires = new Date(user.session_expires_at).getTime()
-    if (!Number.isFinite(legacyExpires) || legacyExpires <= Date.now()) return null
-    return user
-  }
-  const session = (user.sessions || []).find(s => s && s.token_hash === tokenHash)
-  if (!session || !session.expires_at) return null
-  const expiresAt = new Date(session.expires_at).getTime()
-  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return null
-  return user
-}
+// （getSessionUser 本地副本已删除——见上方 require；共享版集合硬编码 'app_user'，
+//   与 USER_COLLECTION 常量同值，语义不变）
 
 function validateUserInput(data, requirePassword) {
   const username = normalizeUsername(data.username)

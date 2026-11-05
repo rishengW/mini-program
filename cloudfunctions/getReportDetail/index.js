@@ -5,9 +5,7 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 const _ = db.command
 
-function hashToken(token) {
-  return crypto.createHash('sha256').update(String(token || '')).digest('hex')
-}
+// （hashToken 本地副本已删除——见下方 shared/session require）
 
 const ABNORMAL_TYPE_NAMES = {
   shortage: '少货/缺货',
@@ -23,34 +21,9 @@ function getAbnormalTypeNames(item = {}) {
   return types.map(type => ABNORMAL_TYPE_NAMES[type] || type)
 }
 
-async function getSessionUser(authToken) {
-  if (!authToken) return null
-  const tokenHash = hashToken(authToken)
-  // B12 多设备会话：先查 sessions 数组（每设备一条），兼容旧单会话字段
-  // 数组元素字段必须点路径匹配：{sessions:{token_hash:x}} 整对象相等永远不中（2026-11-05 修复）
-  const result = await db.collection('app_user')
-    .where({ status: 1, 'sessions.token_hash': tokenHash })
-    .limit(1)
-    .get()
-  let user = result.data[0]
-  if (!user) {
-    const legacy = await db.collection('app_user')
-      .where({ session_token_hash: tokenHash, status: 1 })
-      .limit(1)
-      .get()
-    user = legacy.data[0]
-  }
-  if (!user) return null
-  if (Array.isArray(user.sessions) && user.sessions.length) {
-    const session = user.sessions.find(s => s && s.token_hash === tokenHash)
-    if (!session || !session.expires_at) return null
-    const expiresAt = new Date(session.expires_at).getTime()
-    return Number.isFinite(expiresAt) && expiresAt > Date.now() ? user : null
-  }
-  if (!user.session_expires_at) return null
-  const legacyExpires = new Date(user.session_expires_at).getTime()
-  return Number.isFinite(legacyExpires) && legacyExpires > Date.now() ? user : null
-}
+// 会话校验收敛到跨函数共享模块（2026-11-05 解耦第 3 项；源头 scripts/cloud-shared/session.js，
+// 由 scripts/sync-shared.js 同步副本，勿再恢复本地副本——F1 就是 19 份副本各自漂移的教训）
+const { hashToken, getSessionUser } = require('./shared/session')
 
 exports.main = async (event = {}) => {
   try {

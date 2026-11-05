@@ -14,38 +14,11 @@ const HIDDEN_ORDER_STATUS = ['draft', 'submitted', 'pending_approval', 'rejected
 // partial_received 按 S8 拍板不算完成——分批收货中剩余批次可能未到，保留供货商已有确认状态
 const DONE_ORDER_STATUS = ['received', 'receipt_abnormal', 'completed']
 
-function hashToken(token) {
-  return crypto.createHash('sha256').update(String(token || '')).digest('hex')
-}
+// （hashToken 本地副本已删除——见下方 shared/session require）
 
-async function getSessionUser(authToken) {
-  if (!authToken) return null
-  const tokenHash = hashToken(authToken)
-  // B12 多设备会话：先查 sessions 数组（每设备一条），兼容旧单会话字段
-  // 数组元素字段必须点路径匹配：{sessions:{token_hash:x}} 整对象相等永远不中（2026-11-05 修复）
-  const result = await db.collection('app_user')
-    .where({ status: 1, 'sessions.token_hash': tokenHash })
-    .limit(1)
-    .get()
-  let user = result.data[0]
-  if (!user) {
-    const legacy = await db.collection('app_user')
-      .where({ session_token_hash: tokenHash, status: 1 })
-      .limit(1)
-      .get()
-    user = legacy.data[0]
-  }
-  if (!user) return null
-  if (Array.isArray(user.sessions) && user.sessions.length) {
-    const session = user.sessions.find(s => s && s.token_hash === tokenHash)
-    if (!session || !session.expires_at) return null
-    const expiresAt = new Date(session.expires_at).getTime()
-    return Number.isFinite(expiresAt) && expiresAt > Date.now() ? user : null
-  }
-  if (!user.session_expires_at) return null
-  const legacyExpires = new Date(user.session_expires_at).getTime()
-  return Number.isFinite(legacyExpires) && legacyExpires > Date.now() ? user : null
-}
+// 会话校验收敛到跨函数共享模块（2026-11-05 解耦第 3 项；源头 scripts/cloud-shared/session.js，
+// 由 scripts/sync-shared.js 同步副本，勿再恢复本地副本——F1 就是 19 份副本各自漂移的教训）
+const { hashToken, getSessionUser } = require('./shared/session')
 
 // 供货商视角的订单状态：pending 待确认 / confirmed 已确认 / shipped 已发货 / done 已收货 / cancelled 已作废
 function deriveConfirmStatus(order, supplierId) {
