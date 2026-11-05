@@ -10,7 +10,8 @@ const _ = db.command
 const ABNORMAL_TYPE_NAMES = {
   shortage: '少货/缺货',
   quality: '质量问题',
-  wrong_item: '错货'
+  wrong_item: '错货',
+  missing_price: '缺价待补'
 }
 
 function getAbnormalTypeNames(item = {}) {
@@ -18,6 +19,13 @@ function getAbnormalTypeNames(item = {}) {
   if (item.is_shortage) types.push('shortage')
   if (item.is_quality_issue) types.push('quality')
   if (item.is_wrong_item) types.push('wrong_item')
+  // receipt_item 不落 is_missing_price（收货时仅打异常台账），按收货时同条件推导：
+  // 非手动 && 快照 0 价 && 有供应商 && 实收>0
+  //（与 shared/receipt-reports 的 adaptReceiptItem 同口径；补价后快照刷新即自然消失，
+  //  与 CSV 侧构建器口径一致——此前缺此行，缺价行页面显示「正常」而 CSV 显示「缺价待补」）
+  if (!item.is_manual && Number(item.price_snapshot || 0) <= 0 && item.supplier_id && Number(item.received_qty) > 0) {
+    types.push('missing_price')
+  }
   return types.map(type => ABNORMAL_TYPE_NAMES[type] || type)
 }
 
