@@ -12,8 +12,9 @@ const _ = db.command
 // 由 scripts/sync-shared.js 同步副本，勿再恢复本地副本——F1 就是 19 份副本各自漂移的教训）
 const { hashToken, getSessionUser } = require('./shared/session')
 
-// CSV 工具收敛到共享模块（2026-11-05；源头 scripts/cloud-shared/csv-utils.js，sync-shared.js 同步）
-const { csvField, safePathPart } = require('./shared/csv-utils')
+// ③④⑤⑥ 收货报表统一走共享构建器（2026-11-05 解耦第 4 项；源头
+// scripts/cloud-shared/receipt-reports.js，sync-shared.js 同步），与补生成（_RG）单源同口径
+const { buildReceiptReports } = require('./shared/receipt-reports')
 
 // fileID（cloud://{env}.{bucket}/{cloudPath}）→ cloudPath；非法格式返回空串。
 // 200cb63 引入的归属校验曾直接对完整 fileID 做 startsWith，导致带附件提交必然被拒。
@@ -43,8 +44,7 @@ function getItemAbnormalNames(item) {
   return getItemAbnormalTypes(item).map(type => ABNORMAL_TYPE_NAMES[type] || type)
 }
 
-// 报表版本取号收敛到共享模块（2026-11-05；源头 scripts/cloud-shared/report-version.js）
-const { getNextVersion } = require('./shared/report-version')
+// （getNextVersion 本地调用已随报表段迁入共享构建器，此 require 不再保留）
 
 // Backfill the notification for receipts created by an older deployment.
 // 门店内消息可见口径（清单 #5）：异常类消息定向给店长（处理责任人），
@@ -598,160 +598,16 @@ exports.main = async (event = {}) => {
 
     const reportsGenerated = []
     let reportWarning = ''
-    // 单据信息头共用字段：订单号、门店、收货日期、下单日期、期望到货、经办人
-    const orderDateStr = order.order_date || ''
-    const deliveryDateStr = order.delivery_date || ''
-    const infoHead = [csvField('采购单号'), csvField(purchaseOrderId), csvField('门店'), csvField(storeName), csvField('收货日期'), csvField(receiptDate), csvField('下单日期'), csvField(orderDateStr), csvField('期望到货'), csvField(deliveryDateStr), csvField('验收人'), csvField(receivedBy || ''), csvField('批次'), csvField(`第${committedBatchNo}批${committedIsFinal ? '（收齐）' : ''}`)].join(',') + '\n'
-
-    // 批量查供应商名称（明细行供应商字段供各报表使用）
-    const supplierNameMap = {}
-    const allSupplierIds = [...new Set(items.map(item => item.supplierId).filter(Boolean))]
-    for (let i = 0; i < allSupplierIds.length; i += 20) {
-      const idChunk = allSupplierIds.slice(i, i + 20)
-      const supRes = await db.collection('supplier').where({ supplier_id: _.in(idChunk) }).limit(100).get()
-      supRes.data.forEach(s => { supplierNameMap[s.supplier_id] = s.supplier_name })
-    }
-    items.forEach(item => { item.supplierName = supplierNameMap[item.supplierId] || item.supplierId || '' })
-
+    // ③④⑤⑥ 报表生成：统一走共享构建器（口径单源，见顶部 require 注释）
     try {
-      // ===== 报表1: 门店收货报表 =====
-      const v1 = await getNextVersion('store_receipt_report', storeId, receiptDate)
-      let csv1 = infoHead + [csvField('商品名称'), csvField('供应商'), csvField('下单数量'), csvField('实收数量'), csvField('单位'), csvField('验收状态'), csvField('异常类型'), csvField('备注'), csvField('是否可付款')].join(',') + '\n'
-      items.forEach(item => {
-        const abnormalNames = getItemAbnormalNames(item)
-        csv1 += [csvField(item.productName), csvField(item.supplierName || item.supplierId || ''), csvField(item.orderQty), csvField(item.receivedQty), csvField(item.unit), csvField(abnormalNames.length ? '收货异常' : '正常'), csvField(abnormalNames.join('、')), csvField(item.remark || ''), csvField(item.payableFlag !== false ? '是' : '否')].join(',') + '\n'
+      const reportResult = await buildReceiptReports({
+        receiptId, purchaseOrderId, storeId, storeName, receiptDate,
+        orderDate: order.order_date || '', deliveryDate: order.delivery_date || '',
+        receivedBy, batchNo: committedBatchNo, isFinal: committedIsFinal,
+        items
       })
-      const f1 = `reports/store/${receiptDate}/store-receipt-${safePathPart(storeName)}-${receiptDate}-${receiptId}-v${v1}.csv`
-      const u1 = await cloud.uploadFile({ cloudPath: f1, fileContent: Buffer.from(String.fromCharCode(0xFEFF) + csv1, 'utf-8') })
-      await db.collection('report_file').add({
-        data: {
-          report_id: 'RPT_SR_' + receiptId, report_type: 'store_receipt_report',
-          report_scope: 'store', scope_id: storeId, scope_name: storeName,
-          related_date: receiptDate, source_order_id: purchaseOrderId, basis_date_type: 'receipt_date',
-          file_name: f1, file_url: u1.fileID, file_version: v1,
-          generated_at: db.serverDate(), generated_by_system: true, status: 'generated',
-          has_abnormal: hasAbnormal, abnormal_summary: abnormalTypeNames.join('、')
-        }
-      })
-      reportsGenerated.push('store_receipt_report')
+      reportsGenerated.push(...reportResult.generated)
 
-    // 行级结算隔离（B4/B6）：异常只阻塞异常行，不阻塞正常商品。
-    // 带价报表始终生成，但只包含可付款（payableFlag=true）的正常行；
-    // 异常行的数量与异常类型记录在不含价的收货报表中，走异常流程跟进。
-    // ===== 报表2: 门店带价格收货报表（仅可付款行） =====
-    {
-      // 清单 #24 双保险：手动行不进带价报表（payableFlag 本就为 false，显式过滤防供应商建档后失效）
-      const payableItems = items.filter(item => item.payableFlag && !item.isManual)
-      if (payableItems.length > 0) {
-        const v2 = await getNextVersion('store_receipt_price_report', storeId, receiptDate)
-        let csv2 = infoHead + [csvField('商品名称'), csvField('供应商'), csvField('实收数量'), csvField('单位'), csvField('单价'), csvField('小计'), csvField('是否可付款')].join(',') + '\n'
-        let totalAmount = 0
-        payableItems.forEach(item => {
-          const price = item.priceSnapshot || 0
-          // 逐行先舍入到分再累加，保证"各行小计之和"与"合计"一致
-          const subtotal = Math.round(item.receivedQty * price * 100) / 100
-          totalAmount = Math.round((totalAmount + subtotal) * 100) / 100
-          csv2 += [csvField(item.productName), csvField(item.supplierName || item.supplierId || ''), csvField(item.receivedQty), csvField(item.unit), csvField(price), csvField(subtotal.toFixed(2)), csvField('是')].join(',') + '\n'
-        })
-        csv2 += [csvField('合计'), csvField(''), csvField(''), csvField(''), csvField(''), csvField(totalAmount.toFixed(2)), csvField('')].join(',') + '\n'
-        const f2 = `reports/store/${receiptDate}/store-receipt-price-${safePathPart(storeName)}-${receiptDate}-${receiptId}-v${v2}.csv`
-        const u2 = await cloud.uploadFile({ cloudPath: f2, fileContent: Buffer.from(String.fromCharCode(0xFEFF) + csv2, 'utf-8') })
-        await db.collection('report_file').add({
-          data: {
-            report_id: 'RPT_SRP_' + receiptId, report_type: 'store_receipt_price_report',
-            report_scope: 'store', scope_id: storeId, scope_name: storeName,
-            related_date: receiptDate, source_order_id: purchaseOrderId, basis_date_type: 'receipt_date',
-            file_name: f2, file_url: u2.fileID, file_version: v2,
-            generated_at: db.serverDate(), generated_by_system: true, status: 'generated',
-            has_abnormal: hasAbnormal, abnormal_summary: abnormalTypeNames.join('、'),
-            excluded_rows: items.length - payableItems.length
-          }
-        })
-        reportsGenerated.push('store_receipt_price_report')
-      }
-    }
-
-    // ===== 按供应商分组 =====
-    const supplierMap = {}
-    items.forEach(item => {
-      const sid = item.supplierId || 'unknown'
-      if (!supplierMap[sid]) supplierMap[sid] = { items: [], name: '' }
-      supplierMap[sid].items.push(item)
-    })
-    // 批量查供应商名称，避免每个供应商一次数据库请求
-    const receiptSupplierIds = Object.keys(supplierMap).filter(sid => sid !== 'unknown')
-    for (let i = 0; i < receiptSupplierIds.length; i += 20) {
-      const idChunk = receiptSupplierIds.slice(i, i + 20)
-      const supRes = await db.collection('supplier').where({ supplier_id: _.in(idChunk) }).limit(100).get()
-      supRes.data.forEach(s => {
-        if (supplierMap[s.supplier_id]) supplierMap[s.supplier_id].name = s.supplier_name
-      })
-    }
-
-    // ===== 报表3: 供应商到货汇总（不含价格） =====
-    for (const sid of Object.keys(supplierMap)) {
-      if (sid === 'unknown') continue
-      const supItems = supplierMap[sid].items
-      const supName = supplierMap[sid].name || sid
-      const supplierHasAbnormal = supItems.some(item => getItemAbnormalTypes(item).length > 0)
-      const supplierAbnormalSummary = [...new Set(supItems.reduce((all, item) => all.concat(getItemAbnormalNames(item)), []))].join('、')
-      const v3 = await getNextVersion('supplier_receipt_report', sid, receiptDate)
-
-      let csv3 = infoHead + [csvField('商品名称'), csvField('供应商'), csvField('门店'), csvField('到货数量'), csvField('下单数量'), csvField('单位'), csvField('验收状态'), csvField('异常类型'), csvField('备注')].join(',') + '\n'
-      supItems.forEach(item => {
-        const abnormalNames = getItemAbnormalNames(item)
-        csv3 += [csvField(item.productName), csvField(item.supplierName || item.supplierId || ''), csvField(storeName), csvField(item.receivedQty), csvField(item.orderQty), csvField(item.unit), csvField(abnormalNames.length ? '收货异常' : '正常'), csvField(abnormalNames.join('、')), csvField(item.remark || '')].join(',') + '\n'
-      })
-
-      const f3 = `reports/supplier/${receiptDate}/supplier-receipt-${safePathPart(supName)}-${receiptDate}-${receiptId}-v${v3}.csv`
-      const u3 = await cloud.uploadFile({ cloudPath: f3, fileContent: Buffer.from(String.fromCharCode(0xFEFF) + csv3, 'utf-8') })
-      await db.collection('report_file').add({
-        data: {
-          report_id: 'RPT_SUR_' + sid + '_' + receiptId, report_type: 'supplier_receipt_report',
-          report_scope: 'supplier', scope_id: sid, scope_name: supName,
-          related_date: receiptDate, source_order_id: purchaseOrderId, basis_date_type: 'receipt_date',
-          file_name: f3, file_url: u3.fileID, file_version: v3,
-          generated_at: db.serverDate(), generated_by_system: true, status: 'generated',
-          has_abnormal: supplierHasAbnormal, abnormal_summary: supplierAbnormalSummary
-        }
-      })
-      reportsGenerated.push('supplier_receipt_report:' + sid)
-    }
-
-    // ===== 报表4: 供应商带价格账单（仅可付款行，行级隔离） =====
-    for (const sid of Object.keys(supplierMap)) {
-      if (sid === 'unknown') continue
-      // 清单 #24 双保险：手动行不进供应商带价报表
-      const supPayableItems = supplierMap[sid].items.filter(item => item.payableFlag && !item.isManual)
-      if (supPayableItems.length === 0) continue
-      const supName = supplierMap[sid].name || sid
-      const v4 = await getNextVersion('supplier_receipt_price_report', sid, receiptDate)
-
-      let csv4 = infoHead + [csvField('商品名称'), csvField('供应商'), csvField('门店'), csvField('到货数量'), csvField('单位'), csvField('单价'), csvField('小计'), csvField('可付款')].join(',') + '\n'
-      let sTotal = 0
-      supPayableItems.forEach(item => {
-        const price = item.priceSnapshot || 0
-        // 逐行先舍入到分再累加，保证"各行小计之和"与"合计"一致
-        const sub = Math.round(item.receivedQty * price * 100) / 100
-        sTotal = Math.round((sTotal + sub) * 100) / 100
-        csv4 += [csvField(item.productName), csvField(item.supplierName || item.supplierId || ''), csvField(storeName), csvField(item.receivedQty), csvField(item.unit), csvField(price), csvField(sub.toFixed(2)), csvField('是')].join(',') + '\n'
-      })
-      csv4 += [csvField('合计'), csvField(''), csvField(''), csvField(''), csvField(''), csvField(''), csvField(sTotal.toFixed(2)), csvField('')].join(',') + '\n'
-
-      const f4 = `reports/supplier/${receiptDate}/supplier-receipt-price-${safePathPart(supName)}-${receiptDate}-${receiptId}-v${v4}.csv`
-      const u4 = await cloud.uploadFile({ cloudPath: f4, fileContent: Buffer.from(String.fromCharCode(0xFEFF) + csv4, 'utf-8') })
-      await db.collection('report_file').add({
-        data: {
-          report_id: 'RPT_SURP_' + sid + '_' + receiptId, report_type: 'supplier_receipt_price_report',
-          report_scope: 'supplier', scope_id: sid, scope_name: supName,
-          related_date: receiptDate, source_order_id: purchaseOrderId, basis_date_type: 'receipt_date',
-          file_name: f4, file_url: u4.fileID, file_version: v4,
-          generated_at: db.serverDate(), generated_by_system: true, status: 'generated',
-          excluded_rows: supplierMap[sid].items.length - supPayableItems.length
-        }
-      })
-      reportsGenerated.push('supplier_receipt_price_report:' + sid)
-    }
     } catch (reportErr) {
       console.error('[createReceipt] 收货已保存，但报表生成失败:', reportErr)
       reportWarning = '报表生成失败，请联系管理员处理。'
