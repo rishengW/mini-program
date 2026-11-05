@@ -501,10 +501,18 @@ exports.main = async (event = {}) => {
         return (txHistoryQty[key] || 0) + (thisQtyMap[key] || 0) >= (Number(oi.order_qty) || 0)
       })
       // P1-16：非最终批（还有行未收齐）不生成 shortage 异常——短收只在最终批判定，
-      // 避免正常分批收货把异常台账灌满虚假 shortage 记录
-      if (!txIsFinalBatch) {
-        items.forEach(item => { item.isShortage = false })
-      }
+      // 避免正常分批收货把异常台账灌满虚假 shortage 记录。
+      // F2（2026-11-05）：最终批也必须用事务内新鲜快照逐行重算——事务外预检基于
+      // 旧 historyQtyMap，并发下另一批次先提交填补缺口时，本批沿用陈旧缺口值会
+      // 生成虚假 shortage 异常、单据误标 receipt_abnormal（不影响付款金额）。
+      items.forEach(item => {
+        if (!txIsFinalBatch) {
+          item.isShortage = false
+          return
+        }
+        const freshCumulative = (txHistoryQty[item.orderItemId] || 0) + (thisQtyMap[item.orderItemId] || 0)
+        item.isShortage = freshCumulative < (Number(item.orderQty) || 0)
+      })
       hasAbnormal = items.some(item => getItemAbnormalTypes(item).length > 0)
       abnormalTypeNames = [...new Set(items.reduce((all, item) => all.concat(getItemAbnormalNames(item)), []))]
 
@@ -535,6 +543,11 @@ exports.main = async (event = {}) => {
 
       for (let i = 0; i < items.length; i++) {
         const item = items[i]
+        // 空行不落库：实收 0 且无任何异常标记的行不写 receipt_item——正常前端
+        // （receive-verify 提交过滤）已排除此类行，仅防 crafted 请求写入 qty=0 噪音行。
+        // qty=0 行若历史未收齐则 txIsFinalBatch 必为 false（全批清零 shortage），
+        // 最终批里的 qty=0 行必为历史已收齐，重算后不携带 shortage，跳过不影响台账完整性。
+        if (item.receivedQty === 0 && getItemAbnormalTypes(item).length === 0) continue
         await transaction.collection('receipt_item').add({
           data: {
             receipt_item_id: receiptId + '_' + (i + 1),
