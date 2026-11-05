@@ -13,6 +13,12 @@ Page({
 
   onShow() {
     if (!authGuard.requireLogin()) return
+    // 客户端角色门禁（服务端 requireSuperAdmin 兜底，此处防直达误触）
+    if ((getApp().globalData.userInfo || {}).role !== 'super_admin') {
+      util.showToast('仅超级管理员可访问门店管理')
+      setTimeout(() => wx.navigateBack(), 800)
+      return
+    }
     this.loadData()
   },
 

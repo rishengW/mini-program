@@ -58,11 +58,21 @@ async function verifyManualOrder(event) {
       return { code: -1, msg: '该单已核销通过，无需重复提交' }
     }
     // 被替换掉的旧凭证图从云存储清掉，避免驳回重传堆积孤儿文件。
-    // P0-5：只删通过前缀校验的本订单文件，防止越权删除他人/他门店的 fileID
+    // P0-5：只删通过前缀校验的本订单文件，防止越权删除他人/他门店的 fileID。
+    // F4（2026-11-05）：并发重传防孤儿——上方条件更新基于写入前快照，并发双方
+    // 都会以旧快照计算替换集，被覆盖一方的文件无人清理。改为写入后重读最新
+    // 引用清单：把「旧快照 ∪ 本次上传」中已不被引用的文件删掉——无并发时与
+    // 原逻辑等价；并发覆盖时，被覆盖方能认出自己写入的文件已不在引用清单里。
+    // 残余窗口（重读瞬间又有新写入）只可能漏删本函数自己前缀内的文件，不会误删
+    // 他人文件（对方文件不在本次两集合的并集内）。
+    const freshRes = await db.collection('purchase_order').doc(order._id).get()
+    const currentIds = (freshRes.data && Array.isArray(freshRes.data.verify_voucher_file_ids))
+      ? freshRes.data.verify_voucher_file_ids
+      : []
     const oldFileIds = Array.isArray(order.verify_voucher_file_ids) ? order.verify_voucher_file_ids : []
-    const staleFileIds = oldFileIds.filter(id => {
+    const staleFileIds = [...new Set([...oldFileIds, ...voucherFileIds])].filter(id => {
       const path = cloudPathOfFileId(id)
-      return path && path.startsWith(voucherPrefix) && !voucherFileIds.includes(id)
+      return path && path.startsWith(voucherPrefix) && !currentIds.includes(id)
     })
     if (staleFileIds.length) {
       try {

@@ -86,8 +86,24 @@ Page({
     }
   },
 
+  // 驳回原因输入（editable modal，与 abnormal-list 的 promptResolution 同模式）。
+  // 与服务端 auditOrder「驳回必须填原因」及 approval-detail 的输入框口径一致——
+  // 此前快速驳回硬编码「审核驳回」，下单人拿不到真实原因（2026-11-05 修复）
+  promptRejectReason() {
+    return new Promise(resolve => {
+      wx.showModal({
+        title: '填写驳回原因',
+        editable: true,
+        placeholderText: '请输入驳回原因（必填）',
+        success: res => resolve(res.confirm ? String(res.content || '').trim() : '')
+      })
+    })
+  },
+
   async rejectRequest(e) {
     if (this._submitting) return
+    const remark = await this.promptRejectReason()
+    if (!remark) return  // 取消或未填原因：不驳回
     this._submitting = true
     try {
       const confirmed = await util.showConfirm('确认驳回该采购申请？')
@@ -95,7 +111,7 @@ Page({
       const app = getApp()
       const result = await cloud.callFunction('dataService', {
         action: 'auditOrder',
-        orderId: e.currentTarget.dataset.id, status: 'rejected', auditRemark: '审核驳回', items: []
+        orderId: e.currentTarget.dataset.id, status: 'rejected', auditRemark: remark, items: []
       })
       if (result.code === 0) { util.showToast('已驳回'); this.onShow() } else util.showToast(result.msg || '审核失败')
     } finally {

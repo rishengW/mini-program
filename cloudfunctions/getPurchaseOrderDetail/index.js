@@ -102,9 +102,17 @@ exports.main = async (event = {}) => {
       .where({ source_order_id: orderId })
       .limit(100)
       .get()
-    const reports = user.role === 'chef'
+    // 不下发 file_url/file_name（2026-11-05 旁路修复）：下载一律走 getReportFileUrl
+    // 按 reportId 鉴权取临时链接，与 getReports 列表口径一致——此处原为漏网旁路：
+    // chef 可从订单详情拿到门店收货报表的 fileID，绕过 getReportFileUrl 的
+    // 「chef 仅 store_order_report」限制直换临时链接下载
+    const reports = (user.role === 'chef'
       ? reportRes.data.filter(r => r.report_scope === 'store')
       : reportRes.data
+    ).map(r => {
+      const { file_url, file_name, ...rest } = r
+      return { ...rest, has_file: !!file_url }
+    })
 
     return {
       code: 0,
