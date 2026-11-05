@@ -4,7 +4,10 @@ const util = require('../../utils/util')
 const meta = require('../../utils/meta')
 const authGuard = require('../../utils/auth-guard')
 
-// 微信订阅消息模板 ID：小程序后台申请通过后填入；为空时不拉起授权弹窗
+// 【未启用·死代码标记 2026-11-05】微信订阅消息模板 ID：小程序后台申请通过后填入。
+// 业务方确认暂不需要微信服务通知（站内消息已兜底触达）；两端模板 ID 均为空串时
+// 整条推送链恒早退、从不执行。启用方法：此处与 cloudfunctions/dataService/notify.js
+// 的 SUBSCRIBE_TEMPLATE_ID 填入同一模板 ID 即生效，其余代码现成。
 const NEW_ORDER_TEMPLATE_ID = ''
 
 Page({

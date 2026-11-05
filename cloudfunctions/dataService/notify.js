@@ -4,7 +4,12 @@ const { db, _, cloud } = require('./_shared')
 const { createMessage } = require('./messages')
 
 // ===== 审核通过 → 通知供货商（新订单下推） =====
-// 订阅消息模板配置：小程序后台申请通过后填入 TEMPLATE_ID 即可真实下发；
+// 【未启用·死代码标记 2026-11-05】微信订阅消息推送链：业务方确认暂不需要
+//（站内消息已兜底触达，createMessage 路径正常工作）。两端模板 ID 均为空串时
+// 恒早退：本文件 sendSubscribeMessage 只记日志不发请求；前端 supplier-home.js
+// 的订阅授权弹窗同样恒不拉起。启用方法：小程序后台申请订单通知类模板后，
+// 把模板 ID 同时填入此处与 supplier-home.js 的 NEW_ORDER_TEMPLATE_ID
+//（字段映射见 SUBSCRIBE_TEMPLATE_FIELDS，需与模板 keywords 对齐），其余代码现成。
 // TEMPLATE_ID 为空时只记日志、不发送（站内通知不受影响，作为兜底触达）。
 const SUBSCRIBE_TEMPLATE_ID = ''
 // 模板字段（一次订阅一条）：按申请到的模板 keywords 配置，值从 payload 取
