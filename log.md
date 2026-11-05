@@ -335,3 +335,11 @@
 - getReportDetail missing_price 修复（cd0bdd3）：缺价行页面曾显示「正常」（字典缺类型 +
   receipt_item 不落 is_missing_price 字段），改按收货时同条件推导，与 CSV 构建器同口径；
   与 createReceipt（#25）同属待重传函数
+
+### 遗留小项清理（7a77b84，2026-11-05）
+- getPurchaseOrderDetail 报表下发剥离 file_url/file_name（chef 旁路收口，与 getReports 同口径）
+- approval-list 快速驳回改弹框必填原因（对齐服务端必填与 approval-detail）
+- user-manage/store-manage 补客户端超管门禁（服务端 requireSuperAdmin 兜底不变）
+- F4：verifyManualOrder 孤儿凭证防并发——删旧文件改按写入后重读的最新引用清单计算
+- 订阅消息死代码两端加「未启用」标记注释（27008a9，业务方确认暂不需要）
+- 待重传：getPurchaseOrderDetail、dataService；前端三页随小程序包上传
