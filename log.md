@@ -239,3 +239,45 @@
 
 - 登录态修复**只改前端**（`app.js`/`login.js`/`auth-guard.js`/`cloud.js`/`date.js`），需**重新上传前端小程序包**；云端 `authService` 建议一并重新部署（`validate` action 可能尚未部署）
 - 报表修复在 `cloudfunctions/`，需**重新部署 `getReportDetail`**
+
+---
+
+## 2026-11-05 A 线修复：F1 多设备会话 / F2 最终批 shortage / F3 报表补生成锁
+
+基于 2026-11-03 全量复审（commit 7df3c1b）的三项待修发现，当日获批修复并提交
+（39d1dd5 / 21880f8 / 8997c47）。修复前已先核实 11-04 拉取的 S10 三 commit
+（b8adb97/9a5be21/e337b47），结论全部成立（死锁修复、门禁加固、幂等防降级）。
+
+### F1（39d1dd5）多设备会话查询失效（P1）
+- 19 个云函数 `getSessionUser` 的 `.where({status:1, sessions:{token_hash:x}})` 对数组
+  内对象做整元素相等匹配，而 session 元素是 `{token_hash,expires_at}` 两字段 → 永远
+  匹配不上，静默回退 `session_token_hash`（login 每次覆写为当前设备 token）→ 设备 B
+  登录即踢 A，B12 多设备会话整体失效，退化为"最后登录者独占"
+- 修复：统一改数组元素字段点路径 `'sessions.token_hash': tokenHash`；17 处补防回退
+  注释；各文件内存内 `expires_at` 二次校验逻辑不变
+- 验证：node --check 19/19 通过；旧写法 grep 0 残留
+
+### F2（21880f8）最终批 shortage 陈旧快照（P2）
+- `createReceipt` 外层预检用旧 `historyQtyMap` 设 `isShortage`，事务内只对非最终批
+  清零、最终批不重算 → 并发下 B 先提交填补缺口时，A 最终批沿用陈旧值生成虚假
+  shortage 异常、单据误标 `receipt_abnormal`（不影响付款金额，shortage 行按实收计价）
+- 修复：事务内对所有行用新鲜 `txHistoryQty + thisQtyMap` 逐行重算（非最终批清零
+  逻辑不变）；外层预检保留，注释自述"以事务内为准"自此名副其实
+- 顺带（核实 S10 时发现的预存口子）：qty=0 且无异常标记的 craft 行不再落库
+  `receipt_item`（正常前端已过滤，仅防 crafted 请求噪音行；qty=0 行在最终批必为
+  历史已收齐，重算后不携带 shortage，跳过不影响异常台账完整性）
+
+### F3（8997c47）reprice/regenerate 并发锁（P2）
+- `repriceReceipt`/`regenerateReceiptReports` 缺 `settleReceipt` 那套 CAS 锁，并发
+  触发产重复报表版本（report_id 恒 `_RG` 且不标 superseded）
+- 修复：两函数各拆"入口（管锁）+ 持锁主体"，共用 `regen_lock`（CAS 条件更新抢占 +
+  10 分钟 stale 自愈，同 `settle_lock` 模式）；reprice 内部调 regenerate 传
+  `_lockHeld` 跳过抢锁避免自我死锁；dispatcher 剔除客户端伪造的 `_lockHeld`
+- 未动：`_S` 增量账单与 `_RG` 全量重出的语义重叠（settle 解锁行被 _RG 再次计入致
+  双计）是更深一层问题（2026-10-18 记录），锁只防并发不防先后语义重叠
+
+### 部署提醒（未做，本机无微信开发者工具）
+- F1：19 个会话云函数全部需重新部署；部署后双设备登录互踢消失可实测
+- F2：`createReceipt`；F3：`dataService`
+- 连同 11-04 S10 修复（`confirmSupplierOrder`/`createReceipt`），本次待部署清单：
+  19 个会话函数 + confirmSupplierOrder + createReceipt + dataService
