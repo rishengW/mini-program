@@ -276,11 +276,10 @@
 - 未动：`_S` 增量账单与 `_RG` 全量重出的语义重叠（settle 解锁行被 _RG 再次计入致
   双计）是更深一层问题（2026-10-18 记录），锁只防并发不防先后语义重叠
 
-### 部署提醒（未做，本机无微信开发者工具）
-- F1：19 个会话云函数全部需重新部署；部署后双设备登录互踢消失可实测
-- F2：`createReceipt`；F3：`dataService`
-- 连同 11-04 S10 修复（`confirmSupplierOrder`/`createReceipt`），本次待部署清单：
-  19 个会话函数 + confirmSupplierOrder + createReceipt + dataService
+### 部署（已完成，2026-11-06 补记）
+- F1/F2/F3 连同 11-04 S10 修复（`confirmSupplierOrder`/`createReceipt`）已于 2026-11-05
+  在本机 IDE 全部部署：19 个会话函数 + confirmSupplierOrder + createReceipt + dataService
+- 2026-11-06 用户确认云端版本正常，无部署滞后
 
 ---
 
@@ -322,19 +321,19 @@
   abnormal_summary、shortage 文案「短收」→「少货/缺货」
 - 行为测试 24/24（scripts/_tmp_test/test-receipt-reports.js，mock 云环境锁定关键口径）
 
-### 部署提醒（未做）
-- 全部 19 个云函数需重新部署（目录新增 shared/ 子目录；dataService 多文件结构）
+### 部署（已完成，2026-11-06 补记）
+- 全部 19 个云函数已于 2026-11-05 在本机 IDE 部署完毕（含新增 shared/ 子目录与
+  dataService 多文件结构）
 - 前端 submit-guard 改动随小程序包上传生效
-- 本次待部署清单叠加此前 F1/F2/F3/S10：仍为全部 19 个云函数
 
 ### #25 拍板收窄（5e56aa4，2026-11-05）
 - 补收收齐自动关闭异常从「shortage/quality/wrong_item 一刀切」收窄为**仅 shortage**：
   质量/错货的数量补齐解决不了换货索赔，自动关闭会把未决索赔从待处理列表埋掉；
   missing_price 维持原口径走 repriceReceipt。createReceipt 查询加 type:'shortage' 过滤
-- 需重新部署 createReceipt 生效（其余 18 个函数已于当日本机 IDE 部署完毕）
+- createReceipt 已随当日本机 IDE 全量部署生效（2026-11-05）
 - getReportDetail missing_price 修复（cd0bdd3）：缺价行页面曾显示「正常」（字典缺类型 +
   receipt_item 不落 is_missing_price 字段），改按收货时同条件推导，与 CSV 构建器同口径；
-  与 createReceipt（#25）同属待重传函数
+  与 createReceipt（#25）同批部署
 
 ### 遗留小项清理（7a77b84，2026-11-05）
 - getPurchaseOrderDetail 报表下发剥离 file_url/file_name（chef 旁路收口，与 getReports 同口径）
@@ -342,4 +341,5 @@
 - user-manage/store-manage 补客户端超管门禁（服务端 requireSuperAdmin 兜底不变）
 - F4：verifyManualOrder 孤儿凭证防并发——删旧文件改按写入后重读的最新引用清单计算
 - 订阅消息死代码两端加「未启用」标记注释（27008a9，业务方确认暂不需要）
-- 待重传：getPurchaseOrderDetail、dataService；前端三页随小程序包上传
+- 部署状态：getPurchaseOrderDetail、dataService 已随 2026-11-05 全量部署生效；前端三页改动
+  随小程序包上传生效（2026-11-06 确认云端无滞后）
