@@ -343,3 +343,108 @@
 - 订阅消息死代码两端加「未启用」标记注释（27008a9，业务方确认暂不需要）
 - 部署状态：getPurchaseOrderDetail、dataService 已随 2026-11-05 全量部署生效；前端三页改动
   随小程序包上传生效（2026-11-06 确认云端无滞后）
+
+---
+
+## 2026-11-09 _S/_RG 双计修复：全量版取代 + 多波补结算 + 历史清理
+
+拍板口径（本次确认）：①全量重出（`_RG`）后旧版全部取代（原版 / 之前各波 `_S` / 旧 `_RG`
+标 superseded，列表、详情、下载统一隐藏）；②历史并存数据一次性清理；③不做审计查看入口；
+④补结算支持多波（异常分多波处理时可多次增量补结算）。
+
+### 问题
+- `_RG` 全量重出按当前 `receipt_item` 状态重出 ③④⑤⑥，但不标旧版 superseded；
+  `_S` 增量账单据「原版保持有效」设计也不标。同一解锁行会同时出现在 `_S` 与 `_RG`，
+  多版并存计入 → 双计（2026-10-18 记录问题；F3 的 regen_lock 只防并发，不防先后语义重叠）。
+- 原补结算幂等 `endsWith(receiptId + '_S')` 只允许一张 `_S`，异常分多波处理时后续解锁行无法再结算。
+
+### 改动
+- `scripts/cloud-shared/receipt-reports.js`（源头；副本由 sync-shared.js 同步）
+  - 四类报表新增 `receipt_id` 字段（历史数据无字段也能从 report_id 反解，新字段便于按批次查询）
+  - 新增 `receiptIdFromReportId()` / `RECEIPT_REPORT_TYPES`
+  - `buildReceiptReports` 返回新增 `files`（含新报表 `_id`/report_id/type/scope_id）——
+    `_RG` 的 report_id 每次重出相同，取代时必须按数据库 `_id` 区分新旧版本
+- `cloudfunctions/dataService/settle.js`
+  - `_RG` 成功后 `supersedeReceiptReports`：本批次旧版全部 superseded（按 receiptId 限定，
+    不波及同一订单其他批次），`superseded_by_report_id` 指向对应新全量版
+  - `markRecordsCoveredByFullReports`：`_RG` 覆盖的 pay_received 异常记录打
+    `settled_at / settled_via:'full'`，后续补结算不再重复计入（双计根因的直接封堵）
+  - `settleReceipt` 多波化：`receipt.settle_wave_completed` 记录完成波次，report_id
+    `_S` / `_S2` / `_S3`…；异常记录打 `settled_wave / settled_via:'increment' / settled_in_report_id`
+  - 行级门禁：行上仍有 pending/processing 异常时本波跳过该行，等后续波次
+    （替代原来「全部异常处理完才允许补结算」的全局阻断）
+  - 部分失败断点续跑：同波已生成的供应商报告按 report_id 跳过，收尾按已有报告回读的异常 id 一并标记
+  - 历史兼容：无 settled 标记的旧数据按 resolved_at ≤ 历史 `_S`/`_RG` 生成时间判定已覆盖，不重复结算
+- 新增 `cloudfunctions/reportMaintenance`（仅超管，默认 dryRun，`action:'apply'` 才落库）：
+  - 取代：含 `_RG` 的 (收货单, report_type, scope_id) 组保留最新 `_RG` 及其后 `_S` 波次，
+    其余旧版 superseded；无 `_RG` 的组不动（原版+增量口径正确，避免误伤部分失败的历史重出）
+  - 回填 `receipt_id`、`_S` 的 `settle_wave / settle_type / settle_for_receipt`
+  - 回填异常记录 settled 标记与 `receipt.settle_wave_completed`（只回填历史 `_S` 的第 1 波）
+- `pages/receive-list`：补结算成功提示带波次序号
+
+### 验证
+- `scripts/_tmp_test/test-settle-versions.js`：55 项全过（波 1/波 2 增量、无新行拒绝、
+  行级门禁、`_RG` 取代与批次隔离、连续两次 `_RG`、历史 `_S` 兼容、部分失败断点续跑、
+  regen_lock 互斥、清理工具 dryRun/apply/幂等）
+- `scripts/_tmp_test/test-receipt-reports.js` 24 项全过（构建器口径回归）
+- node --check 相关文件全过；sync-shared --check 20 函数 × 5 模块副本一致
+
+### 部署与上线顺序（未做）
+- 需部署：`dataService`、`createReceipt`（构建器副本变更）、新增 `reportMaintenance`；
+  前端包重新上传（receive-list 提示文案）
+- 建议顺序：部署云函数 → `reportMaintenance` 先跑 `dryRun` 核对清理计划 → `apply` →
+  再通知业务使用多波补结算
+- 清理只改 report_file 元数据，不删除云存储文件；superseded 记录仍留 DB 可追溯
+- 云函数测试面板调用示例：`{ authToken: '<超管 token>', action: 'dryRun' }` / `{ ..., action: 'apply' }`
+
+---
+
+### 2026-11-09 代码审查与加固（二轮）
+
+对上一节改动做全量自审（外加两份独立审查报告逐条核实），确认并修复 4 个真实问题，
+另收编若干结构性加固。
+
+**确认的 bug（已修）**
+
+1. **⑥原 + `_S` 双计**（老代码就有，首版重写时仍在）：纯少货行收货时即 `payable=true`、
+   已进原版 ⑥（createReceipt「纯少货不剔除」），而异常解决弹窗对所有类型都问
+   「按实收付款」——少货记录选「是」后该行会在 `_S` 再计一次。
+   修法：`settleReceipt` 按「是否已被账单计价」分类——已计价行（收货即计价 / 被 `_RG`
+   覆盖 / 被含该行的补结算报告覆盖）只补结算标记（`settled_via: already_priced`），
+   不再出增量账单；质量/错货等收货被剔除行仍为解锁行。
+2. **断点续跑漏账**：部分失败的波次重试时，已有报告未覆盖的新解锁行会被误标已结算
+   却没进任何账单。修法：标记按「报告实际覆盖范围」（settle_item_ids / settle_abnormal_ids）
+   判定，未覆盖的行留待下一波（`deferredRows` 透出，前端提示）。
+3. **清理工具分批回填掐掉时间兜底**：`receipt_id`/`settle_wave` 回填对全部单据生效，
+   而异常记录标记回填受 `maxReceipts` 分批——超出的单据会既没标记又失去时间兜底，
+   下次补结算双计。修法：`settle_wave` 与 `_RG` 的 `receipt_id` 不再回填（它们是
+   settle.js 判别历史账单的依据）；历史行 `receipt_id` 整体不回填（现有代码一律从
+   report_id 反解，不读该字段；全量回填也超出云函数时限）。
+4. **`receiptIdFromReportId` 首个 `RCP` 匹配**：供应商 id 含 `RCP` 字样会误解析。
+   改为剥掉 `_RG`/`_S[n]` 后缀后取最后一段并要求 `RCP` 开头。
+
+**结构性加固**
+
+- **翻转后置**：`payable_flag` 在出账确认后才写——先翻转后出账中途崩溃会留下
+  「已付款但没进任何账单」的行，且重试会因 payable=true 被当已计价行跳过（漏账）。
+  配合分类逻辑，「已翻转未出账」的历史遗留行会被识别并重新按解锁行出账。
+- **report_id 文法单源化**：`settleWaveOf` / `isSettleVersion` / `isFullVersion` /
+  `SETTLE_REPORT_TYPE` / `reportTimeMs` 收敛进 `scripts/cloud-shared/receipt-reports.js`，
+  settle.js 与 reportMaintenance 共用同一份实现（F1 副本漂移教训）。
+- **写放大收敛**：supersede、结算标记、`payable_flag` 翻转、清理工具 apply 全部改
+  `where({_id: _.in(chunk)})` 分组批量写（200/批）；清理工具收货单批量取（50/批）。
+  避免数千次逐 doc 往返打满 ~60s 云函数时限（历史数据量大时原实现跑不完 apply）。
+- 清理工具 `receiptsWithFull` 改 Set；`planSettlementBackfill` 每供应商最新账单一次取好。
+- `receipt.js` supersede 死分支（report_id 兜底）与构建器 `_id` 防御性默认值删除
+  （db.add 成功必有 _id，防御默认值反而会把新报表从保留集里漏掉）。
+
+**测试**：新增「已计价防护」「续跑延迟」两场景，合计 **65 项全过**；
+构建器回归 24 项全过；`sync-shared --check` 20 函数 × 5 模块一致。
+
+**已知边界（未修，评估后接受）**
+- `_RG` 标记记录（markRecordsCoveredByFullReports）若中途失败，未标记的记录在后续补结算
+  可能重复计入；`_RG` 返回失败后重试会自愈，视为可接受窗口。
+- `getReportDetail` 对 ⑥ 供应商带价账单按「供应商+日期」取全部收货明细，不限定本收货单，
+  多波 `_S` 后详情页行数/合计会与 CSV 对不上（既有问题，独立批次处理）。
+- 历史已发生的「少货 ⑥原+_S 双计」账单内容无法回改（CSV 是快照）；出过一次 `_RG` 后
+  有效账单即恢复正确。

@@ -1,0 +1,9 @@
+{
+  "name": "reportMaintenance",
+  "version": "1.0.0",
+  "description": "收货报表版本一次性清理（_S/_RG 双计修复配套，仅超管）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

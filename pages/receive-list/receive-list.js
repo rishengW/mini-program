@@ -134,7 +134,17 @@ Page({
       util.showToast((result && result.msg) || '补结算失败')
       return
     }
-    util.showSuccess('补结算完成，已生成补充账单')
+    // 多波补结算（2026-11-09）：区分「出了增量账单 / 全部已在既有账单中 / 有行留待下一波」
+    const data = (result && result.data) || {}
+    if (data.settledRows > 0 && data.deferredRows > 0) {
+      util.showSuccess(`补结算完成（第${data.wave}波），另有 ${data.deferredRows} 行待下一波补结算`)
+    } else if (data.settledRows > 0) {
+      util.showSuccess(data.wave ? `补结算完成（第${data.wave}波），已生成补充账单` : '补结算完成，已生成补充账单')
+    } else if (data.deferredRows > 0) {
+      util.showSuccess(`本波未生成账单，${data.deferredRows} 行待下一波补结算`)
+    } else {
+      util.showSuccess('相关行已在既有账单中计价，已更新结算标记')
+    }
   },
 
   // 清单 #7：报表生成失败后，管理员手动补生成（后端仅 purchaser/super_admin）
