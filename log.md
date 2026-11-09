@@ -389,13 +389,12 @@
 - `scripts/_tmp_test/test-receipt-reports.js` 24 项全过（构建器口径回归）
 - node --check 相关文件全过；sync-shared --check 20 函数 × 5 模块副本一致
 
-### 部署与上线顺序（未做）
-- 需部署：`dataService`、`createReceipt`（构建器副本变更）、新增 `reportMaintenance`；
-  前端包重新上传（receive-list 提示文案）
-- 建议顺序：部署云函数 → `reportMaintenance` 先跑 `dryRun` 核对清理计划 → `apply` →
-  再通知业务使用多波补结算
-- 清理只改 report_file 元数据，不删除云存储文件；superseded 记录仍留 DB 可追溯
-- 云函数测试面板调用示例：`{ authToken: '<超管 token>', action: 'dryRun' }` / `{ ..., action: 'apply' }`
+### 部署状态（2026-11-09 用户确认）
+- ✅ 云函数已部署：`dataService`、`createReceipt`（构建器副本变更）、新增 `reportMaintenance`
+- ✅ 历史清理已核验（2026-11-09 `dryRun`）：59 份报表 / 11 张收货单，
+  **无 `_RG`、无 `_S` 并存**（supersede / 回填计划全 0，`unparsedReportIds` 为空）——
+  线上无历史双计，`apply` 无需执行。本次修复属预防性质。
+- ⏳ 前端包待上传（receive-list 波次提示 + P2-32 首页缓存）
 
 ---
 
