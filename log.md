@@ -394,7 +394,10 @@
 - ✅ 历史清理已核验（2026-11-09 `dryRun`）：59 份报表 / 11 张收货单，
   **无 `_RG`、无 `_S` 并存**（supersede / 回填计划全 0，`unparsedReportIds` 为空）——
   线上无历史双计，`apply` 无需执行。本次修复属预防性质。
-- ⏳ 前端包待上传（receive-list 波次提示 + P2-32 首页缓存）
+- ✅ P2-41 配套云函数已部署（2026-11-10 用户确认）：`dataService`（saveProduct 后端查重）、
+  `importProducts`（落库前终查）
+- ⏳ 前端包待上传（receive-list 波次提示 + P2-32 首页缓存 + P1-20 三态 + P1-15 剔除提示 +
+  L37 模板下载按钮）
 
 ---
 
