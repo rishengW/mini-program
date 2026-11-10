@@ -171,16 +171,16 @@ async function remindAudit(event) {
     return { code: -1, msg: '已催办过，请 1 小时后再试' }
   }
 
-  // 条件更新兜底防并发重复催办
+  // 条件更新兜底防并发重复催办（逻辑运算符统一走 _.and/_.or——裸 $or 字面量依赖 SDK
+  // 对 MongoDB 原语的支持，识别与否不可控，全仓其余处均已收敛为 command 形式）
   const remindRes = await db.collection('purchase_order')
-    .where({
-      _id: order._id,
-      order_status: 'submitted',
-      $or: [
+    .where(_.and([
+      { _id: order._id, order_status: 'submitted' },
+      _.or([
         { audit_reminded_at: _.exists(false) },
         { audit_reminded_at: _.lt(new Date(Date.now() - ONE_HOUR)) }
-      ]
-    })
+      ])
+    ]))
     .update({ data: { audit_reminded_at: db.serverDate(), updated_at: db.serverDate() } })
   if (!remindRes.stats || remindRes.stats.updated === 0) {
     return { code: -1, msg: '已催办过，请 1 小时后再试' }
