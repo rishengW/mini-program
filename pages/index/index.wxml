@@ -87,8 +87,8 @@
     <view wx:if="{{recentOrders.length === 0}}" class="empty-hint">暂无采购单</view>
   </view>
 
-  <!-- 最近报表 -->
-  <view class="card">
+  <!-- 最近报表（2026-11-10 拍板：chef 无报表入口，不渲染） -->
+  <view class="card" wx:if="{{showReports}}">
     <view class="flex-between">
       <view class="card-title">最近报表</view>
       <view class="more-link" bindtap="goAction" data-taburl="/pages/report-list/report-list">查看全部 ▸</view>

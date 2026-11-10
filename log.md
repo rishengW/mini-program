@@ -514,3 +514,17 @@ L37（Excel 导入模板）。
   部分收货窗口；异常处理改 P1-20 三态 + #25 收窄；⑥ 补结算改 #26 多波增量 +
   已计价防双计 + `_RG` 旧版作废
 - `采购流程图.png` 由 headless Chrome 按内容高度重新导出（1500×1640，目检通过）
+
+---
+
+## 2026-11-10 chef 无报表入口（拍板落地）
+
+拍板口径：**chef（下单人员）不再有报表入口**（取代此前「限本店下单报表」的收窄口径）。
+
+- **后端三函数一律 -403**：`getReports` / `getReportDetail` / `getReportFileUrl`
+- **前端**：tabBar「报表」tab 对 chef 隐藏（`wx.hideTabBarItem` index 2，其他角色恢复显示）；
+  首页「最近报表」区块对 chef 不请求不渲染（`showReports` 标志，顺带少一次云调用）；
+  `report-list` / `report-detail` / `report-history` 加 chef 访问守卫（误入回首页/返回）
+- **验证**：`scripts/_tmp_test/test-chef-reports-denied.js` 7 项全过
+  （chef 三函数 -403；店长本店 / 超管仍可用）
+- **部署**：三个报表函数需重新部署；前端改动随小程序包上传生效

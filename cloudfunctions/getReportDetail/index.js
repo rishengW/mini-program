@@ -56,11 +56,12 @@ exports.main = async (event = {}) => {
     if (report.status === 'superseded') {
       return { code: -1, msg: '该报表已被新版本替代，请在报表列表查看最新版本' }
     }
+    // 2026-11-10 拍板：chef 不再有报表入口，后端直接拒绝
+    if (user.role === 'chef') return { code: -403, msg: '当前账号无权查看报表' }
     const isGlobal = ['super_admin', 'purchaser'].includes(user.role)
     if (!isGlobal) {
-      if (!['chef', 'store_manager'].includes(user.role)) return { code: -403, msg: '当前账号无权查看报表' }
+      if (user.role !== 'store_manager') return { code: -403, msg: '当前账号无权查看报表' }
       if (report.report_scope !== 'store' || report.scope_id !== user.default_store_id) return { code: -403, msg: '无权查看其他门店报表' }
-      if (user.role === 'chef' && report.report_type !== 'store_order_report') return { code: -403, msg: '当前账号无权查看该报表类型' }
     }
     let rows = []
 

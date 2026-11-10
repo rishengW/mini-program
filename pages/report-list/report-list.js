@@ -22,6 +22,11 @@ Page({
 
   onShow() {
     if (!authGuard.requireLogin()) return
+    // 2026-11-10 拍板：chef 无报表入口，误入直接回首页
+    if ((getApp().globalData.userInfo || {}).role === 'chef') {
+      wx.switchTab({ url: '/pages/index/index' })
+      return
+    }
     this.initTabs()
     this.reload()
   },

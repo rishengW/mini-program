@@ -26,6 +26,12 @@ Page({
 
   onShow() {
     if (!authGuard.requireLogin()) return
+    // 2026-11-10 拍板：chef 无报表入口
+    if ((getApp().globalData.userInfo || {}).role === 'chef') {
+      util.showToast('当前账号无权查看报表')
+      setTimeout(() => wx.navigateBack(), 600)
+      return
+    }
     const role = (getApp().globalData.userInfo || {}).role
     const isGlobal = ['super_admin', 'purchaser'].includes(role)
     // P2-34：筛选项按角色裁剪——非全局角色服务端会强制 report_scope='store'，

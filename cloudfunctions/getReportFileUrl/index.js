@@ -28,11 +28,12 @@ exports.main = async (event = {}) => {
     if (report.status === 'superseded') {
       return { code: -1, msg: '该报表已被新版本替代，请在报表列表查看最新版本' }
     }
+    // 2026-11-10 拍板：chef 不再有报表入口，下载同样拒绝
+    if (user.role === 'chef') return { code: -403, msg: '当前账号无权下载报表文件' }
     if (!['super_admin', 'purchaser'].includes(user.role)) {
-      if (!['chef', 'store_manager'].includes(user.role) || report.report_scope !== 'store' || report.scope_id !== user.default_store_id) {
+      if (user.role !== 'store_manager' || report.report_scope !== 'store' || report.scope_id !== user.default_store_id) {
         return { code: -403, msg: '无权下载该报表文件' }
       }
-      if (user.role === 'chef' && report.report_type !== 'store_order_report') return { code: -403, msg: '当前账号无权下载该报表文件' }
     }
     const res = await cloud.getTempFileURL({ fileList: [report.file_url] })
     if (res.fileList && res.fileList.length > 0 && res.fileList[0].tempFileURL) {

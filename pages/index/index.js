@@ -26,7 +26,9 @@ Page({
     recentReports: [],
     isSuperAdmin: false,
     isManager: false,
-    unreadMsg: 0
+    unreadMsg: 0,
+    // 2026-11-10 拍板：chef 无报表入口，首页最近报表区块不渲染
+    showReports: true
   },
 
   // P2-32：页面实例级缓存状态（非渲染数据，不进 data）
@@ -56,6 +58,13 @@ Page({
     }
     const store = app.globalData.currentStore || {}
 
+    // 2026-11-10 拍板：chef 隐藏「报表」tab（tabBar 第 3 项，index 2）；其他角色恢复显示
+    if (user.role === 'chef') {
+      wx.hideTabBarItem({ index: 2 })
+    } else {
+      wx.showTabBarItem({ index: 2 })
+    }
+
     const storeId = store.storeId || store.id || ''
     const cacheKey = [user.userId || user.id || user.name, user.role, storeId].join('|')
     if (this._loading) return
@@ -71,14 +80,17 @@ Page({
           createdBy: user.role === 'chef' ? (user.userId || user.id || user.name) : '',
           pageSize: 3
         }),
-        cloud.callFunction('getReports', {
-          role: user.role,
-          storeId,
-          reportType: '',
-          relatedDate: '',
-          page: 1,
-          pageSize: 3
-        }),
+        // 2026-11-10 拍板：chef 无报表入口——不再请求报表接口（也少一次云调用）
+        user.role === 'chef'
+          ? Promise.resolve({ code: 0, data: [] })
+          : cloud.callFunction('getReports', {
+            role: user.role,
+            storeId,
+            reportType: '',
+            relatedDate: '',
+            page: 1,
+            pageSize: 3
+          }),
         cloud.callFunction('dataService', { action: 'getMessages' }),
         cloud.callFunction('dataService', { action: 'getOrderStats', storeId })
       ])
@@ -136,6 +148,7 @@ Page({
         isSuperAdmin: user.role === 'super_admin',
         isManager: ['super_admin', 'purchaser'].includes(user.role),
         unreadMsg,
+        showReports: user.role !== 'chef',
         stats, recentOrders, recentReports
       })
 

@@ -18,6 +18,12 @@ Page({
 
   async onLoad(options) {
     if (!authGuard.requireLogin()) return
+    // 2026-11-10 拍板：chef 无报表入口
+    if ((getApp().globalData.userInfo || {}).role === 'chef') {
+      util.showToast('当前账号无权查看报表')
+      setTimeout(() => wx.navigateBack(), 600)
+      return
+    }
     const reportId = options.id
     const app = getApp()
     util.showLoading('加载报表...')

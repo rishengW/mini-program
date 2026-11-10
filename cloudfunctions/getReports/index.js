@@ -22,11 +22,8 @@ exports.main = async (event = {}) => {
 
     // 按角色过滤
     if (user.role === 'chef') {
-      // 厨师/下单人员：只看门店下单报表
-      query.report_scope = 'store'
-      query.report_type = 'store_order_report'
-      if (!user.default_store_id) return { code: -403, msg: '账号未关联有效门店' }
-      query.scope_id = user.default_store_id
+      // 2026-11-10 拍板：chef 不再有报表入口（此前「限本店下单报表」的收窄作废），后端直接拒绝
+      return { code: -403, msg: '当前账号无权查看报表' }
     } else if (user.role === 'store_manager') {
       // 店长：看门店所有报表
       query.report_scope = 'store'
