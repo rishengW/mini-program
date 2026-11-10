@@ -20,6 +20,9 @@ exports.main = async (event = {}) => {
     if (user.role === 'supplier') {
       // 供货商只能看自己名下的协议价，忽略前端传入的 supplierId
       if (!user.default_supplier_id) return { code: -403, msg: '账号未关联供货商，请联系管理员' }
+      // P2-3（2026-11-10）：供应商档案停用后，存量登录会话立即失效——停用即不可见
+      const supRes = await db.collection('supplier').where({ supplier_id: user.default_supplier_id }).limit(1).get()
+      if (!supRes.data[0] || supRes.data[0].status !== 1) return { code: -403, msg: '该供货商已停用，请联系管理员' }
       query.supplier_id = user.default_supplier_id
     } else {
       if (!['super_admin', 'purchaser'].includes(user.role)) return { code: -403, msg: '当前账号无权查看供应商价格' }

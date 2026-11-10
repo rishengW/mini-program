@@ -54,6 +54,11 @@ exports.main = async (event = {}) => {
       proxy = true
     }
 
+    // P2-3（2026-11-10）：供应商档案停用后停用其确认/发货通道（代确认同口径）——
+    // 存量登录会话与管理员代操作都不得再推进停用供应商的单据
+    const supRes = await db.collection('supplier').where({ supplier_id: supplierId }).limit(1).get()
+    if (!supRes.data[0] || supRes.data[0].status !== 1) return { code: -403, msg: '该供货商已停用，请联系管理员' }
+
     // 该订单必须真的包含此供货商的商品，防止越权确认别人的订单
     const itemRes = await db.collection('purchase_order_item')
       .where({ purchase_order_id: orderId, supplier_id: supplierId })

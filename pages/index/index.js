@@ -58,11 +58,13 @@ Page({
     }
     const store = app.globalData.currentStore || {}
 
-    // 2026-11-10 拍板：chef 隐藏「报表」tab（tabBar 第 3 项，index 2）；其他角色恢复显示
-    if (user.role === 'chef') {
-      wx.hideTabBarItem({ index: 2 })
-    } else {
-      wx.showTabBarItem({ index: 2 })
+    // 2026-11-10 拍板：chef 隐藏「报表」tab（tabBar 第 3 项，index 2）；其他角色恢复显示。
+    // hideTabBarItem/showTabBarItem 需较新基础库（实测开发者工具 3.17.1 无此 API，
+    // 直接调用抛 TypeError 炸断 onShow）——特性检测降级：无 API 时 tab 保留
+    // （report 三页面有守卫兜底），仅影响视觉入口，不阻断首页渲染。
+    if (typeof wx.hideTabBarItem === 'function' && typeof wx.showTabBarItem === 'function') {
+      const tabApi = user.role === 'chef' ? wx.hideTabBarItem : wx.showTabBarItem
+      try { tabApi.call(wx, { index: 2, fail: () => {} }) } catch (e) { console.warn('[index] tabBar 显隐切换失败:', e) }
     }
 
     const storeId = store.storeId || store.id || ''

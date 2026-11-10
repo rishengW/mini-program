@@ -36,6 +36,9 @@ exports.main = async (event = {}) => {
     if (user.role !== 'supplier') return { code: -403, msg: '当前账号无权查看供货商订单' }
     const supplierId = user.default_supplier_id
     if (!supplierId) return { code: -403, msg: '账号未关联供货商，请联系管理员' }
+    // P2-3（2026-11-10）：供应商档案停用后，存量登录会话立即失效——停用即不可见
+    const supRes = await db.collection('supplier').where({ supplier_id: supplierId }).limit(1).get()
+    if (!supRes.data[0] || supRes.data[0].status !== 1) return { code: -403, msg: '该供货商已停用，请联系管理员' }
 
     const { confirmStatus, orderDate } = event || {}
     const page = Math.max(1, Math.min(1000, Math.floor(Number(event.page) || 1)))

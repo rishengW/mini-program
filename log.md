@@ -532,3 +532,12 @@ L37（Excel 导入模板）。
 ### 顺带修复（2026-11-10）
 - `approval.js:179` 裸 `$or` 字面量改 `_.and/_.or` command 形式（10-18 审计标记：
   SDK 若不支持裸操作符，催审条件更新会静默失效；全仓其余处均为 command 形式，自此无例外）
+
+### P2-3 供应商停用后会话失效（2026-11-10）
+- **问题**：供应商档案停用后，已登录账号仍可看单/确认/发货/查价——各函数只取
+  `default_supplier_id`，从不查 `supplier.status`
+- **修复**：`getSupplierOrders` / `getSupplierReceipts` / `getProductPrices`（供应商分支）/
+  `confirmSupplierOrder`（含管理员代确认）四处补 `supplier.status === 1` 校验，
+  停用即 -403「该供货商已停用，请联系管理员」
+- **验证**：`test-supplier-disabled.js` 12 项全过（启用通过 / 停用 -403 / 档案缺失 -403）
+- **部署**：上述四个云函数需重新部署
