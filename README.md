@@ -59,7 +59,7 @@
 - **查询修复**：`getProducts` 关键词下推数据库正则（修复超 200 种商品后搜不到）；`getSupplierOrders` 分页取全量（修复超 1000 行旧订单静默消失、计数失真）+ 时间戳比较修复跨月排序错乱。
 - **其他**：期望到货时间支持精确到时分（`YYYY-MM-DD HH:mm`）；`receipt_abnormal` 允许继续补收（与事务内白名单口径一致）；`importProducts` fileID → cloudPath 解析修正。
 - **采购列表页**：状态 tab 去掉数字徽标（大数字溢出被横向滚动容器裁剪）、加高点击区；补分页底部「正在加载…/没有更多了」提示与底部留白（避开悬浮新建按钮）。
-- **B5 前端体验批次（25/30 项）**：按《修复计划-2026-10-03》B5 执行——防重入补齐（purchase-create 全段 try/finally、product-manage 三处）、状态字典单源收敛到 `meta.js`（核销态/异常类型/报表 superseded）、分页竞态防护（3 个列表页）、失败态与空态互斥、命中区域加大等。未做 4 项（首页调用合并、分页骨架重构、setData 裁剪、Excel 模板）详见 `log.md` 2026-10-19 节与《修复计划》§0 进度表。
+- **B5 前端体验批次（26/30 项）**：按《修复计划-2026-10-03》B5 执行——防重入补齐（purchase-create 全段 try/finally、product-manage 三处）、状态字典单源收敛到 `meta.js`（核销态/异常类型/报表 superseded）、分页竞态防护（3 个列表页）、失败态与空态互斥、命中区域加大等。未做 3 项（分页骨架重构、setData 裁剪、Excel 模板）；「首页调用合并」已于 2026-11-09 修复（在途去重 + 10 秒新鲜度缓存 + 报表请求载荷瘦身）。详见 `log.md` 与《修复计划》§0 进度表。
 
 ### 2026-10-20 修复批次（登录态 + 报表批次）
 
@@ -125,6 +125,7 @@ seed-data/             初始数据与导入说明（见 seed-data/README.md）
 | `getPurchaseOrders` / `getPurchaseOrderDetail` / `getReceipts` | 门店端查询 |
 | `getReports` / `getReportDetail` / `getReportFileUrl` | 报表查询/下载 |
 | `generateSummaryReport` | B11 日/月汇总报表 |
+| `reportMaintenance` | 收货报表版本一次性清理（仅超管；默认 `dryRun` 只读预演，`apply` 才落库；2026-11-09 双计修复配套） |
 
 ## 部署与初始化
 
