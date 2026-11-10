@@ -4,6 +4,7 @@ const XLSX = require('xlsx')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
+const _ = db.command
 
 const MANAGEMENT_ROLES = ['super_admin', 'purchaser']
 
@@ -170,6 +171,33 @@ async function main(event) {
       created_at: db.serverDate(),
       updated_at: db.serverDate()
     })
+  }
+
+  // P2-41 后半（2026-11-09）：落库前终查——初次全表查重与逐条写入之间存在并发窗口
+  // （另一管理员同时导入同名商品），此处对待插入名称再查一遍，把窗口压到毫秒级。
+  if (toInsert.length > 0) {
+    const namesToCheck = [...new Set(toInsert.map(item => item.product_name))]
+    const freshKeys = new Set()
+    for (let i = 0; i < namesToCheck.length; i += 20) {
+      const chunk = namesToCheck.slice(i, i + 20)
+      const res = await db.collection('product')
+        .where({ product_name: _.in(chunk) })
+        .field({ product_name: true, manufacturer_name: true })
+        .limit(200)
+        .get()
+      ;(res.data || []).forEach(p => freshKeys.add(`${p.product_name}|${p.manufacturer_name || '默认'}`))
+    }
+    const stillValid = []
+    toInsert.forEach(item => {
+      const key = `${item.product_name}|${item.manufacturer_name}`
+      if (freshKeys.has(key)) {
+        errors.push({ row: '-', msg: `${item.product_name}: 写入前检测到同名同厂家商品（可能并发导入），已跳过` })
+      } else {
+        stillValid.push(item)
+      }
+    })
+    toInsert.length = 0
+    toInsert.push(...stillValid)
   }
 
   // 逐条写入（量小场景足够；避免单次 add 批量接口限制）

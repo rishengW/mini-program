@@ -1,5 +1,5 @@
 // 档案域（2026-11-05 拆分自 dataService/index.js）：分类查询、商品/供应商档案维护。
-const { crypto, db, requireUser, MANAGEMENT_ROLES } = require('./_shared')
+const { crypto, db, _, requireUser, MANAGEMENT_ROLES } = require('./_shared')
 
 async function getCategories(event) {
   const auth = await requireUser(event)
@@ -54,6 +54,8 @@ async function saveProduct(event) {
     if (!supplierRes.data.length) return { code: -1, msg: '默认供应商不存在或已停用' }
   }
 
+  const manufacturerName = String(event.manufacturerName || '默认').trim() || '默认'
+
   const data = {
     product_name: name,
     category_level_1: category.category_level_1,
@@ -62,14 +64,37 @@ async function saveProduct(event) {
     unit,
     spec: String(event.spec || '').trim(),
     default_supplier_id: defaultSupplierId,
-    manufacturer_name: String(event.manufacturerName || '默认').trim() || '默认',
+    manufacturer_name: manufacturerName,
     updated_at: db.serverDate()
   }
+
+  // P2-41 后半（2026-11-09 修复）：后端查重——名称+厂家，与 importProducts 判重同口径。
+  // 前端查重不可信（并发/直连可绕过），CloudBase 无唯一索引，只能应用层拦。
   if (event.productId) {
     const existing = await db.collection('product').where({ product_id: event.productId }).limit(1).get()
     if (existing.data.length === 0) return { code: -1, msg: '商品不存在' }
-    await db.collection('product').doc(existing.data[0]._id).update({ data })
+    const current = existing.data[0]
+    // 改名/改厂家才查重（排除自己）；名称厂家没变不查，容忍历史重复数据编辑其他字段
+    if (current.product_name !== name || (current.manufacturer_name || '默认') !== manufacturerName) {
+      const dupRes = await db.collection('product')
+        .where({ product_name: name, manufacturer_name: manufacturerName, product_id: _.neq(event.productId) })
+        .limit(1)
+        .get()
+      if (dupRes.data.length > 0) {
+        return { code: -1, msg: `已存在同名同厂家的商品「${name}」（${manufacturerName}），请直接编辑该商品或更换厂家名` }
+      }
+    }
+    await db.collection('product').doc(current._id).update({ data })
     return { code: 0, data: { productId: event.productId } }
+  }
+
+  // 新建：同名同厂家直接拒绝，引导去编辑现有商品
+  const dupRes = await db.collection('product')
+    .where({ product_name: name, manufacturer_name: manufacturerName })
+    .limit(1)
+    .get()
+  if (dupRes.data.length > 0) {
+    return { code: -1, msg: `已存在同名同厂家的商品「${name}」（${manufacturerName}），请直接编辑该商品或更换厂家名` }
   }
 
   const productId = 'P' + Date.now() + crypto.randomBytes(3).toString('hex')
