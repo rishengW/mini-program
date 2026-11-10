@@ -211,6 +211,45 @@ Page({
     })
   },
 
+  // L37（2026-11-09）：下载官方导入模板。
+  // 模板随小程序包分发（版本随代码走、离线可用、无需云存储单独维护）。
+  // 包内资源只读 → 读出写到用户目录 → 优先转发到聊天（导入本就要求从聊天选文件，
+  // 形成闭环）；低版本基础库无 shareFileMessage 时退化为打开预览（菜单里可转发）。
+  downloadImportTemplate() {
+    const fs = wx.getFileSystemManager()
+    const target = `${wx.env.USER_DATA_PATH}/商品导入模板.xlsx`
+    try {
+      const data = fs.readFileSync('/assets/templates/商品导入模板.xlsx')
+      fs.writeFileSync(target, data)
+    } catch (e) {
+      console.error('[product-manage] 模板复制失败:', e)
+      util.showToast('模板读取失败，请重试')
+      return
+    }
+    if (typeof wx.shareFileMessage === 'function') {
+      wx.shareFileMessage({
+        filePath: target,
+        fileName: '商品导入模板.xlsx',
+        success: () => util.showSuccess('已发送，可在聊天中填写后导入'),
+        fail: err => {
+          if (err && /cancel/i.test(err.errMsg || '')) return // 用户取消不视为失败
+          this._openTemplate(target)
+        }
+      })
+    } else {
+      this._openTemplate(target)
+    }
+  },
+
+  _openTemplate(filePath) {
+    wx.openDocument({
+      filePath,
+      fileType: 'xlsx',
+      showMenu: true,
+      fail: () => util.showToast('打开模板失败，请稍后重试')
+    })
+  },
+
   // Prevent clicks inside the modal (including picker controls) from closing it.
   stopBubble() {},
 

@@ -467,3 +467,41 @@ TTL 过期/在途去重/强制刷新/换门店/失败重试/载荷参数）。
 
 B5 遗留四项至此清一项，剩 L17/L18/L27（分页骨架/装饰去重/setData 裁剪，重构类）、
 L37（Excel 导入模板）。
+
+---
+
+## 2026-11-09 可动手五项清理（文档同步 / P1-20 / P1-15 / P2-41 / L37）
+
+### 文档同步
+- `业务模糊点确认清单`：#4 与 #15 两处「异常全部处理完后才能补结算」旧口径改为
+  行级门禁 + 多波增量；页脚汇总表新增 **#26**（补结算多波 + `_RG` 全量取代拍板，
+  含 `reportMaintenance` dryRun 核验线上无历史并存），并同步修正正文两处旧口径
+- `README`：B5 进度 25/30 → 26/30（P2-32 已修）；云函数一览补 `reportMaintenance`
+
+### P1-20 异常处理「取消」=「拒绝付款」修复
+- `abnormal-list.js` 付款裁决由确认框（取消=提交且拒绝付款）改 `wx.showActionSheet`
+  三态：按实收付款 / 不付款 / 取消（**取消 = 中止整个提交**，不落任何裁决）
+
+### P1-15 下架商品数量静默丢弃修复（purchase-create）
+- `_updateTotal` 页脚只统计真正会随提交生效的行（`products` 中存在的），不再虚高
+- `_saveOrder` 检测被剔除行（`_qtyMap>0` 但不在可购列表），弹确认框**列名并让用户确认**
+  后才继续（原实现静默丢弃、用户零提示）；`_productNameMap` 在
+  `filterProducts`/`loadExistingOrder` 留底商品名，草稿下架行也能报出名字
+
+### P2-41 后半 saveProduct 后端查重
+- `catalog.js saveProduct`：新建按**名称+厂家**拒绝重复（与 importProducts 判重同口径）；
+  编辑改名/改厂家才查重（排除自己），不改名不查——容忍历史重复数据编辑其他字段
+- `importProducts` 落库前终查：对待插入名称分块 `_.in` 再查一遍，把「初次查重 → 逐条写入」
+  的并发窗口压到毫秒级
+- 测试：`scripts/_tmp_test/test-product-dedup.js` 6 项全过（新建拒重/不同厂家放行/
+  编辑自己放行/撞他人名拒/改名通过）
+
+### L37 Excel 导入模板
+- 新增 `scripts/make-import-template.js`：无本地 xlsx 依赖，手工构造最小
+  SpreadsheetML 包（STORE zip）——**两张表：列头（与 HEADER_ALIASES 严格对齐）+
+  填写说明**；不含示例数据行（示例行会被当真实商品导入）
+- 产物 `assets/templates/商品导入模板.xlsx`（5.4KB）随小程序包分发；验证：
+  PowerShell Expand-Archive 解包 + 全部 XML 良构通过
+- `product-manage` 新增「下载模板」按钮：包内资源读出 → 写用户目录 →
+  `wx.shareFileMessage` 转发到聊天（导入本就要求从聊天选文件，形成闭环）；
+  低版本基础库退化为 `wx.openDocument` 预览（菜单可转发）
