@@ -260,6 +260,13 @@ Page({
   // #12-③：催审——向管理员发催办消息（后端 1 小时限频）
   async remindAudit() {
     if (this._submitting) return
+    // P2-59（2026-11-10 修复）：催审限频前端也生效——原仅后端 1 小时限频，
+    // 按钮可反复点；本地记录上次催审时间，1 小时内直接拦截并提示
+    const now = Date.now()
+    if (this._lastRemindAt && now - this._lastRemindAt < 60 * 60 * 1000) {
+      util.showToast('已催办过，请 1 小时后再试')
+      return
+    }
     this._submitting = true
     try {
       const result = await cloud.callFunction('dataService', {
@@ -267,6 +274,7 @@ Page({
         orderId: this.orderId
       })
       if (result && result.code === 0) {
+        this._lastRemindAt = now
         util.showToast('已提醒管理员审核')
       } else {
         util.showToast((result && result.msg) || '催办失败')

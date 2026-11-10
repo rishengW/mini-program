@@ -627,6 +627,10 @@ async function repriceReceiptLocked(event, receiptId, auth) {
         status: 'resolved',
         resolution: '已补配协议价并刷新价格快照，账单按补价重出',
         handled_by: auth.user.name,
+        // P2-25（2026-11-10 修复）：与 resolveAbnormal 口径对齐——补 resolved_by/resolved_at，
+        // 原先只设 handled_by，按 resolved_at 统计的口径会漏掉这批补价关闭的异常
+        resolved_by: auth.user.name,
+        resolved_at: db.serverDate(),
         updated_at: db.serverDate()
       }
     })

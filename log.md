@@ -546,3 +546,22 @@ L37（Excel 导入模板）。
 - 首页 `wx.showTabBarItem` 在开发者工具基础库 3.17.1 上不存在，直接调用抛 TypeError
   炸断 `onShow`——改特性检测降级：无 API 时保留 tab（report 三页面有守卫兜底），
   不再阻断首页渲染
+
+---
+
+## 2026-11-10 B4-B6 清尾 Round 1（10 项小修）
+
+| 条目 | 修复 |
+|---|---|
+| L4 | `updateProductPrice` price_id 加随机后缀（同毫秒调价撞号） |
+| L10 | `login_locked_until` 改 `db.serverDate({offset})`，时钟源统一 |
+| P2-25 | `repriceReceipt` 关闭异常补 `resolved_by`/`resolved_at`（与 resolveAbnormal 同口径） |
+| P2-58 | 审批驳回原因前端先 trim 再判空（纯空格不再放行） |
+| P2-56 | 审批数量校验前移到确认弹窗之前 |
+| P2-57 | 列表快速通过确认弹窗明示「不修改数量，需改量进详情页」 |
+| P2-59 | 催审 1 小时限频前端也生效（本地记录上次催审时间） |
+| P2-61 | 异常列表空态区分「无异常」与「chef 无查看权限」 |
+| P2-49 | 到货日期前端补「不得早于采购日期」校验 |
+| P2-76 | 必填标记补校验：手动商品分类、用户所属角色 |
+
+验证：全部 `node --check` 通过；`test-settle-versions` 65 项回归全过；编码校验通过。

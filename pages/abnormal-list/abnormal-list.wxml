@@ -52,6 +52,7 @@
 
   <view wx:if="{{filteredList.length === 0}}" class="empty-state">
     <view class="empty-state-icon icon icon-xxl icon-check-success"></view>
-    <view class="empty-state-text">暂无异常记录</view>
+    <view class="empty-state-text" wx:if="{{!isChef}}">暂无异常记录</view>
+    <view class="empty-state-text" wx:else>异常由店长或管理员处理，当前账号无查看权限</view>
   </view>
 </view>

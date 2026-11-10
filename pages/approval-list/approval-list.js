@@ -69,7 +69,9 @@ Page({
     if (this._submitting) return
     this._submitting = true
     try {
-      const confirmed = await util.showConfirm('确认通过该采购申请？')
+      // P2-57（2026-11-10 修复）：列表快速通过传 items:[]（后端不改量），与详情页可改量
+      // 语义不同——确认弹窗显式告知，避免用户误以为在列表也能改量
+      const confirmed = await util.showConfirm('确认通过该采购申请？\n（列表快速通过不修改数量，需改量请点进详情页）')
       if (!confirmed) return
       const app = getApp()
       const result = await cloud.callFunction('dataService', {

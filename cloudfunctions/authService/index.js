@@ -161,7 +161,9 @@ async function login(event) {
         .where({ _id: user._id, login_fail_count: _.gte(5) })
         .update({
           data: {
-            login_locked_until: new Date(Date.now() + 10 * 60 * 1000),
+            // L10（2026-11-10 修复）：锁定到期时间统一用数据库时钟（带 10 分钟偏移），
+            // 与全库其他时间字段同源，避免云函数本地时钟与 DB 时钟漂移导致锁定窗口偏差
+            login_locked_until: db.serverDate({ offset: 10 * 60 * 1000 }),
             login_fail_count: 0,
             updated_at: db.serverDate()
           }

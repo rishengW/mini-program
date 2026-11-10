@@ -260,6 +260,8 @@ Page({
   confirmManual() {
     const { name, categoryL1, unit, qty, remark } = this.data.manualForm
     if (!name.trim()) { util.showToast('请输入商品名称'); return }
+    // P2-76（2026-11-10）：分类是必填标记（wxml「分类 *」），补上对应校验
+    if (!categoryL1) { util.showToast('请选择分类'); return }
     if (!unit.trim()) { util.showToast('请输入单位'); return }
     if (!qty || parseFloat(qty) <= 0) { util.showToast('请输入有效数量'); return }
     const item = {
@@ -316,6 +318,12 @@ Page({
     // P2-38：全段 try/finally——任一环节抛异常都必须复位标志位与 Loading 遮罩，否则页面卡死
     try {
       if (!this.data.deliveryDate) { util.showToast('请选择到货日期'); return }
+      // P2-49（2026-11-10 修复）：到货日期先后校验前移到前端——
+      // 原仅判非空，与 createPurchaseOrder 后端「不得早于采购日期」口径对齐
+      if (this.data.deliveryDate < this.data.orderDate) {
+        util.showToast('期望到货日期不能早于采购日期')
+        return
+      }
 
       // 收集数量>0的库存商品
       const qtyMap = this._qtyMap || {}

@@ -67,14 +67,15 @@ Page({
     if (this._submitting) return
     this._submitting = true
     try {
-      const confirmed = await util.showConfirm('确认通过该采购申请？')
-      if (!confirmed) return
-      // 审批数量必须大于 0：0 通过会把该商品行审批成 0 量，等于静默删行
+      // P2-56（2026-11-10 修复）：数量校验前移到确认弹窗之前——
+      // 原实现先「确认通过」再提示数量非法，交互顺序错误
       const invalidItem = (this.data.detail.items || []).find(item => !(Number(item.approveQty) > 0))
       if (invalidItem) {
         util.showToast(`「${invalidItem.productName || '商品'}」审批数量必须大于 0`)
         return
       }
+      const confirmed = await util.showConfirm('确认通过该采购申请？')
+      if (!confirmed) return
       const app = getApp()
       const result = await cloud.callFunction('dataService', {
         action: 'auditOrder',
@@ -92,7 +93,8 @@ Page({
 
   async rejectRequest() {
     if (this._submitting) return
-    if (!this.data.auditRemark) {
+    // P2-58（2026-11-10 修复）：驳回原因先 trim 再判空——纯空格原来被前端放行、后端拒绝
+    if (!String(this.data.auditRemark || '').trim()) {
       util.showToast('请填写驳回原因')
       return
     }

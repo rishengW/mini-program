@@ -9,7 +9,9 @@ Page({
   data: {
     activeFilter: 'all',
     filteredList: [],
-    records: []
+    records: [],
+    // P2-61（2026-11-10）：区分「无异常」与「chef 无权查看异常」的空态文案
+    isChef: false
   },
 
   async onShow() {
@@ -26,7 +28,7 @@ Page({
       ...item,
       createdAt: cloud.formatDateTime(item.createdAt)
     }))
-    this.setData({ records })
+    this.setData({ records, isChef: (app.globalData.userInfo || {}).role === 'chef' })
     this.applyFilter()
   },
 

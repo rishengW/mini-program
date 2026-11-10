@@ -79,7 +79,9 @@ exports.main = async (event = {}) => {
       return { code: 0, data: { dryRun: true, affectedOrders } }
     }
 
-    const priceId = 'PRC_' + Date.now()
+    // L4（2026-11-10 修复）：price_id 加随机后缀，与 RCP/PO/SUP/U/MSG 等 ID 口径一致——
+    // 原 'PRC_' + Date.now() 在同毫秒两次调价时撞号
+    const priceId = 'PRC_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex')
     // Switching the current price and inserting the replacement must be one
     // transaction, otherwise concurrent updates can leave two current rows.
     await db.runTransaction(async transaction => {

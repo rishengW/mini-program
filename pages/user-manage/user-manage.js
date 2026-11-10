@@ -195,6 +195,8 @@ Page({
     if (form.password && form.password.trim().length < 6) {
       return util.showToast('密码至少需要6位')
     }
+    // P2-76（2026-11-10）：所属角色是必填标记（wxml「所属角色 *」），补上对应校验
+    if (!form.role) return util.showToast('请选择所属角色')
     if (['chef', 'store_manager'].includes(form.role) && !form.defaultStoreId) {
       return util.showToast('请选择所属门店')
     }
