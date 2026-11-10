@@ -88,6 +88,9 @@ Page({
         })
       } else if (item.productId) {
         qtyMap[item.productId] = Number(item.orderQty) || 0
+        // P1-15：草稿行名快照留底——商品下架后提交剔除时能报出名字
+        if (!this._productNameMap) this._productNameMap = {}
+        this._productNameMap[item.productId] = item.productNameSnapshot || item.productId
       }
     })
     this._qtyMap = qtyMap
@@ -182,6 +185,9 @@ Page({
         manufacturerName: p.manufacturerName || '默认'
       }
     })
+    // P1-15：记录见过的商品名——提交时被剔除的行（已下架）要能报出名字
+    if (!this._productNameMap) this._productNameMap = {}
+    list.forEach(p => { this._productNameMap[p.productId] = p.name })
     this.setData({ displayProducts })
     this._updateTotal()
   },
@@ -219,7 +225,14 @@ Page({
 
   _updateTotal() {
     const qtyMap = this._qtyMap || {}
-    let count = Object.values(qtyMap).filter(v => v > 0).length
+    const products = this.data.products || []
+    // P1-15（2026-11-09 修复）：页脚只统计「真正会随提交生效」的行。
+    // 数量挂在当次可购列表上（includeInactive:false），已下架商品不会进提交集合——
+    // 原实现统计整个 _qtyMap，出现"页脚共 10 种、实际只提交 9 种"的虚高。
+    let count = 0
+    Object.keys(qtyMap).forEach(pid => {
+      if (qtyMap[pid] > 0 && products.some(p => p.productId === pid)) count++
+    })
     count += this.data.manualItems.length
     this.setData({ totalCount: count })
   },
@@ -307,12 +320,25 @@ Page({
       // 收集数量>0的库存商品
       const qtyMap = this._qtyMap || {}
       const selectedProducts = []
+      const droppedProductIds = [] // P1-15：已下架/不在当前可购列表的行
       Object.keys(qtyMap).forEach(pid => {
         if (qtyMap[pid] > 0) {
           const p = (this.data.products || []).find(x => x.productId === pid)
           if (p) selectedProducts.push({ ...p, qty: qtyMap[pid] })
+          else droppedProductIds.push(pid)
         }
       })
+
+      // P1-15（2026-11-09 修复）：被剔除的行必须让用户看见并确认——原实现静默丢弃，
+      // 录入数量后商品被另一端下架（或草稿里的商品已下架）时，保存后该行凭空消失、
+      // 后端无从报错、用户零提示。
+      if (droppedProductIds.length > 0) {
+        const names = droppedProductIds
+          .map(pid => (this._productNameMap && this._productNameMap[pid]) || pid)
+          .join('、')
+        const goOn = await util.showConfirm(`有 ${droppedProductIds.length} 种商品已下架或不可用，提交时将被剔除：\n${names}\n\n是否继续？`)
+        if (!goOn) return
+      }
 
       const allItems = [...selectedProducts, ...this.data.manualItems]
       if (allItems.length === 0) { util.showToast('请至少填写一种商品的数量'); return }
