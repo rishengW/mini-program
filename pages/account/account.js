@@ -14,10 +14,7 @@ Page({
   onShow() {
     if (!authGuard.requireLogin()) return
     const app = getApp()
-    if (!app.globalData.isLoggedIn) {
-      wx.redirectTo({ url: '/pages/login/login' })
-      return
-    }
+    // L13：requireLogin 已保证登录态，原 if(!isLoggedIn) 死分支删除
     this.setData({
       user: app.globalData.userInfo,
       avatarText: (app.globalData.userInfo && app.globalData.userInfo.name || '我').slice(0, 1),

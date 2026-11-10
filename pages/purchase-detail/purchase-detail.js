@@ -14,6 +14,8 @@ Page({
   },
 
   onShow() {
+    // L14（2026-11-10）：登录守卫扩展到 onShow——会话中途失效时返回本页也会被拦截
+    if (!authGuard.requireLogin()) return
     if (this.orderId) this.loadData()
   },
 

@@ -64,9 +64,14 @@ async function startAbnormal(event) {
     return { code: -403, msg: '当前账号无权处理该门店异常' }
   }
   if (result.data.status !== 'pending') return { code: -1, msg: '该异常已进入处理流程' }
-  await db.collection('abnormal_record').doc(event.id).update({
-    data: { status: 'processing', handled_by: auth.user.name, updated_at: db.serverDate() }
-  })
+  // L6（2026-11-10）：check-then-act 改条件更新——并发双击只有一条能推进状态，
+  // 后写者 updated=0 不再覆盖 handled_by，也不会重复发起
+  const upd = await db.collection('abnormal_record')
+    .where({ _id: event.id, status: 'pending' })
+    .update({
+      data: { status: 'processing', handled_by: auth.user.name, updated_at: db.serverDate() }
+    })
+  if (!upd.stats || upd.stats.updated === 0) return { code: -1, msg: '该异常已进入处理流程' }
   return { code: 0 }
 }
 
@@ -88,16 +93,23 @@ async function resolveAbnormal(event) {
   // 付款裁决：pay_received = 异常行转回可付款（补结算时纳入）；reject = 维持不可付款
   const paymentDecision = ['pay_received', 'reject'].includes(event.paymentDecision) ? event.paymentDecision : ''
 
-  await db.collection('abnormal_record').doc(event.id).update({
-    data: {
-      status: 'resolved',
-      resolution,
-      payment_decision: paymentDecision,
-      resolved_by: auth.user.name,
-      resolved_at: db.serverDate(),
-      updated_at: db.serverDate()
-    }
-  })
+  // L6（2026-11-10）：check-then-act 改条件更新——并发双击只有一条能推进 resolved，
+  // 后写者 updated=0 直接返回，resolved_by/resolved_at 不被覆盖、消息不重复发
+  const resolveUpd = await db.collection('abnormal_record')
+    .where({ _id: event.id, status: 'processing' })
+    .update({
+      data: {
+        status: 'resolved',
+        resolution,
+        payment_decision: paymentDecision,
+        resolved_by: auth.user.name,
+        resolved_at: db.serverDate(),
+        updated_at: db.serverDate()
+      }
+    })
+  if (!resolveUpd.stats || resolveUpd.stats.updated === 0) {
+    return { code: -1, msg: '该异常已被处理，请刷新后查看' }
+  }
   await createMessage({
     type: 'abnormal',
     title: '异常已解决',
@@ -135,14 +147,20 @@ async function closeAbnormal(event) {
   }
   if (record.status !== 'resolved') return { code: -1, msg: '只有已解决异常才能关闭' }
 
-  await db.collection('abnormal_record').doc(event.id).update({
-    data: {
-      status: 'closed',
-      closed_by: auth.user.name,
-      closed_at: db.serverDate(),
-      updated_at: db.serverDate()
-    }
-  })
+  // L6（2026-11-10）：关闭同样改条件更新，并发双击只有一条推进 closed
+  const closeUpd = await db.collection('abnormal_record')
+    .where({ _id: event.id, status: 'resolved' })
+    .update({
+      data: {
+        status: 'closed',
+        closed_by: auth.user.name,
+        closed_at: db.serverDate(),
+        updated_at: db.serverDate()
+      }
+    })
+  if (!closeUpd.stats || closeUpd.stats.updated === 0) {
+    return { code: -1, msg: '该异常已被关闭，请刷新后查看' }
+  }
   return { code: 0 }
 }
 

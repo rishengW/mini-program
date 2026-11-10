@@ -48,7 +48,8 @@ async function auditOrder(event) {
         : null
       // qty <= 0 拒绝：0 通过会把该行静默改成 0 量，审批数量必须为正数
       if (!item || !validIds.has(item.itemId) || !Number.isFinite(qty) || qty <= 0 || qty > Number(sourceItem && sourceItem.order_qty)) {
-        return { code: -1, msg: '审批数量必须大于 0 且不超过下单数量，请检查后重试' }
+        // P2-51：审批数量错误带上商品名，不再整单级提示
+        return { code: -1, msg: `商品「${(sourceItem && sourceItem.product_name_snapshot) || (item && item.itemId) || '未知'}」审批数量必须大于 0 且不超过下单数量，请检查后重试` }
       }
     }
   }

@@ -5,9 +5,12 @@ const authGuard = require('../../utils/auth-guard')
 
 async function recoverCommittedReceipt(orderId, failedResult) {
   const message = String(failedResult && failedResult.msg || '')
+  // P2-71（2026-11-10）：超时兜底从「特定错误文案」扩展到所有传输/部署类失败——
+  // errorType 存在即云端/网络故障（FUNCTION_NOT_DEPLOYED、TIMEOUT、NETWORK_ERROR 等），
+  // 业务拒绝（服务端 code:-1 无 errorType）不会误触发。recover 只在详情证实已收货时才生效。
   const shouldCheck = failedResult && (
-    failedResult.errorType === 'CLOUD_UNAVAILABLE' ||
-    /已完成收货|不可收货|连接失败|Not connected/i.test(message)
+    !!failedResult.errorType ||
+    /已完成收货|不可收货|连接失败|Not connected|timeout|超时|网络|network/i.test(message)
   )
   if (!shouldCheck) return null
 
@@ -43,6 +46,11 @@ Page({
     photos: [],
     overallRemark: '',
     isSubmitting: false
+  },
+
+  // L14（2026-11-10）：登录守卫扩展到 onShow——会话中途失效时返回本页也会被拦截
+  onShow() {
+    if (!authGuard.requireLogin()) return
   },
 
   async onLoad(options = {}) {

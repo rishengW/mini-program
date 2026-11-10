@@ -143,13 +143,14 @@ exports.main = async (event = {}) => {
       // 100 行时 >600 操作，触及平台单事务上限会硬失败（不重试）——压到 50 行保安全
       return { code: -1, msg: '每单验收商品最多50种，请分批提交收货' }
     }
-    const hasInvalidItem = items.some(item => (
+    // P2-51：错误定位到具体商品行（some 改 find 取首个非法行，报出商品名）
+    const invalidItem = items.find(item => (
       !item || !item.productId || !item.productName || !item.unit ||
       typeof item.receivedQty !== 'number' || !Number.isFinite(item.receivedQty) || item.receivedQty < 0 ||
       typeof item.orderQty !== 'number' || !Number.isFinite(item.orderQty)
     ))
-    if (hasInvalidItem) {
-      return { code: -1, msg: '部分商品的验收信息不完整，请检查后重试' }
+    if (invalidItem) {
+      return { code: -1, msg: `商品「${invalidItem.productName || invalidItem.productId || '未知'}」验收信息不完整，请检查后重试` }
     }
     if (!Array.isArray(photoFileIds)) {
       return { code: -1, msg: '验收照片信息格式不正确，请重新选择照片' }

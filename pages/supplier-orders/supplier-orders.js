@@ -32,10 +32,7 @@ Page({
   onShow() {
     const app = getApp()
     const user = app.globalData.userInfo || {}
-    if (!app.globalData.isLoggedIn) {
-      wx.redirectTo({ url: '/pages/login/login' })
-      return
-    }
+    // L13：requireLogin 已保证登录态，原 if(!isLoggedIn) 死分支删除
     if (user.role !== 'supplier') {
       wx.reLaunch({ url: '/pages/index/index' })
       return

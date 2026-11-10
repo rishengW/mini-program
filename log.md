@@ -565,3 +565,19 @@ L37（Excel 导入模板）。
 | P2-76 | 必填标记补校验：手动商品分类、用户所属角色 |
 
 验证：全部 `node --check` 通过；`test-settle-versions` 65 项回归全过；编码校验通过。
+
+---
+
+## 2026-11-10 B4-B6 清尾 Round 2（7 项中修）
+
+| 条目 | 修复 |
+|---|---|
+| L6 | 异常 start/resolve/close 由 check-then-act 改条件更新（并发双击只有一条推进，resolved_by 不被覆盖、消息不重复发） |
+| L24 | 审批列表/详情「仅管理员」拦截收敛到 `auth-guard.requireGlobalRole()` 公共函数 |
+| L13 | 5 个供应商/账号页删除 `requireLogin` 之后的 `if(!isLoggedIn)` 死分支 |
+| L14 | 5 个页面（purchase-detail/approval-detail/purchase-create/receive-verify/report-detail）登录守卫从仅 onLoad 扩展到 onShow，会话中途失效返回页也被拦截 |
+| P2-51 | 下单/收货/审批的后端错误信息带上商品名（some→find 取首个非法行），不再整单级提示 |
+| P2-71 | receive-verify 超时兜底从特定错误文案扩展到所有传输/部署类失败（`errorType` 存在即触发恢复） |
+| L7 | 核实已被 11-04 幂等防降级覆盖（重复 ship 提前返回，不重复写消息）——无需再改 |
+
+验证：16 个文件 `node --check` 通过；settle 65 项 + chef 7 项回归全过；编码校验通过。

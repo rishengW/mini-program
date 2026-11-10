@@ -232,9 +232,10 @@ exports.main = async (event = {}) => {
       const unit = String(item.unit || '').trim()
       const qty = Number(item.orderQty)
       if (!productId || !Number.isFinite(qty) || qty <= 0 || qty > 1000000) {
-        return { code: -1, msg: '商品信息或采购数量无效，请检查后重试' }
+        // P2-51：后端错误定位到具体商品行（原来整单级提示，用户无法知道是哪一行）
+        return { code: -1, msg: `商品「${productName || productId}」信息或采购数量无效，请检查后重试` }
       }
-      if (seenProductIds[productId]) return { code: -1, msg: '采购商品不能重复，请检查后重试' }
+      if (seenProductIds[productId]) return { code: -1, msg: `商品「${productName || productId}」重复，请检查后重试` }
       seenProductIds[productId] = true
       if (item.isManual) {
         if (!productName || !unit) return { code: -1, msg: '手动商品名称和单位不能为空' }
@@ -242,7 +243,7 @@ exports.main = async (event = {}) => {
         continue
       }
       const product = productMap[productId]
-      if (!product) return { code: -1, msg: '部分商品已下架或不存在，请刷新商品列表后重试' }
+      if (!product) return { code: -1, msg: `商品「${productName || productId}」已下架或不存在，请刷新商品列表后重试` }
       normalizedItems.push({
         ...item,
         productId,

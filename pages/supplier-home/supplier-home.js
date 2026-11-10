@@ -32,10 +32,7 @@ Page({
     // 隐藏微信原生"返回首页"按钮：跳到登录页后仍需重新输账号密码，容易误导
     if (wx.hideHomeButton) wx.hideHomeButton()
     const app = getApp()
-    if (!app.globalData.isLoggedIn) {
-      wx.redirectTo({ url: '/pages/login/login' })
-      return
-    }
+    // L13：requireLogin 已保证登录态，原 if(!isLoggedIn) 死分支删除
     const user = app.globalData.userInfo || {}
     // 非供货商角色误入时回到门店首页
     if (user.role !== 'supplier') {
