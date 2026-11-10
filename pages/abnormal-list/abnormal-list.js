@@ -77,9 +77,18 @@ Page({
       util.showToast('请填写处理结果')
       return
     }
-    // 付款裁决：少货/异常行处理后是否按实收转回可付款（补结算时纳入）
-    const payConfirmed = await util.showConfirm('该异常行是否按实收数量转回可付款？（补结算时纳入账单）\n「取消」则维持不可付款')
-    const paymentDecision = payConfirmed ? 'pay_received' : 'reject'
+    // P1-20（2026-11-09 修复）：付款裁决改三态显式选择。原确认框的「取消」会被
+    // 当成「提交且拒绝付款」继续走——想"稍后再说"的用户误点取消即把该行永久标记
+    // 不付款，且供货商端会看到「裁决：维持不付款」。现在取消/失败 = 中止整个提交。
+    const decision = await new Promise(resolve => {
+      wx.showActionSheet({
+        itemList: ['按实收付款（纳入补结算账单）', '不付款（按异常核销）'],
+        success: res => resolve(res.tapIndex === 0 ? 'pay_received' : 'reject'),
+        fail: () => resolve('') // 用户取消或拉起失败：中止，不落任何裁决
+      })
+    })
+    if (!decision) return
+    const paymentDecision = decision
     const result = await submitGuard(this, () => cloud.callFunction('dataService', {
       action: 'resolveAbnormal',
       id: e.currentTarget.dataset.id,
