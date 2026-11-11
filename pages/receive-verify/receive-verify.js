@@ -174,9 +174,11 @@ Page({
       util.showToast('订单中没有可验收的商品，请返回后重试')
       return
     }
+    // P2-48（2026-11-11 修复）：超收校验改为「历史累计 + 本次 ≤ 下单量」——
+    // 原只比对本行 orderQty，分批收货时前端放行后端拒绝的超收请求
     const invalidQty = items.some(item => (
       typeof item.receivedQty !== 'number' || !Number.isFinite(item.receivedQty) ||
-      item.receivedQty < 0 || item.receivedQty > item.orderQty
+      item.receivedQty < 0 || (item.receivedTotal + item.receivedQty) > item.orderQty
     ))
     if (invalidQty) {
       util.showToast('实收数量不能超过订单数量，请检查后重试')

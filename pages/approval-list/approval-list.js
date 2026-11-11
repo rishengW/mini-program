@@ -69,9 +69,10 @@ Page({
       const confirmed = await util.showConfirm('确认通过该采购申请？\n（列表快速通过不修改数量，需改量请点进详情页）')
       if (!confirmed) return
       const app = getApp()
+      const requestId = this._auditReqId || (this._auditReqId = 'AUD' + Date.now() + Math.random().toString(36).slice(2, 8))
       const result = await cloud.callFunction('dataService', {
         action: 'auditOrder',
-        orderId: e.currentTarget.dataset.id, status: 'approved', items: []
+        orderId: e.currentTarget.dataset.id, status: 'approved', requestId, items: []
       })
       if (result.code === 0) {
         const warning = result.data && result.data.reportWarning

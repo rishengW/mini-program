@@ -85,6 +85,22 @@ function seed() {
   const r7 = await auditOrder({ authToken: 'tok-adm', orderId: 'PO1', status: 'rejected', auditRemark: '临时取消' })
   check('驳回成功 rejected', r7.code === 0 && order().order_status === 'rejected', r7)
 
+  // 7. P2-60：同 requestId 幂等短路——第一次改量通过，第二次同 requestId 直接短路不重复改量
+  seed()
+  const reqId = 'AUD_TEST_IDEMPOTENT_1'
+  const i1 = await auditOrder({
+    authToken: 'tok-adm', orderId: 'PO1', status: 'approved', requestId: reqId,
+    items: [{ itemId: 'PO1_1', approveQty: 8 }]
+  })
+  check('带 requestId 首次审核通过', i1.code === 0, i1)
+  const qtyAfterFirst = item('PO1_1').order_qty
+  const i2 = await auditOrder({
+    authToken: 'tok-adm', orderId: 'PO1', status: 'approved', requestId: reqId,
+    items: [{ itemId: 'PO1_1', approveQty: 3 }]
+  })
+  check('同 requestId 短路返回 idempotent', i2.code === 0 && i2.data && i2.data.idempotent === true, i2)
+  check('短路不重复改量（order_qty 保持首次的 8）', item('PO1_1').order_qty === qtyAfterFirst, item('PO1_1').order_qty)
+
   console.log(failures === 0 ? '\n全部通过' : `\n${failures} 项失败`)
   process.exit(failures === 0 ? 0 : 1)
 })().catch(err => { console.error('测试执行异常:', err); process.exit(1) })

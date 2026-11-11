@@ -77,10 +77,14 @@ Page({
       const confirmed = await util.showConfirm('确认通过该采购申请？')
       if (!confirmed) return
       const app = getApp()
+      // P2-60：审核带幂等键（本页一次通过动作内重试共用同一 requestId，成功后重置）
+      const requestId = this._auditReqId || (this._auditReqId = 'AUD' + Date.now() + Math.random().toString(36).slice(2, 8))
       const result = await cloud.callFunction('dataService', {
         action: 'auditOrder',
-        orderId: this.orderId, status: 'approved', items: (this.data.detail.items || []).map(item => ({ itemId: item.itemId, approveQty: item.approveQty }))
+        orderId: this.orderId, status: 'approved', requestId,
+        items: (this.data.detail.items || []).map(item => ({ itemId: item.itemId, approveQty: item.approveQty }))
       })
+      if (result.code === 0) this._auditReqId = ''
       if (result.code === 0) {
         const warning = result.data && result.data.reportWarning
         if (warning) util.showToast(warning); else util.showSuccess('审核通过')
@@ -103,9 +107,10 @@ Page({
       const confirmed = await util.showConfirm('确认驳回该采购申请？')
       if (!confirmed) return
       const app = getApp()
+      const requestId = this._rejectReqId || (this._rejectReqId = 'AUD' + Date.now() + Math.random().toString(36).slice(2, 8))
       const result = await cloud.callFunction('dataService', {
         action: 'auditOrder',
-        orderId: this.orderId, status: 'rejected', auditRemark: this.data.auditRemark, items: []
+        orderId: this.orderId, status: 'rejected', requestId, auditRemark: this.data.auditRemark, items: []
       })
       if (result.code === 0) { util.showToast('已驳回'); setTimeout(() => wx.navigateBack(), 800) } else util.showToast(result.msg || '审核失败')
     } finally {

@@ -9,6 +9,14 @@ async function auditOrder(event) {
   if (auth.error) return auth.error
   if (!['approved', 'rejected'].includes(event.status)) return { code: -1, msg: '审核状态无效' }
 
+  // P2-60（2026-11-11）：审核带 requestId 幂等键——命中已处理请求直接短路返回成功，
+  // 与「每笔写操作带幂等键」的项目约定对齐（事务内状态复查仍兜底防并发重复审核）。
+  const requestId = String(event.requestId || '').trim()
+  if (requestId) {
+    const dup = await db.collection('audit_request').where({ request_id: requestId }).limit(1).get()
+    if (dup.data.length) return { code: 0, data: { idempotent: true, message: '该审核请求已处理，无需重复操作' } }
+  }
+
   const orderResult = await db.collection('purchase_order')
     .where({ purchase_order_id: event.orderId })
     .limit(1)
@@ -94,6 +102,17 @@ async function auditOrder(event) {
     if (err && err.errMsg && err.errMsg.includes('该订单已经审核')) return { code: -1, msg: '该订单已经审核，请勿重复操作' }
     throw err
   })
+
+  // P2-60：事务提交成功后记录幂等键（记录失败不影响审核结果，仅失去短路能力）
+  if (requestId) {
+    try {
+      await db.collection('audit_request').add({
+        data: { request_id: requestId, order_id: event.orderId, status: event.status, created_at: db.serverDate() }
+      })
+    } catch (e) {
+      console.error('[auditOrder] 幂等键记录失败（不影响审核结果）:', e)
+    }
+  }
 
   // P2-10：事务提交到后续动作之间存在窗口，另一管理员可能已作废订单——
   // 复查状态，已非本次目标状态则跳过报表重算与供应商通知（不向已作废单刷报表/花钱群发）
