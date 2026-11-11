@@ -648,3 +648,17 @@ L8 saveSupplier/createUser 查重、L3 时钟源细节。B4/B5/B6 主体工作�
 | L8 | 核实 saveSupplier（catalog.js:130）/createUser（authService:337）均已有查重，仅剩管理端低频并发窗口，可接受不改 |
 
 `getReportDetail` ⑥ 详情口径（多波 `_S` 后页面与 CSV 对不上）留作独立批次。
+
+---
+
+## 2026-11-11 getReportDetail ⑥ 详情口径修复
+
+- **问题**：供应商到货/带价账单（⑤⑥）详情按「供应商+日期」聚合**全部**收货单明细，
+  同日多张收货单/多波 `_S` 补结算时，页面行数与合计和该报表 CSV 对不上
+- **修复**：
+  - 按 `report_id` 反解 `receiptId`（复用 `shared/receipt-reports.receiptIdFromReportId`），
+    精确只取该收货单的明细；无法反解时兜底回原「供应商+日期」口径
+  - `_S` 补结算波次若带 `settle_item_ids`，只展示该波**增量行**，与补充账单 CSV 一致
+- **验证**：`test-report-detail-scope.js` 5 项全过——同日同供应商两张收货单，
+  原版⑥只含本单 2 行不混单、`_S` 波次只含 `settle_item_ids` 指定的 1 行
+- **部署**：`getReportDetail` 需重新部署

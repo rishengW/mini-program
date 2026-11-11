@@ -6,6 +6,8 @@ const db = cloud.database()
 const _ = db.command
 
 // （hashToken 本地副本已删除——见下方 shared/session require）
+// report_id 反解收货单号（shared/receipt-reports 统一副本，2026-11-11 详情口径修复用）
+const { receiptIdFromReportId } = require('./shared/receipt-reports')
 
 const ABNORMAL_TYPE_NAMES = {
   shortage: '少货/缺货',
@@ -166,21 +168,37 @@ exports.main = async (event = {}) => {
         })
       }
     } else if (type === 'supplier_receipt_report' || type === 'supplier_receipt_price_report') {
-      // 供应商到货/带价格账单：收货明细本身已存 supplier_id（createReceipt 写入时从订单明细带过来），
-      // 直接按供应商过滤，不再逐行回查 purchase_order_item（原来是 收货单数×明细数 级别的串行查询）。
+      // 2026-11-11 详情口径修复：优先按 report_id 反解的收货单精确取本批/本波次明细，
+      // 不再按「供应商+日期」聚合全部收货单——多波 _S 补结算后页面合计才与 CSV 一致。
       const supplierId = report.scope_id
-      const date = report.related_date
-      const receiptsRes = await db.collection('receipt')
-        .where({ receipt_date: date })
-        .limit(200)
-        .get()
+      const receiptId = receiptIdFromReportId(report.report_id)
       const receiptMap = {}
-      receiptsRes.data.forEach(receipt => { receiptMap[receipt.receipt_id] = receipt })
-      const receiptIds = receiptsRes.data.map(receipt => receipt.receipt_id)
+      let receiptIds = []
+      if (receiptId) {
+        const one = await db.collection('receipt').where({ receipt_id: receiptId }).limit(1).get()
+        if (one.data[0]) {
+          receiptMap[receiptId] = one.data[0]
+          receiptIds = [receiptId]
+        }
+      }
+      if (!receiptIds.length) {
+        // 兜底：report_id 无法反解（历史/异常格式）时维持原「供应商+日期」口径
+        const receiptsRes = await db.collection('receipt')
+          .where({ receipt_date: report.related_date })
+          .limit(200)
+          .get()
+        receiptsRes.data.forEach(r => { receiptMap[r.receipt_id] = r })
+        receiptIds = receiptsRes.data.map(r => r.receipt_id)
+      }
       for (let i = 0; i < receiptIds.length; i += 20) {
         const idChunk = receiptIds.slice(i, i + 20)
+        const query = { receipt_id: _.in(idChunk), supplier_id: supplierId }
+        // 多波补结算（_S）若带 settle_item_ids，只展示该波增量行，与补充账单 CSV 一致
+        if (Array.isArray(report.settle_item_ids) && report.settle_item_ids.length) {
+          query._id = _.in(report.settle_item_ids)
+        }
         const itemsRes = await db.collection('receipt_item')
-          .where({ receipt_id: _.in(idChunk), supplier_id: supplierId })
+          .where(query)
           .limit(1000)
           .get()
         itemsRes.data.forEach(item => {
