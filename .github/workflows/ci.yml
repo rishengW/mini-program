@@ -1,0 +1,21 @@
+name: ci
+
+on: [push, pull_request]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 全库 JS 语法检查
+        run: node scripts/lint-check.js
+
+      - name: B6 行为测试集（内存 mock 云环境）
+        run: node tests/run-tests.js
+
+      - name: ESLint（不阻断，报告告警）
+        run: npx --yes eslint@9 . || true

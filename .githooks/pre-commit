@@ -1,0 +1,7 @@
+#!/bin/sh
+# pre-commit 钩子（B6）：提交前做全库语法检查 + 行为测试集。
+# 启用方式（仓库根目录执行一次）：
+#   git config core.hooksPath .githooks
+set -e
+node scripts/lint-check.js
+node tests/run-tests.js

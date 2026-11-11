@@ -127,6 +127,20 @@ seed-data/             初始数据与导入说明（见 seed-data/README.md）
 | `generateSummaryReport` | B11 日/月汇总报表 |
 | `reportMaintenance` | 收货报表版本一次性清理（仅超管；默认 `dryRun` 只读预演，`apply` 才落库；2026-11-09 双计修复配套） |
 
+## 唯一索引与防重（CloudBase 不支持唯一索引）
+
+微信云开发数据库**不支持唯一索引约束**，原计划 B6 的「唯一索引」项已重定义为**应用层防重**，
+现有机制已覆盖各写路径：
+
+| 机制 | 用在哪里 |
+|---|---|
+| 幂等键（`request_id`） | `createPurchaseOrder` 建单（拆单 `:c`/`:m` 子键）、`auditOrder`、报表重出 |
+| CAS 条件更新 | `settle_lock`/`regen_lock` 抢占锁、状态机跃迁、凭证核销、催审限频、异常 start/resolve/close |
+| 计数器 CAS | `report_version_counter` 报表版本取号（读-比-写，`updated===1` 才算抢到） |
+| 名称查重 | 商品 `saveProduct` / `importProducts` 按「名称+厂家」判重（含落库前终查压缩并发窗口） |
+
+唯一性靠「先查条件 + 条件更新 + 幂等键」在应用层保证，不依赖数据库约束。
+
 ## 部署与初始化
 
 1. 微信开发者工具导入项目（`project.config.json`），开通云开发环境。

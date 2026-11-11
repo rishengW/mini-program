@@ -594,3 +594,33 @@ L37（Excel 导入模板）。
   分页骨架、竞态、加载/失败态、装饰逻辑全部收敛到该工具，页面只保留参数组装与业务装饰
 - 验证：6 个文件 `node --check` 通过；编码校验通过。**待真机回归**：五个列表页的
   下拉刷新、上拉翻页、筛选切换、从详情返回（report-history 保留翻页位置）
+
+---
+
+## 2026-11-11 B6 工程化清尾（测试集 + ESLint/CI + 唯一索引重定义）
+
+### 最小测试集（B6-4 五项全部齐备）
+- 新增可追踪 `tests/` 目录（内存 mock 云环境 `tests/mock-cloud.js`，支持事务/上传/下载/CAS）：
+  - `test-receipt-final.js`：createReceipt 分批/并发终态 12 项（非最终批 partial_received +
+    shortage 清零、最终批收齐 received、batch_no/is_final、收齐重复拒）
+  - `test-audit-order.js`：auditOrder 改量对账 13 项（original_order_qty 保留原始量、
+    `_A` 报表重算、超量/0 拒、自审拒、重复审核拒、驳回原因）
+  - `test-summary-report.js`：generateSummaryReport 金额等式 9 项（仅可付款行计入、
+    手动行排除、CSV 合计、幂等复用不重复上传）
+  - `test-verify-manual-order.js`：verifyManualOrder 状态机 13 项（提交→pending→approved/
+    rejected、凭证前缀校验、驳回原因、金额>0、角色分段、幂等防重）
+  - `tests/run-tests.js` 统一入口，全过
+- 既有 `scripts/_tmp_test/`（gitignored）本地回归保持：settle 65 项、构建器 24 项、
+  首页缓存 10 项、查重 6 项、chef 7 项、供应商停用 12 项
+
+### ESLint + pre-commit + CI
+- `package.json`（lint/test 脚本 + eslint devDep）、`eslint.config.js`（ESLint 9 flat）
+- `scripts/lint-check.js`：全库 `node --check`（181 个 JS 文件全过）
+- `.githooks/pre-commit`（`git config core.hooksPath .githooks` 启用）
+- `.github/workflows/ci.yml`：语法检查 + 行为测试集 + ESLint（不阻断）
+
+### 唯一索引重定义
+- CloudBase 不支持唯一索引 → README 增「唯一索引与防重」节，登记应用层防重机制
+  （幂等键 / CAS 条件更新 / 计数器 CAS / 名称查重）
+
+**B6 工程化批次至此完成；B4/B5/B6 全部清尾。**

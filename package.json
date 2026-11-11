@@ -1,0 +1,13 @@
+{
+  "name": "hotel-procurement-miniprogram",
+  "version": "1.0.0",
+  "private": true,
+  "description": "酒店采购管理小程序（微信小程序 + 微信云开发）",
+  "scripts": {
+    "lint": "node scripts/lint-check.js",
+    "test": "node tests/run-tests.js"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0"
+  }
+}
