@@ -13,18 +13,18 @@
 
 .info-label {
   font-size: 24rpx;
-  color: #8C8C8C;
+  color: var(--color-text-tertiary);
   margin-bottom: 4rpx;
 }
 
 .info-value {
   font-size: 28rpx;
-  color: #262626;
+  color: var(--color-text-primary);
 }
 
 .remark-box {
   padding-top: 16rpx;
-  border-top: 1rpx solid #F0F0F0;
+  border-top: 1rpx solid var(--color-divider);
   font-size: 24rpx;
 }
 
@@ -33,7 +33,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 20rpx 0;
-  border-bottom: 1rpx solid #F0F0F0;
+  border-bottom: 1rpx solid var(--color-divider);
 }
 
 .goods-row:last-child {
@@ -51,7 +51,7 @@
 
 .qty-request {
   font-size: 24rpx;
-  color: #8C8C8C;
+  color: var(--color-text-tertiary);
   margin-bottom: 8rpx;
 }
 
@@ -64,16 +64,16 @@
   width: 100rpx;
   height: 56rpx;
   text-align: center;
-  background: #F0F2F5;
+  background: var(--color-bg-grey);
   border-radius: 8rpx;
   font-size: 28rpx;
   font-weight: 600;
-  color: #00873E;
+  color: var(--color-primary);
   margin-left: 8rpx;
 }
 
 .action-card {
-  background: #ffffff;
+  background: var(--color-white);
   border-radius: 16rpx;
   padding: 28rpx;
   box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);

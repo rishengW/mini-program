@@ -8,12 +8,12 @@
 .page-title {
   font-size: 36rpx;
   font-weight: 700;
-  color: #262626;
+  color: var(--color-text-primary);
 }
 
 .page-subtitle {
   font-size: 24rpx;
-  color: #8C8C8C;
+  color: var(--color-text-tertiary);
   margin-top: 8rpx;
 }
 
@@ -22,7 +22,7 @@
 }
 
 .list-item {
-  background: #ffffff;
+  background: var(--color-white);
   border-radius: 16rpx;
   padding: 32rpx;
   margin-bottom: 24rpx;
@@ -32,7 +32,7 @@
 .item-name {
   font-size: 32rpx;
   font-weight: 600;
-  color: #262626;
+  color: var(--color-text-primary);
   margin-bottom: 16rpx;
   display: flex;
   align-items: center;
@@ -40,12 +40,12 @@
 
 .item-meta, .item-sub {
   font-size: 26rpx;
-  color: #595959;
+  color: var(--color-text-secondary);
   margin-bottom: 8rpx;
 }
 
 .item-sub {
-  color: #8C8C8C;
+  color: var(--color-text-tertiary);
   margin-top: 12rpx;
 }
 
@@ -58,18 +58,18 @@
 
 .action-btn {
   font-size: 24rpx;
-  color: #00873E;
+  color: var(--color-primary);
   padding: 8rpx 0;
   white-space: nowrap;
 }
 
 .action-delete {
-  color: #FF4D4F;
+  color: var(--color-danger);
   margin-left: 8rpx;
 }
 
 .action-reset {
-  color: #FA8C16;
+  color: var(--color-accent-orange);
   margin-left: 8rpx;
 }
 
@@ -80,8 +80,8 @@
   width: 100rpx;
   height: 100rpx;
   border-radius: 50%;
-  background: linear-gradient(135deg, #33A862, #00873E);
-  color: #ffffff;
+  background: linear-gradient(135deg, var(--color-primary-light), var(--color-primary));
+  color: var(--color-white);
   font-size: 52rpx;
   display: flex;
   align-items: center;
@@ -105,7 +105,7 @@
 
 .modal-body {
   width: 100%;
-  background: #ffffff;
+  background: var(--color-white);
   border-radius: 32rpx 32rpx 0 0;
   padding: 40rpx 40rpx calc(40rpx + env(safe-area-inset-bottom));
 }
@@ -123,7 +123,7 @@
 
 .reset-target {
   text-align: center;
-  color: #595959;
+  color: var(--color-text-secondary);
   font-size: 26rpx;
   margin: -16rpx 0 32rpx;
 }
@@ -134,14 +134,14 @@
 
 .form-label {
   font-size: 28rpx;
-  color: #595959;
+  color: var(--color-text-secondary);
   margin-bottom: 12rpx;
 }
 
 .form-input {
   width: 100%;
   height: 80rpx;
-  background: #F5F7FA;
+  background: var(--color-bg-page);
   border-radius: 12rpx;
   padding: 0 24rpx;
   box-sizing: border-box;
@@ -151,7 +151,7 @@
 .picker-display {
   display: flex;
   align-items: center;
-  color: #262626;
+  color: var(--color-text-primary);
 }
 
 .btn-group {

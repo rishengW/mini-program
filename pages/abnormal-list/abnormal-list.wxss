@@ -10,16 +10,16 @@
 
 .filter-tab {
   padding: 10rpx 24rpx;
-  background: #ffffff;
+  background: var(--color-white);
   border-radius: 32rpx;
   font-size: 26rpx;
-  color: #595959;
+  color: var(--color-text-secondary);
   box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.04);
 }
 
 .filter-tab-active {
-  background: #00873E;
-  color: #ffffff;
+  background: var(--color-primary);
+  color: var(--color-white);
 }
 
 .abnormal-type {
@@ -33,26 +33,26 @@
   width: 16rpx;
   height: 16rpx;
   border-radius: 50%;
-  background: #BFBFBF;
+  background: var(--color-text-placeholder);
   flex-shrink: 0;
 }
-.type-dot-quality { background: #FF4D4F; }
-.type-dot-shortage { background: #FAAD14; }
-.type-dot-delay { background: #FA8C16; }
-.type-dot-wrong_item { background: #5B8FF9; }
+.type-dot-quality { background: var(--color-danger); }
+.type-dot-shortage { background: var(--color-warning); }
+.type-dot-delay { background: var(--color-accent-orange); }
+.type-dot-wrong_item { background: var(--color-info-blue); }
 .type-name { font-size: 28rpx; font-weight: 600; }
 
 .abnormal-desc {
   margin-top: 12rpx;
   font-size: 26rpx;
-  color: #595959;
+  color: var(--color-text-secondary);
   line-height: 1.6;
 }
 
 .abnormal-meta {
   margin-top: 10rpx;
   font-size: 22rpx;
-  color: #8C8C8C;
+  color: var(--color-text-tertiary);
 }
 
 .dot { margin: 0 8rpx; }
@@ -60,7 +60,7 @@
 .resolution-box {
   margin-top: 12rpx;
   padding: 12rpx 16rpx;
-  background: #F6FFED;
+  background: var(--color-success-bg-alt);
   border-radius: 8rpx;
 }
 
@@ -69,5 +69,5 @@
   justify-content: flex-end;
   margin-top: 16rpx;
   padding-top: 12rpx;
-  border-top: 1rpx solid #F0F0F0;
+  border-top: 1rpx solid var(--color-divider);
 }

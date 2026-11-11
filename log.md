@@ -662,3 +662,17 @@ L8 saveSupplier/createUser 查重、L3 时钟源细节。B4/B5/B6 主体工作�
 - **验证**：`test-report-detail-scope.js` 5 项全过——同日同供应商两张收货单，
   原版⑥只含本单 2 行不混单、`_S` 波次只含 `settle_item_ids` 指定的 1 行
 - **部署**：`getReportDetail` 需重新部署
+
+---
+
+## 2026-11-11 UI 设计令牌治理
+
+- **问题**：`app.wxss` 已定义 16 个 CSS 变量，但 23 个页面 wxss 里有 **254 处硬编码 hex**
+  （去重 32 色），设计令牌形同虚设——改主题色要改几十处
+- **修复**：新增 `scripts/migrate-design-tokens.js` 一键迁移——每个 hex 一对一映射到
+  携带相同色值的变量（**零视觉变化**），23 个页面 wxss 的 254 处硬编码全部替换为 `var()`；
+  新增 22 个语义变量（`--color-white` / `--color-accent-orange` / `--color-success-bg` /
+  `--color-danger-bg` / `--color-border-muted` 等）注入 `app.wxss`，现共 38 个设计令牌单源
+- **验证**：`pages/` 下已无硬编码 hex；182 个 JS 文件语法检查通过
+- **说明**：`.form-input` 被页面 wxss 覆盖属另一类问题（P2-73 已修 store-manage 那处），
+  不在本次范围；深色模式双套变量未做（沿用 `darkmode:false` 声明）

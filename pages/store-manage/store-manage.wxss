@@ -8,12 +8,12 @@
 .page-title {
   font-size: 36rpx;
   font-weight: 700;
-  color: #262626;
+  color: var(--color-text-primary);
 }
 
 .page-subtitle {
   font-size: 24rpx;
-  color: #8C8C8C;
+  color: var(--color-text-tertiary);
   margin-top: 8rpx;
 }
 
@@ -22,7 +22,7 @@
 }
 
 .list-item {
-  background: #ffffff;
+  background: var(--color-white);
   border-radius: 16rpx;
   padding: 32rpx;
   margin-bottom: 24rpx;
@@ -32,7 +32,7 @@
 .item-name {
   font-size: 32rpx;
   font-weight: 600;
-  color: #262626;
+  color: var(--color-text-primary);
   margin-bottom: 16rpx;
   display: flex;
   align-items: center;
@@ -40,13 +40,13 @@
 
 .item-meta {
   font-size: 26rpx;
-  color: #595959;
+  color: var(--color-text-secondary);
   margin-bottom: 8rpx;
 }
 
 .tag-disabled {
-  background: #FFF1F0;
-  color: #FF4D4F;
+  background: var(--color-danger-bg-alt);
+  color: var(--color-danger);
 }
 
 .item-actions {
@@ -58,13 +58,13 @@
 
 .action-btn {
   font-size: 24rpx;
-  color: #00873E;
+  color: var(--color-primary);
   padding: 8rpx 0;
   white-space: nowrap;
 }
 
 .action-delete {
-  color: #FF4D4F;
+  color: var(--color-danger);
   margin-left: 8rpx;
 }
 
@@ -75,8 +75,8 @@
   width: 100rpx;
   height: 100rpx;
   border-radius: 50%;
-  background: linear-gradient(135deg, #33A862, #00873E);
-  color: #ffffff;
+  background: linear-gradient(135deg, var(--color-primary-light), var(--color-primary));
+  color: var(--color-white);
   font-size: 52rpx;
   display: flex;
   align-items: center;
@@ -100,7 +100,7 @@
 
 .modal-body {
   width: 100%;
-  background: #ffffff;
+  background: var(--color-white);
   border-radius: 32rpx 32rpx 0 0;
   padding: 40rpx 40rpx calc(40rpx + env(safe-area-inset-bottom));
 }
@@ -115,11 +115,11 @@
 /* P2-73：删除本地对全局 .form-group/.form-label/.form-input/.btn-group 的静默覆盖（页面 wxss 后加载会压过全局，导致跨页输入框底色不一致），统一走 app.wxss 全局定义 */
 
 .form-static {
-  color: #8C8C8C;
+  color: var(--color-text-tertiary);
 }
 
 .form-hint {
   font-size: 24rpx;
-  color: #8C8C8C;
+  color: var(--color-text-tertiary);
   margin-top: 12rpx;
 }

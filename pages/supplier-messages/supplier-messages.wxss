@@ -10,12 +10,12 @@
 
 .mark-all-read {
   font-size: 24rpx;
-  color: #00873E;
+  color: var(--color-primary);
 }
 
 .msg-item {
   display: flex;
-  background: #ffffff;
+  background: var(--color-white);
   border-radius: 16rpx;
   padding: 24rpx;
   margin-bottom: 12rpx;
@@ -23,7 +23,7 @@
 }
 
 .msg-unread {
-  background: #E9F7EF;
+  background: var(--color-success-bg);
 }
 
 .msg-icon-wrap {
@@ -36,7 +36,7 @@
   width: 72rpx;
   height: 72rpx;
   border-radius: 50%;
-  background: #F0F2F5;
+  background: var(--color-bg-grey);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -49,9 +49,9 @@
   right: 0;
   width: 16rpx;
   height: 16rpx;
-  background: #FF4D4F;
+  background: var(--color-danger);
   border-radius: 50%;
-  border: 2rpx solid #ffffff;
+  border: 2rpx solid var(--color-white);
 }
 
 .msg-content {
@@ -62,7 +62,7 @@
 .msg-title {
   font-size: 28rpx;
   font-weight: 500;
-  color: #262626;
+  color: var(--color-text-primary);
   margin-bottom: 6rpx;
 }
 

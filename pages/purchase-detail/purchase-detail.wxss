@@ -7,14 +7,14 @@
   padding: 40rpx;
   border-radius: 16rpx;
   margin-bottom: 20rpx;
-  color: #ffffff;
+  color: var(--color-white);
 }
 
-.status-bg-grey { background: linear-gradient(135deg, #8C8C8C, #595959); }
-.status-bg-primary { background: linear-gradient(135deg, #33A862, #00873E); }
-.status-bg-warning { background: linear-gradient(135deg, #FFC53D, #FAAD14); }
-.status-bg-success { background: linear-gradient(135deg, #73D13D, #52C41A); }
-.status-bg-danger { background: linear-gradient(135deg, #FF7875, #FF4D4F); }
+.status-bg-grey { background: linear-gradient(135deg, var(--color-text-tertiary), var(--color-text-secondary)); }
+.status-bg-primary { background: linear-gradient(135deg, var(--color-primary-light), var(--color-primary)); }
+.status-bg-warning { background: linear-gradient(135deg, var(--color-warning-light-2), var(--color-warning)); }
+.status-bg-success { background: linear-gradient(135deg, var(--color-success-light), var(--color-success)); }
+.status-bg-danger { background: linear-gradient(135deg, var(--color-danger-light), var(--color-danger)); }
 
 .status-icon {
   font-size: 56rpx;
@@ -46,18 +46,18 @@
 
 .info-label {
   font-size: 24rpx;
-  color: #8C8C8C;
+  color: var(--color-text-tertiary);
   margin-bottom: 6rpx;
 }
 
 .info-value {
   font-size: 28rpx;
-  color: #262626;
+  color: var(--color-text-primary);
 }
 
 .info-remark {
   padding-top: 16rpx;
-  border-top: 1rpx solid #F0F0F0;
+  border-top: 1rpx solid var(--color-divider);
 }
 
 /* 供货商分组头（S6） */
@@ -66,7 +66,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 20rpx 0 12rpx;
-  border-bottom: 1rpx solid #E8E8E8;
+  border-bottom: 1rpx solid var(--color-border);
   margin-bottom: 4rpx;
 }
 
@@ -81,7 +81,7 @@
 .supplier-group-name {
   font-size: 26rpx;
   font-weight: 600;
-  color: #595959;
+  color: var(--color-text-secondary);
 }
 
 /* 商品行 */
@@ -90,7 +90,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 20rpx 0;
-  border-bottom: 1rpx solid #F0F0F0;
+  border-bottom: 1rpx solid var(--color-divider);
 }
 
 .goods-row:last-child {
@@ -113,7 +113,7 @@
 .qty-main {
   font-size: 28rpx;
   font-weight: 600;
-  color: #262626;
+  color: var(--color-text-primary);
 }
 
 .qty-approved {
@@ -126,14 +126,14 @@
   font-size: 18rpx;
   padding: 2rpx 8rpx;
   border-radius: 4rpx;
-  background: #FFF7E6;
-  color: #FAAD14;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
   margin-left: 6rpx;
   vertical-align: middle;
 }
 
 .manual-goods-row {
-  border-left: 4rpx solid #FAAD14;
+  border-left: 4rpx solid var(--color-warning);
   padding-left: 16rpx;
 }
 
@@ -149,7 +149,7 @@
   width: 160rpx;
   height: 160rpx;
   border-radius: 8rpx;
-  border: 1rpx solid #F0F0F0;
+  border: 1rpx solid var(--color-divider);
 }
 
 /* 底部操作 */

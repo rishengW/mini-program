@@ -7,7 +7,7 @@
   background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
   padding: 32rpx;
   border-radius: var(--radius-lg);
-  color: #ffffff;
+  color: var(--color-white);
   margin-bottom: 20rpx;
 }
 /* 门店名与「切换」：门店名可长可短（上限 30 字），必须允许收缩并截断，
@@ -55,7 +55,7 @@
   padding: 0 8rpx;
   border-radius: 15rpx;
   background: var(--color-danger);
-  color: #ffffff;
+  color: var(--color-white);
   font-size: 20rpx;
   line-height: 30rpx;
   text-align: center;
@@ -70,7 +70,7 @@
   margin-bottom: 24rpx;
 }
 .stat-card {
-  background: #ffffff;
+  background: var(--color-white);
   border-radius: 20rpx;
   padding: 40rpx 16rpx 36rpx;
   text-align: center;
@@ -97,7 +97,7 @@
   align-items: center;
   justify-content: center;
   padding: 36rpx 0 32rpx;
-  background: #ffffff;
+  background: var(--color-white);
   border-radius: 20rpx;
   box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.05);
   transition: transform 0.12s ease, opacity 0.12s ease;
@@ -172,7 +172,7 @@
   margin-bottom: 12rpx;
 }
 .form-input {
-  border: 2rpx solid #D9D9D9;
+  border: 2rpx solid var(--color-border-strong);
   border-radius: var(--radius-md);
   padding: 16rpx 20rpx;
   font-size: 28rpx;
@@ -194,5 +194,5 @@
   border-radius: 12rpx;
   font-size: 28rpx;
 }
-.modal-btn-secondary { background: #F5F5F5; color: var(--color-text-secondary); }
-.modal-btn-primary { background: var(--color-primary); color: #ffffff; }
+.modal-btn-secondary { background: var(--color-bg-light); color: var(--color-text-secondary); }
+.modal-btn-primary { background: var(--color-primary); color: var(--color-white); }

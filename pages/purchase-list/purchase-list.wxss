@@ -16,24 +16,24 @@
 
 .filter-tab {
   padding: 16rpx 28rpx;
-  background: #ffffff;
+  background: var(--color-white);
   border-radius: 32rpx;
   font-size: 28rpx;
-  color: #595959;
+  color: var(--color-text-secondary);
   box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
   flex-shrink: 0;
 }
 
 .filter-tab-active {
-  background: #00873E;
-  color: #ffffff;
+  background: var(--color-primary);
+  color: var(--color-white);
 }
 
 .load-more-hint {
   padding: 24rpx 0 32rpx;
   text-align: center;
   font-size: 24rpx;
-  color: #999999;
+  color: var(--color-text-grey);
 }
 
 .item-products {
@@ -46,16 +46,16 @@
 .product-tag {
   display: inline-block;
   padding: 4rpx 14rpx;
-  background: #F0F2F5;
+  background: var(--color-bg-grey);
   border-radius: 6rpx;
   font-size: 22rpx;
-  color: #595959;
+  color: var(--color-text-secondary);
 }
 
 .item-meta {
   margin-top: 12rpx;
   font-size: 24rpx;
-  color: #8C8C8C;
+  color: var(--color-text-tertiary);
 }
 
 .dot {
@@ -65,10 +65,10 @@
 .reject-reason {
   margin-top: 10rpx;
   padding: 12rpx 16rpx;
-  background: #FFF2F0;
+  background: var(--color-danger-bg);
   border-radius: 8rpx;
   font-size: 24rpx;
-  color: #FF4D4F;
+  color: var(--color-danger);
 }
 
 /* 浮动按钮 */
@@ -79,8 +79,8 @@
   width: 100rpx;
   height: 100rpx;
   border-radius: 50%;
-  background: linear-gradient(135deg, #33A862, #00873E);
-  color: #ffffff;
+  background: linear-gradient(135deg, var(--color-primary-light), var(--color-primary));
+  color: var(--color-white);
   font-size: 52rpx;
   display: flex;
   align-items: center;
@@ -93,18 +93,18 @@
 }
 
 .product-tag-manual {
-  background: #FFF7E6;
-  color: #FAAD14;
-  border: 1rpx solid #FFE58F;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  border: 1rpx solid var(--color-warning-lighter);
 }
 
 .manual-count-tag {
   display: inline-block;
   margin-left: 8rpx;
   font-size: 20rpx;
-  color: #FAAD14;
+  color: var(--color-warning);
   padding: 0 8rpx;
-  background: #FFF7E6;
+  background: var(--color-warning-bg);
   border-radius: 4rpx;
 }
 

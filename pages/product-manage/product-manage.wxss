@@ -15,7 +15,7 @@
   padding: 12rpx 24rpx; border-radius: 32rpx; font-size: 24rpx;
   background: var(--color-bg-card); color: var(--color-text-secondary); box-shadow: var(--shadow-card);
 }
-.filter-tab-active { background: var(--color-primary); color: #fff; }
+.filter-tab-active { background: var(--color-primary); color: var(--color-white); }
 
 .item-name { font-size: 30rpx; font-weight: 600; display: flex; align-items: center; }
 .item-meta { font-size: 24rpx; color: var(--color-text-tertiary); margin-top: 8rpx; }
@@ -35,14 +35,14 @@
 .import-lines { max-height: 480rpx; }
 .import-line {
   font-size: 24rpx; color: var(--color-text-secondary);
-  padding: 8rpx 0; border-bottom: 1rpx solid var(--color-border, #eee);
+  padding: 8rpx 0; border-bottom: 1rpx solid var(--color-border, var(--color-border-light));
 }
 
 .fab {
   position: fixed; right: 40rpx; bottom: 120rpx;
   width: 96rpx; height: 96rpx; border-radius: 50%;
   background: linear-gradient(135deg, var(--color-primary-light), var(--color-primary));
-  color: #fff; font-size: 44rpx; display: flex; align-items: center; justify-content: center;
+  color: var(--color-white); font-size: 44rpx; display: flex; align-items: center; justify-content: center;
   box-shadow: var(--shadow-float);
 }
 .fab:active { transform: scale(0.92); }
@@ -54,7 +54,7 @@
 }
 .modal-body {
   width: 100%; max-height: 85vh; padding: 40rpx;
-  background: #fff; border-radius: 24rpx 24rpx 0 0;
+  background: var(--color-white); border-radius: 24rpx 24rpx 0 0;
   overflow-y: auto; box-sizing: border-box;
 }
 .modal-title { font-size: 34rpx; font-weight: 700; margin-bottom: 32rpx; text-align: center; }

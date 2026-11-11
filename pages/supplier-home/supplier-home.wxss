@@ -7,7 +7,7 @@
   border-radius: var(--radius-lg);
   padding: 36rpx 28rpx;
   margin-bottom: 24rpx;
-  color: #ffffff;
+  color: var(--color-white);
 }
 
 .supplier-avatar {
@@ -38,8 +38,8 @@
 .notice-bar {
   display: flex;
   align-items: center;
-  background: #FFF7E6;
-  border: 1rpx solid #FFE7BA;
+  background: var(--color-warning-bg);
+  border: 1rpx solid var(--color-warning-bg-2);
   border-radius: var(--radius-lg);
   padding: 20rpx 24rpx;
   margin-bottom: 24rpx;
@@ -74,8 +74,8 @@
   line-height: 32rpx;
   padding: 0 8rpx;
   border-radius: 16rpx;
-  background: #FF4D4F;
-  color: #ffffff;
+  background: var(--color-danger);
+  color: var(--color-white);
   font-size: 20rpx;
   font-weight: 400;
   text-align: center;

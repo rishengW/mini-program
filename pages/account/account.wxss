@@ -13,8 +13,8 @@
   width: 88rpx;
   height: 88rpx;
   border-radius: 44rpx;
-  background: #E9F7EF;
-  color: #00873E;
+  background: var(--color-success-bg);
+  color: var(--color-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -34,7 +34,7 @@
 
 .account-meta {
   margin-top: 8rpx;
-  color: #8C8C8C;
+  color: var(--color-text-tertiary);
   font-size: 24rpx;
 }
 
@@ -52,7 +52,7 @@
 
 .password-tip {
   margin-top: 20rpx;
-  color: #8C8C8C;
+  color: var(--color-text-tertiary);
   font-size: 22rpx;
   line-height: 1.6;
 }

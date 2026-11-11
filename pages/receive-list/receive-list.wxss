@@ -11,7 +11,7 @@
 .supplier-name {
   font-size: 30rpx;
   font-weight: 600;
-  color: #262626;
+  color: var(--color-text-primary);
 }
 
 .order-no {
@@ -21,7 +21,7 @@
 .order-product {
   padding: 8rpx 0;
   font-size: 26rpx;
-  color: #595959;
+  color: var(--color-text-secondary);
 }
 
 .order-footer {
@@ -31,7 +31,7 @@
 }
 
 .delivery-info {
-  color: #595959;
+  color: var(--color-text-secondary);
 }
 
 .order-amount {
@@ -39,6 +39,6 @@
 }
 
 .receipt-history { margin-top: 24rpx; }
-.receipt-history-item { padding: 16rpx 0; border-bottom: 1rpx solid #F0F0F0; }
+.receipt-history-item { padding: 16rpx 0; border-bottom: 1rpx solid var(--color-divider); }
 .receipt-history-item:last-child { border-bottom: none; }
 .receipt-history-item > view:last-child { margin-top: 6rpx; }

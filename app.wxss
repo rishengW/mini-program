@@ -30,6 +30,32 @@ page {
 
   --shadow-card: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
   --shadow-float: 0 4rpx 20rpx rgba(0, 0, 0, 0.1);
+  /* ===== 设计令牌扩展（UI 治理 2026-11-11，色值与原硬编码一致） ===== */
+  --color-white: #FFFFFF;
+  --color-accent-orange: #FA8C16;
+  --color-success-bg: #E9F7EF;
+  --color-success-bg-alt: #F6FFED;
+  --color-warning-bg: #FFF7E6;
+  --color-danger-bg: #FFF2F0;
+  --color-danger-bg-alt: #FFF1F0;
+  --color-danger-dark: #CF1322;
+  --color-danger-light: #FF7875;
+  --color-danger-lighter: #FFA39E;
+  --color-warning-light: #FFD591;
+  --color-warning-light-2: #FFC53D;
+  --color-warning-lighter: #FFE58F;
+  --color-warning-bg-alt: #FFFBE6;
+  --color-warning-bg-2: #FFE7BA;
+  --color-success-light: #73D13D;
+  --color-info-blue: #5B8FF9;
+  --color-border-strong: #D9D9D9;
+  --color-border-light: #EEEEEE;
+  --color-text-grey: #999999;
+  --color-bg-light: #F5F5F5;
+  /* ===== 设计令牌扩展（UI 治理 2026-11-11，色值与原硬编码一致） ===== */
+  --color-border-muted: #E0E2E5;
+
+
 
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
     'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;

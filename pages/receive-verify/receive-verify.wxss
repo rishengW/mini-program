@@ -6,20 +6,20 @@
 .manual-order-banner {
   margin-top: 16rpx;
   padding: 12rpx 16rpx;
-  background: #FFF7E6;
+  background: var(--color-warning-bg);
   border-radius: 8rpx;
   font-size: 24rpx;
-  color: #FA8C16;
+  color: var(--color-accent-orange);
 }
 
 /* 供应商确认门禁：未确认行的锁定呈现（与手动单提示条同色系，同属"流程阻断"语义） */
 .pending-supplier-banner {
   margin-bottom: 16rpx;
   padding: 12rpx 16rpx;
-  background: #FFF7E6;
+  background: var(--color-warning-bg);
   border-radius: 8rpx;
   font-size: 24rpx;
-  color: #FA8C16;
+  color: var(--color-accent-orange);
 }
 .verify-item-locked .verify-form {
   opacity: 0.45;
@@ -27,7 +27,7 @@
 
 .verify-item {
   padding: 20rpx 0;
-  border-bottom: 1rpx solid #F0F0F0;
+  border-bottom: 1rpx solid var(--color-divider);
 }
 
 .verify-item:last-child { border-bottom: none; }
@@ -54,7 +54,7 @@
 
 .verify-label {
   font-size: 24rpx;
-  color: #8C8C8C;
+  color: var(--color-text-tertiary);
   margin-bottom: 8rpx;
   display: block;
 }
@@ -68,7 +68,7 @@
 .verify-input {
   width: 160rpx;
   height: 64rpx;
-  background: #F0F2F5;
+  background: var(--color-bg-grey);
   border-radius: 8rpx;
   text-align: center;
   font-size: 30rpx;
@@ -77,7 +77,7 @@
 
 .verify-unit {
   font-size: 26rpx;
-  color: #595959;
+  color: var(--color-text-secondary);
 }
 
 .check-group {
@@ -88,23 +88,23 @@
 
 .check-item {
   padding: 8rpx 20rpx;
-  background: #F0F2F5;
+  background: var(--color-bg-grey);
   border-radius: 8rpx;
   font-size: 24rpx;
-  color: #595959;
+  color: var(--color-text-secondary);
   border: 2rpx solid transparent;
 }
 
 .check-active {
-  background: #FFF2F0;
-  color: #FF4D4F;
-  border-color: #FF4D4F;
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  border-color: var(--color-danger);
 }
 
 /* 照片 */
 .photo-hint {
   margin: -8rpx 0 16rpx;
-  color: #8C8C8C;
+  color: var(--color-text-tertiary);
   font-size: 22rpx;
 }
 
@@ -134,7 +134,7 @@
   width: 40rpx;
   height: 40rpx;
   background: rgba(0, 0, 0, 0.5);
-  color: #ffffff;
+  color: var(--color-white);
   font-size: 24rpx;
   display: flex;
   align-items: center;
@@ -145,7 +145,7 @@
 .photo-add {
   width: 200rpx;
   height: 200rpx;
-  border: 2rpx dashed #D9D9D9;
+  border: 2rpx dashed var(--color-border-strong);
   border-radius: 12rpx;
   display: flex;
   flex-direction: column;
@@ -157,7 +157,7 @@
 
 .photo-add-text {
   font-size: 22rpx;
-  color: #8C8C8C;
+  color: var(--color-text-tertiary);
   margin-top: 4rpx;
 }
 

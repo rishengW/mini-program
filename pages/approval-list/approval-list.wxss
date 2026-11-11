@@ -14,13 +14,13 @@
 
 .page-count {
   font-size: 24rpx;
-  color: #8C8C8C;
+  color: var(--color-text-tertiary);
 }
 
 .requester-badge {
   display: inline-block;
-  background: #E9F7EF;
-  color: #00873E;
+  background: var(--color-success-bg);
+  color: var(--color-primary);
   padding: 2rpx 12rpx;
   border-radius: 6rpx;
   font-size: 24rpx;
@@ -37,16 +37,16 @@
 .product-tag {
   display: inline-block;
   padding: 4rpx 14rpx;
-  background: #F0F2F5;
+  background: var(--color-bg-grey);
   border-radius: 6rpx;
   font-size: 22rpx;
-  color: #595959;
+  color: var(--color-text-secondary);
 }
 
 .item-meta {
   margin-top: 12rpx;
   font-size: 24rpx;
-  color: #8C8C8C;
+  color: var(--color-text-tertiary);
 }
 
 .item-actions {
@@ -55,7 +55,7 @@
   gap: 16rpx;
   margin-top: 16rpx;
   padding-top: 16rpx;
-  border-top: 1rpx solid #F0F0F0;
+  border-top: 1rpx solid var(--color-divider);
 }
 
 .manual-badge {
@@ -64,7 +64,7 @@
   padding: 2rpx 12rpx;
   border-radius: 8rpx;
   font-size: 20rpx;
-  color: #FA8C16;
-  border: 1rpx solid #FFD591;
-  background: #FFF7E6;
+  color: var(--color-accent-orange);
+  border: 1rpx solid var(--color-warning-light);
+  background: var(--color-warning-bg);
 }

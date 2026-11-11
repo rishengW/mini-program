@@ -22,7 +22,7 @@
 
 .tab-item-active {
   background: var(--color-primary);
-  color: #ffffff;
+  color: var(--color-white);
   font-weight: 600;
 }
 

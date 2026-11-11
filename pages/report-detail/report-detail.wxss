@@ -4,7 +4,7 @@
   display: flex;
   align-items: center;
   gap: 24rpx;
-  background: #ffffff;
+  background: var(--color-white);
   border-radius: 16rpx;
   padding: 32rpx;
   margin-bottom: 20rpx;
@@ -24,28 +24,28 @@
 .report-type-name {
   font-size: 32rpx;
   font-weight: 600;
-  color: #262626;
+  color: var(--color-text-primary);
   margin-bottom: 6rpx;
 }
 
 .report-scope-info {
   font-size: 26rpx;
-  color: #595959;
+  color: var(--color-text-secondary);
   margin-bottom: 4rpx;
 }
 
 .report-date-info {
   font-size: 24rpx;
-  color: #8C8C8C;
+  color: var(--color-text-tertiary);
 }
 
 /* 表格 */
 .table-header {
   display: flex;
   padding: 16rpx 0;
-  border-bottom: 2rpx solid #E8E8E8;
+  border-bottom: 2rpx solid var(--color-border);
   font-size: 24rpx;
-  color: #8C8C8C;
+  color: var(--color-text-tertiary);
   font-weight: 500;
 }
 
@@ -53,34 +53,34 @@
   display: flex;
   flex-wrap: wrap;
   padding: 20rpx 0;
-  border-bottom: 1rpx solid #F0F0F0;
+  border-bottom: 1rpx solid var(--color-divider);
   font-size: 26rpx;
-  color: #262626;
+  color: var(--color-text-primary);
   align-items: center;
 }
 
 .table-row:last-child { border-bottom: none; }
 
-.row-warning { background: #FFFBE6; margin: 0 -28rpx; padding-left: 28rpx; padding-right: 28rpx; }
+.row-warning { background: var(--color-warning-bg-alt); margin: 0 -28rpx; padding-left: 28rpx; padding-right: 28rpx; }
 
 .table-total {
   display: flex;
   padding: 20rpx 0;
-  border-top: 2rpx solid #E8E8E8;
+  border-top: 2rpx solid var(--color-border);
   font-size: 28rpx;
 }
 
 .report-abnormal-banner {
-  color: #cf1322;
-  background: #fff1f0;
-  border: 1rpx solid #ffa39e;
+  color: var(--color-danger-dark);
+  background: var(--color-danger-bg-alt);
+  border: 1rpx solid var(--color-danger-lighter);
   padding: 16rpx 20rpx;
   margin-bottom: 12rpx;
   font-size: 24rpx;
 }
 
 .col-name { flex: 3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.col-cat { flex: 2; font-size: 24rpx; color: #8C8C8C; }
+.col-cat { flex: 2; font-size: 24rpx; color: var(--color-text-tertiary); }
 .col-unit { flex: 1; text-align: center; }
 .col-qty { flex: 1; text-align: right; }
 .col-num { flex: 1.2; text-align: center; }
@@ -89,7 +89,7 @@
 
 .abnormal-label {
   flex-basis: 100%;
-  color: #cf1322;
+  color: var(--color-danger-dark);
   font-size: 22rpx;
   margin-top: 8rpx;
 }
@@ -98,12 +98,12 @@
 .report-order-link {
   margin-top: 8rpx;
   font-size: 24rpx;
-  color: #00873E;
+  color: var(--color-primary);
 }
 
 /* 供应商报表行级跳转：商品名超链接样式 */
 .link-text {
-  color: #00873E;
+  color: var(--color-primary);
   text-decoration: underline;
 }
 
