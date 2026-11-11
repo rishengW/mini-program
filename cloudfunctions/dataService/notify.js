@@ -101,6 +101,22 @@ async function notifySuppliersNewOrder(order, orderItems) {
       })
     } catch (err) {
       console.error('[dataService] 供货商站内通知写入失败:', supplierId, err)
+      // P2-21（2026-11-11）：通知失败补偿——订单打 notify_failed 标记 + 定向管理员消息，
+      // 复用 missing_reports 补偿模式，避免供货商漏单无人知晓
+      try {
+        await db.collection('purchase_order').doc(order._id).update({
+          data: { notify_failed: true, updated_at: db.serverDate() }
+        })
+        await createMessage({
+          type: 'order',
+          title: '供货商通知失败补偿提醒',
+          content: `采购单 ${order.order_no || order.purchase_order_id} 给「${supplierName}」的站内通知写入失败，请人工补发或电话确认接单。`,
+          bizId: order.purchase_order_id,
+          storeId: order.store_id || ''
+        })
+      } catch (e2) {
+        console.error('[dataService] 通知失败补偿消息也写入失败:', e2)
+      }
     }
     // 微信服务通知：订阅授权次数内推送
     const users = await getSupplierUsers(supplierId)

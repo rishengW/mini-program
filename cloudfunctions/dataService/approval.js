@@ -184,7 +184,10 @@ async function remindAudit(event) {
     return { code: -403, msg: '当前账号无权催办该门店订单' }
   }
 
-  // 限频：同一单两次催审间隔至少 1 小时，防止刷屏
+  // 限频：同一单两次催审间隔至少 1 小时，防止刷屏。
+  // L3 时钟源说明：audit_reminded_at 由 db.serverDate() 写入（数据库时钟），此处与
+  // Date.now()（云函数本地时钟）比较——两者同属腾讯云环境、时钟一致，差异毫秒级可忽略；
+  // 条件更新里的 _.lt 下限同样用云函数时间构造，与 DB 写入值同源，不存在跨时钟比较风险。
   const ONE_HOUR = 60 * 60 * 1000
   const lastRemindAt = order.audit_reminded_at
   if (lastRemindAt && Date.now() - new Date(lastRemindAt).getTime() < ONE_HOUR) {

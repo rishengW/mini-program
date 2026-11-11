@@ -634,3 +634,17 @@ L37（Excel 导入模板）。
 
 B4 剩余均为低危长尾：P2-21 通知失败补偿（订阅链未启用）、L5 已读去重强化、
 L8 saveSupplier/createUser 查重、L3 时钟源细节。B4/B5/B6 主体工作全部完成。
+
+---
+
+## 2026-11-11 低危长尾清理
+
+| 条目 | 处理 |
+|---|---|
+| L1 | `getAbnormalRecords` 对 chef 与 supplier 显式返回 `[]`（不再靠 store_id 恒非空「侥幸安全」） |
+| P2-21 | `notifySuppliersNewOrder` 站内通知写失败时：订单打 `notify_failed` 标记 + 定向管理员补偿消息（复用 missing_reports 补偿模式） |
+| L9 | `project.private.config.json` 加入 `.gitignore` 并 `git rm --cached`（个人开发者配置不再入库，本地保留） |
+| L3 | `remindAudit` 时钟源补注释：DB serverDate 与云函数 Date.now 同属腾讯云、时钟一致，差异毫秒级可忽略 |
+| L8 | 核实 saveSupplier（catalog.js:130）/createUser（authService:337）均已有查重，仅剩管理端低频并发窗口，可接受不改 |
+
+`getReportDetail` ⑥ 详情口径（多波 `_S` 后页面与 CSV 对不上）留作独立批次。

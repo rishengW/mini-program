@@ -11,6 +11,9 @@ seed-data/
 .claude/
 .workbuddy/
 
+# L9：微信开发者工具个人配置（官方建议 gitignore，无密钥但污染协作者环境）
+project.private.config.json
+
 # 系统文件
 .DS_Store
 Thumbs.db

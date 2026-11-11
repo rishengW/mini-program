@@ -20,7 +20,8 @@ const ABNORMAL_STATUS_NAMES = {
 async function getAbnormalRecords(event) {
   const auth = await requireUser(event)
   if (auth.error) return auth.error
-  if (auth.user.role === 'chef') return { code: 0, data: [] }
+  // L1（2026-11-11）：chef 与 supplier 显式无异常查看权限——不再靠 store_id 恒非空「侥幸安全」
+  if (['chef', 'supplier'].includes(auth.user.role)) return { code: 0, data: [] }
 
   const query = {}
   if (!GLOBAL_ROLES.includes(auth.user.role)) query.store_id = auth.user.default_store_id
