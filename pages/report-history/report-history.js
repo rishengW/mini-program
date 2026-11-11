@@ -3,6 +3,7 @@ const meta = require('../../utils/meta')
 const cloud = require('../../utils/cloud')
 const util = require('../../utils/util')
 const authGuard = require('../../utils/auth-guard')
+const { listLifecycle, listFetch, withStatus } = require('../../utils/list-page')
 
 const PAGE_SIZE = 20
 
@@ -69,60 +70,36 @@ Page({
     if (this.data.reports.length === 0) this.reload()
   },
 
-  onPullDownRefresh() {
-    this.reload().finally(() => wx.stopPullDownRefresh())
-  },
+  ...listLifecycle('reports'),
 
-  onReachBottom() {
-    if (this.data.isLoadingMore || !this.data.hasMore) return
-    this.loadReports(this.data.page + 1, true)
-  },
-
-  reload() {
-    this.setData({ page: 1, hasMore: true })
-    return this.loadReports(1, false)
-  },
-
-  async loadReports(page = 1, append = false) {
-    // P2-31：请求序号防竞态——刷新/切筛选后旧请求的后至响应直接丢弃
-    const seq = (this._reqSeq = (this._reqSeq || 0) + 1)
+  // 分页骨架统一走 listFetch（L17/L27）；装饰收敛用 withStatus（L18）
+  async fetchPage(page = 1, append = false) {
     const app = getApp()
     const role = app.globalData.userInfo ? app.globalData.userInfo.role : 'purchaser'
     const storeId = app.globalData.currentStore ? app.globalData.currentStore.storeId : ''
-    if (append) this.setData({ isLoadingMore: true })
-
-    const result = await cloud.callFunction('getReports', {
-      role: role || 'purchaser',
-      storeId: storeId || '',
-      reportScope: this.data.filterScope !== 'all' ? this.data.filterScope : '',
-      reportType: this.data.filterType,
-      relatedDate: this.data.filterDate,
-      page,
-      pageSize: PAGE_SIZE
-    })
-
-    if (seq !== this._reqSeq) return
-    if (result.code === 0) {
-      const newReports = (result.data || []).map(r => {
+    await listFetch(page, this, append, {
+      fetch: () => cloud.callFunction('getReports', {
+        role: role || 'purchaser',
+        storeId: storeId || '',
+        reportScope: this.data.filterScope !== 'all' ? this.data.filterScope : '',
+        reportType: this.data.filterType,
+        relatedDate: this.data.filterDate,
+        page,
+        pageSize: PAGE_SIZE
+      }),
+      decorate: r => {
         const typeInfo = meta.getReportTypeInfo(r.reportType || r.report_type)
-        const nr = cloud.normalizeReport(r)
+        const nr = withStatus(cloud.normalizeReport(r), 'status')
         return {
           ...nr,
           typeLabel: typeInfo.label,
           typeIconClass: typeInfo.iconClass,
-          typeColor: typeInfo.color,
-          // P2-55：报表状态文案走 meta 单源，wxml 不再硬编码 'superseded'
-          statusText: meta.getStatusInfo(nr.status).text,
-          statusType: meta.getStatusInfo(nr.status).type
+          typeColor: typeInfo.color
         }
-      })
-      const reports = append ? this.data.reports.concat(newReports) : newReports
-      const total = Number(result.total) || 0
-      this.setData({ reports, page, hasMore: reports.length < total, isLoadingMore: false })
-    } else {
-      this.setData({ isLoadingMore: false })
-      util.showToast(result.msg || '报表加载失败')
-    }
+      },
+      listKey: 'reports',
+      failMsg: '报表加载失败'
+    })
   },
 
   onScopeChange(e) {

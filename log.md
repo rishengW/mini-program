@@ -581,3 +581,16 @@ L37（Excel 导入模板）。
 | L7 | 核实已被 11-04 幂等防降级覆盖（重复 ship 提前返回，不重复写消息）——无需再改 |
 
 验证：16 个文件 `node --check` 通过；settle 65 项 + chef 7 项回归全过；编码校验通过。
+
+---
+
+## 2026-11-11 B5 重构清尾（L17/L18/L27）
+
+- 新增 `utils/list-page.js` 公共列表骨架：
+  - `listLifecycle(listKey)`：下拉刷新/上拉加载/重载单源，兼容 `hasMore` 与 `loading+total` 两套字段口径
+  - `listFetch(page, self, append, opts)`：竞态序号 + 加载态/失败态 + hasMore/total 维护 + **L27 翻页路径 setData**（`orders[N]=item`，不再整个数组重传）
+  - `withStatus(item, statusField)`：L18 的 normalize + meta 状态平铺组合器
+- 5 个列表页重构：`purchase-list` / `report-list` / `report-history` / `supplier-orders` / `supplier-receipts` 的
+  分页骨架、竞态、加载/失败态、装饰逻辑全部收敛到该工具，页面只保留参数组装与业务装饰
+- 验证：6 个文件 `node --check` 通过；编码校验通过。**待真机回归**：五个列表页的
+  下拉刷新、上拉翻页、筛选切换、从详情返回（report-history 保留翻页位置）

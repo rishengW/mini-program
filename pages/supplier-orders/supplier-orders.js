@@ -3,6 +3,7 @@ const meta = require('../../utils/meta')
 const util = require('../../utils/util')
 const cloud = require('../../utils/cloud')
 const authGuard = require('../../utils/auth-guard')
+const { listLifecycle, listFetch } = require('../../utils/list-page')
 
 // L23：tab 文案收敛到 meta.supplierConfirmMap 单源，不再本地硬编码
 const TABS = ['pending', 'confirmed', 'shipped', 'done', 'all'].map(key => ({
@@ -40,11 +41,7 @@ Page({
     this.reload()
   },
 
-  onReachBottom() {
-    const { orders, total, loading } = this.data
-    if (loading || orders.length >= total) return
-    this.loadOrders(this.data.page + 1, true)
-  },
+  ...listLifecycle('orders'),
 
   switchTab(e) {
     const key = e.currentTarget.dataset.key
@@ -53,31 +50,20 @@ Page({
     this.reload()
   },
 
-  reload() {
-    this.loadOrders(1, false)
-  },
-
-  async loadOrders(page, append) {
-    if (this.data.loading) return
-    this.setData({ loading: true })
-    const res = await cloud.callFunction('getSupplierOrders', {
-      confirmStatus: this.data.activeTab,
-      page,
-      pageSize: this.data.pageSize
-    })
-    this.setData({ loading: false })
-    if (!res || res.code !== 0) {
-      // P2-69：首页加载失败清空旧数据，避免陈旧列表被误认为最新
-      if (page === 1) this.setData({ orders: [], total: 0 })
-      util.showToast((res && res.msg) || '订单加载失败，请稍后重试')
-      return
-    }
-    const orders = (res.data || []).map(order => this.decorateOrder(order))
-    this.setData({
-      orders: append ? this.data.orders.concat(orders) : orders,
-      page,
-      total: res.total || 0,
-      statusCounts: res.statusCounts || {}
+  // 分页骨架统一走 listFetch（L17/L27），保留 loading 重入守卫与 P2-69 首屏失败清空
+  async fetchPage(page, append) {
+    await listFetch(page, this, append, {
+      fetch: () => cloud.callFunction('getSupplierOrders', {
+        confirmStatus: this.data.activeTab,
+        page,
+        pageSize: this.data.pageSize
+      }),
+      decorate: order => this.decorateOrder(order),
+      listKey: 'orders',
+      failMsg: '订单加载失败，请稍后重试',
+      skipIfLoading: true,
+      clearOnFail: true,
+      extraSetData: res => ({ statusCounts: res.statusCounts || {} })
     })
   },
 

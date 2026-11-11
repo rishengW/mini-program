@@ -4,6 +4,8 @@ const meta = require('../../utils/meta')
 const util = require('../../utils/util')
 const cloud = require('../../utils/cloud')
 const authGuard = require('../../utils/auth-guard')
+// B5：分页骨架/竞态/setData 追加收敛到公共列表工具（L17/L27）
+const { listLifecycle, listFetch } = require('../../utils/list-page')
 
 const PAGE_SIZE = 20
 
@@ -38,28 +40,13 @@ Page({
     this.reload()
   },
 
-  onPullDownRefresh() {
-    this.reload().finally(() => wx.stopPullDownRefresh())
-  },
+  ...listLifecycle('orders'),
 
-  onReachBottom() {
-    if (this.data.isLoading || this.data.isLoadingMore || !this.data.hasMore) return
-    this.loadData(this.data.page + 1, true)
-  },
-
-  reload() {
-    this.setData({ page: 1, hasMore: true })
-    return this.loadData(1, false)
-  },
-
-  async loadData(page, append) {
-    // P2-31：请求序号防竞态——刷新/切筛选后旧请求的后至响应直接丢弃，不覆盖新列表
-    const seq = (this._reqSeq = (this._reqSeq || 0) + 1)
+  // 分页骨架（竞态/加载态/失败态/hasMore/setData 追加）统一走 listFetch（L17/L27）
+  async fetchPage(page, append) {
     const app = getApp()
     const user = app.globalData.userInfo || {}
     const store = app.globalData.currentStore || {}
-    this.setData(page === 1 ? { isLoading: true } : { isLoadingMore: true })
-
     const params = {
       role: user.role || 'purchaser',
       storeId: store.storeId || store.id || '',
@@ -70,20 +57,7 @@ Page({
     // 状态过滤下推到服务端，翻页时口径一致
     if (this.data.activeFilter !== 'all') params.orderStatus = this.data.activeFilter
 
-    const result = await cloud.callFunction('getPurchaseOrders', params)
-    if (seq !== this._reqSeq) return
-    if (!result || result.code !== 0) {
-      // 失败态置位，避免页面渲染成"暂无采购申请"误导无数据
-      this.setData({ isLoading: false, isLoadingMore: false, loadFailed: page === 1 })
-      util.showToast((result && result.msg) || '采购订单加载失败，请稍后重试')
-      return
-    }
-    this.setData({ loadFailed: false })
-
-    const newOrders = (result.data || []).map(cloud.normalizePurchaseOrder)
-    const orders = append ? this.data.orders.concat(newOrders) : newOrders
-    const total = Number(result.total) || 0
-    const isGlobal = ['super_admin', 'purchaser'].includes((getApp().globalData.userInfo || {}).role)
+    const isGlobal = ['super_admin', 'purchaser'].includes(user.role)
     const filterTabs = [
       { label: '全部', value: 'all' },
       { label: '草稿', value: 'draft' },
@@ -98,15 +72,14 @@ Page({
     if (isGlobal) {
       filterTabs.push({ label: '待核销', value: 'to_verify' })
     }
-    this.setData({
-      filterTabs,
-      orders,
-      page,
-      hasMore: orders.length < total,
-      isLoading: false,
-      isLoadingMore: false
+    const ok = await listFetch(page, this, append, {
+      fetch: () => cloud.callFunction('getPurchaseOrders', params),
+      decorate: o => cloud.normalizePurchaseOrder(o),
+      listKey: 'orders',
+      failMsg: '采购订单加载失败，请稍后重试',
+      extraSetData: () => ({ filterTabs })
     })
-    this.renderList()
+    if (ok) this.renderList()
   },
 
   switchFilter(e) {
