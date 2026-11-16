@@ -676,3 +676,79 @@ L8 saveSupplier/createUser 查重、L3 时钟源细节。B4/B5/B6 主体工作�
 - **验证**：`pages/` 下已无硬编码 hex；182 个 JS 文件语法检查通过
 - **说明**：`.form-input` 被页面 wxss 覆盖属另一类问题（P2-73 已修 store-manage 那处），
   不在本次范围；深色模式双套变量未做（沿用 `darkmode:false` 声明）
+
+---
+
+## 2026-11-16 修复清单复核（H1/H2/M1~M12/低危批量）
+
+对一份后续修复清单逐项对代码复核，**确认已全部修复**（多数由 2026-11-13 另一会话实现，
+代码内含该日期修复注释）：
+
+| 项 | 复核结论 |
+|---|---|
+| H1 审批静默丢失 | ✅ `approval-list` 已用 `_auditReqIds`（订单+动作对象缓存、成功清键、驳回带 requestId）；后端 `audit_request` 按 request_id 短路 |
+| H2 失败态假空态 | ✅ 多页 `loadFailed` + 失败/加载中/空态三段式 + 重试入口；supplier-messages 同步；相关页 `.json` 均启用下拉刷新 |
+| M1~M12 | ✅ 防重入置位提前+finally、receive-verify 缓存 requestId + createReceipt 按 request_id 查重、onShow 空列表才重拉、renderList 并入 decorate（L27）、store-switch 本店、supplier-manage 门禁、onShow 角色复检、user-manage 含停用、NaN 拦截、index 部分失败容错、首页未读数 unreadCountOnly、receive-verify 重试页 |
+| 低危批量 | ✅ wx:key 真实字段、formatMoney 统一、login 账号 trim、步减口径、L13 死分支清理（5 页）等 |
+
+**说明**：M1 的「恰好 8 处守卫置位提前」与低危「×13 具体清单」未逐条枚举对号，但抽查均符合预期模式；
+其余条目均已直接核实到代码实现。
+
+---
+
+## 2026-11-13 UI 全量评审修复（H1/H2 + M1~M12 + 低危批量）
+
+背景：2026-11-12 三路并行评审 26 个页面（核心业务/列表报表/管理供应商账号），
+逐项核实后于本日修复。**H1/H2 经主审逐行复核确认属实**。
+
+### 高危
+- **H1 审批列表幂等键跨订单复用 → 连续审批第二单被静默吞**：
+  `approval-list` 通过/驳回的 requestId 改为按「订单+动作」缓存（`_auditReqIds[orderId:action]`），
+  成功后删除该键；驳回路径此前完全未传 requestId，一并补齐。后端 `approval.js`
+  按 request_id 单字段查重，原页面级单键会让 B 单命中 A 单的幂等记录短路返回「已通过」
+- **H2 失败态假空态（7 页）**：`listFetch` 仅在页面声明 `loadFailed` 时才置失败态，
+  而 report-list/report-history/supplier-orders/supplier-receipts 未声明，
+  receive-list/abnormal-list/message 各自失败仅 toast——失败全部渲染成「暂无数据」。
+  修复：7 页补 `loadFailed` 声明 + wxml 失败/加载中/空态三段式 + 重试按钮；
+  abnormal-list/message/supplier-messages/supplier-orders/supplier-receipts 五页开启下拉刷新
+
+### 中危（M1~M12）
+- M1 `purchase-detail` 提交审核/复制草稿补防重入（原全页唯二无守卫写路径）
+- M2 收货幂等：前端 receive-verify 缓存 `requestId`（成功含超时恢复后清键），
+  后端 `createReceipt` 入口按 `request_id` 查重短路 + 落库携带——纯异常行（0 实收+异常标记）
+  超时重试不再重复生成收货单/异常记录
+- M3 purchase-list/report-list onShow 改空列表才重拉（与 report-history 同口径，返回保留翻页）
+- M4 store-switch 非全局角色仅可切本人所属门店
+- M5 supplier-manage 补客户端角色门禁；M6 price-manage 角色复检扩展到 onShow；
+  approval-detail 的 onShow 同步补 `requireGlobalRole`
+- M7 user-manage 门店/供应商下拉含停用（超管场景），编辑绑定已停用对象的账号不再卡死
+- M8 purchase-create 手动商品数量 NaN 拦截（`Number.isFinite`）
+- M9 purchase-list 装饰并入 `listFetch.decorate`，删除 renderList 全量重传 filteredList，
+  wxml 改用 orders 单份数据，L27 路径追加真正生效
+- M10 report-history 作用域标签改数据驱动 `filterScopeLabel`（非全局角色下标越界空白必现已修），
+  「共 N 份」改用服务端 total
+- M11 index 四接口部分失败容错：成功区块照常渲染，失败计数/列表沿用旧值
+- M12 首页未读数改 `getMessages({unreadCountOnly:true})` 服务端 count（复用可见范围 query），
+  不再全量拉消息列表；receive-verify 补加载失败态 + retryLoad
+
+### 低危批量
+- 守卫置位统一提前到确认弹窗前 + try/finally 释放：purchase-detail（proxyConfirm/
+  regenerateOrderReports/requestCancel/rejectCancel/cancelOrder）、receive-list
+  （settleReceipt/regenerateReports/repriceReceipt）、supplier-orders doAction、
+  price-manage savePrice/saveNewPrice、message/supplier-messages markAllRead
+- 死代码清理：未使用 `const app = getApp()` ×10（approval-list/detail、purchase-detail、
+  message、supplier-manage、price-manage、user-manage、report-detail）、login 死键
+  `account_history`、index goStatPage abnormal 死分支、report-list 不可达 chef 分支
+- `cloud.normalizePurchaseItem` 的 itemId 兜底 `_id`（手动商品 wx:key 空串重复）；
+  report-detail 汇总块 wx:key 统一 `_key`、失败态隐藏导出按钮
+- 金额格式：price-manage 列表/编辑弹窗、purchase-detail 核销实付统一 `util.formatMoney`
+- 其他：login 账号 trim、purchase-create 步减允许到 0/小数、receive-verify 异常确认文案
+  「第 X 行」歧义修正、product-manage 厂家去掉与校验不符的必填星号、user-manage picker 判空
+
+### 验证与部署
+- `scripts/lint-check.js`：182 个 JS 文件全部通过
+- `tests/run-tests.js`：4 个测试文件全过；`test-receipt-final.js` 新增 M2 三项断言
+  （同 requestId 重发幂等短路 / 不重复生成收货单 / 纯异常行重发不重复生成异常记录）
+- **待部署**：`createReceipt`（request_id 幂等）、`dataService`（getMessages unreadCountOnly）
+  两个云函数需重新部署；全部前端改动随小程序包上传生效（含此前 11-09 待上传项）
+- **待真机回归**：连续审批两单、各列表失败态/下拉刷新、翻页后详情返回、首页部分失败容错
