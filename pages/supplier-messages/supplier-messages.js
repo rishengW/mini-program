@@ -6,7 +6,9 @@ const authGuard = require('../../utils/auth-guard')
 Page({
   data: {
     messages: [],
-    unreadCount: 0
+    unreadCount: 0,
+    loading: false,
+    loadFailed: false
   },
 
   async onShow() {
@@ -22,8 +24,10 @@ Page({
   },
 
   async loadMessages() {
+    this.setData({ loading: true, loadFailed: false })
     const result = await cloud.callFunction('dataService', { action: 'getMessages' })
     if (!result || result.code !== 0) {
+      this.setData({ loading: false, loadFailed: true })
       util.showToast((result && result.msg) || '消息加载失败')
       return
     }
@@ -33,7 +37,12 @@ Page({
       timeAgo: util.getRelativeTime(cloud.formatDateTime(m.time))
     }))
     const unreadCount = messages.filter(m => !m.read).length
-    this.setData({ messages, unreadCount })
+    this.setData({ messages, unreadCount, loading: false })
+  },
+
+  async onPullDownRefresh() {
+    await this.loadMessages()
+    wx.stopPullDownRefresh()
   },
 
   async readMessage(e) {
@@ -58,10 +67,16 @@ Page({
   },
 
   async markAllRead() {
-    const result = await cloud.callFunction('dataService', { action: 'markAllMessagesRead' })
-    if (result.code !== 0) return util.showToast(result.msg || '消息状态更新失败')
-    const messages = this.data.messages.map(m => ({ ...m, read: true }))
-    this.setData({ messages, unreadCount: 0 })
-    util.showSuccess('全部已读')
+    if (this._submitting) return
+    this._submitting = true
+    try {
+      const result = await cloud.callFunction('dataService', { action: 'markAllMessagesRead' })
+      if (result.code !== 0) return util.showToast(result.msg || '消息状态更新失败')
+      const messages = this.data.messages.map(m => ({ ...m, read: true }))
+      this.setData({ messages, unreadCount: 0 })
+      util.showSuccess('全部已读')
+    } finally {
+      this._submitting = false
+    }
   }
 })

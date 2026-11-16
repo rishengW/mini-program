@@ -268,11 +268,13 @@ Page({
     // P2-76（2026-11-10）：分类是必填标记（wxml「分类 *」），补上对应校验
     if (!categoryL1) { util.showToast('请选择分类'); return }
     if (!unit.trim()) { util.showToast('请输入单位'); return }
-    if (!qty || parseFloat(qty) <= 0) { util.showToast('请输入有效数量'); return }
+    // M8（2026-11-13）：NaN 拦截——非数字串此前 parseFloat 得 NaN 且 NaN<=0 为 false 被放行
+    const qtyNum = parseFloat(qty)
+    if (!qty || !Number.isFinite(qtyNum) || qtyNum <= 0) { util.showToast('请输入有效数量'); return }
     const item = {
       tempId: 'MANUAL_' + Date.now(),
       name: name.trim(), categoryL1, unit: unit.trim(),
-      qty: parseFloat(qty), remark: remark.trim(), isManual: true
+      qty: qtyNum, remark: remark.trim(), isManual: true
     }
     const manualItems = [...this.data.manualItems, item]
     this.setData({ manualItems, showManualPopup: false })
@@ -287,8 +289,10 @@ Page({
   },
   decreaseManualQty(e) {
     const idx = e.currentTarget.dataset.index
-    if (this.data.manualItems[idx].qty > 1) {
-      this.setData({ [`manualItems[${idx}].qty`]: this.data.manualItems[idx].qty - 1 })
+    const qty = Number(this.data.manualItems[idx].qty) || 0
+    if (qty > 0) {
+      // 与输入框口径一致：允许减到 0/小数（0.5 → 0），非法数量提交时统一拦截
+      this.setData({ [`manualItems[${idx}].qty`]: Math.max(0, Math.round((qty - 1) * 100) / 100) })
     }
   },
   onManualQtyInput(e) {

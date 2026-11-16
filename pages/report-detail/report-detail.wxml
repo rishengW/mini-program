@@ -125,7 +125,7 @@
         <text class="col-num">实收</text>
         <text class="col-amount">金额</text>
       </view>
-      <view wx:for="{{rows}}" wx:key="productName" class="table-row">
+      <view wx:for="{{rows}}" wx:key="_key" class="table-row">
         <text class="col-name">{{item.productName}}</text>
         <text class="col-cat text-sm">{{item.supplierName}}</text>
         <text class="col-num">{{item.orderQty}}</text>
@@ -148,8 +148,8 @@
     </block>
   </view>
 
-  <!-- 导出按钮 -->
-  <view class="export-section">
+  <!-- 导出按钮（加载失败时隐藏，避免误点后提示与真实失败原因不符） -->
+  <view class="export-section" wx:if="{{!loadFailed}}">
     <button class="btn btn-primary btn-block" bindtap="exportReport">
       <view class="icon icon-sm icon-inline icon-upload-white"></view>导出报表文件
     </button>

@@ -11,16 +11,21 @@ Page({
     filteredList: [],
     records: [],
     // P2-61（2026-11-10）：区分「无异常」与「chef 无权查看异常」的空态文案
-    isChef: false
+    isChef: false,
+    loadFailed: false,
+    loading: false
   },
 
   async onShow() {
     if (!authGuard.requireLogin()) return
     const app = getApp()
+    this.setData({ loading: true, loadFailed: false })
     const result = await cloud.callFunction('dataService', {
       action: 'getAbnormalRecords',
     })
     if (!result || result.code !== 0) {
+      // H2（2026-11-13）：失败置失败态，不再被「暂无异常记录」空态掩盖
+      this.setData({ loading: false, loadFailed: true })
       util.showToast((result && result.msg) || '异常记录加载失败')
       return
     }
@@ -28,8 +33,13 @@ Page({
       ...item,
       createdAt: cloud.formatDateTime(item.createdAt)
     }))
-    this.setData({ records, isChef: (app.globalData.userInfo || {}).role === 'chef' })
+    this.setData({ records, isChef: (app.globalData.userInfo || {}).role === 'chef', loading: false })
     this.applyFilter()
+  },
+
+  async onPullDownRefresh() {
+    await this.onShow()
+    wx.stopPullDownRefresh()
   },
 
   switchFilter(e) {

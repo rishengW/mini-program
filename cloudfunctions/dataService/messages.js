@@ -88,6 +88,14 @@ async function getMessages(event) {
       query = _.and([recipientCondition, notSupplierCondition])
     }
   }
+  // M12（2026-11-13）：首页未读角标只取计数——复用上方同一套可见范围 query，
+  // 不再为算一个未读数全量拉取消息列表（消息积累后每次首页刷新都全量传输）
+  if (event.unreadCountOnly) {
+    const unreadRes = await db.collection('message')
+      .where(_.and([query, { read: _.neq(true) }, { read_by: _.nin([userId]) }]))
+      .count()
+    return { code: 0, data: { unread: unreadRes.total || 0 } }
+  }
   const result = await db.collection('message').where(query).orderBy('created_at', 'desc').limit(100).get()
   const list = result.data.map(message => {
     const readBy = Array.isArray(message.read_by) ? message.read_by : []

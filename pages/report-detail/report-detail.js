@@ -30,7 +30,6 @@ Page({
       return
     }
     const reportId = options.id
-    const app = getApp()
     util.showLoading('加载报表...')
 
     const result = await cloud.callFunction('getReportDetail', {

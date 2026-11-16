@@ -18,7 +18,11 @@ Page({
     reports: [],
     page: 1,
     hasMore: true,
-    isLoadingMore: false
+    isLoadingMore: false,
+    // H2（2026-11-13）：声明 loadFailed 后 listFetch 首屏失败才置失败态，
+    // 否则加载失败被 wxml 的「暂无报表」空态掩盖
+    loadFailed: false,
+    isLoading: false
   },
 
   onShow() {
@@ -29,7 +33,9 @@ Page({
       return
     }
     this.initTabs()
-    this.reload()
+    // M3（2026-11-13）：与 report-history 同口径——仅空列表时加载，
+    // 从详情返回保留翻页位置，不再每次 onShow 全量重拉
+    if (this.data.reports.length === 0) this.reload()
   },
 
   ...listLifecycle('reports'),
@@ -39,10 +45,8 @@ Page({
     const role = (app.globalData.userInfo && app.globalData.userInfo.role) || 'purchaser'
     let tabs = [{ value: 'all', label: '全部', iconBase: 'chart' }]
 
-    if (role === 'chef') {
-      tabs.push({ value: 'store_order_report', label: '下单报表', iconBase: 'clipboard' })
-      this.setData({ showTypeTabs: false, activeType: 'store_order_report' })
-    } else if (role === 'store_manager') {
+    // chef 在 onShow 已被拦截回首页，此处不再保留其不可达分支（2026-11-13 死代码清理）
+    if (role === 'store_manager') {
       tabs.push(
         { value: 'store_order_report', label: '下单报表', iconBase: 'clipboard' },
         { value: 'store_receipt_report', label: '收货报表', iconBase: 'package' },
@@ -96,7 +100,9 @@ Page({
   },
 
   switchType(e) {
-    this.setData({ activeType: e.currentTarget.dataset.value })
+    const value = e.currentTarget.dataset.value
+    if (value === this.data.activeType) return  // 重复点击当前 tab 不重置翻页不重拉
+    this.setData({ activeType: value })
     this.reload()
   },
 

@@ -68,13 +68,18 @@ Page({
       // 语义不同——确认弹窗显式告知，避免用户误以为在列表也能改量
       const confirmed = await util.showConfirm('确认通过该采购申请？\n（列表快速通过不修改数量，需改量请点进详情页）')
       if (!confirmed) return
-      const app = getApp()
-      const requestId = this._auditReqId || (this._auditReqId = 'AUD' + Date.now() + Math.random().toString(36).slice(2, 8))
+      // H1（2026-11-13 修复）：幂等键按「订单+动作」缓存——此前页面级单键跨订单复用且
+      // 成功后不重置，连续审批第二张单会命中第一张的幂等记录被静默吞掉（显示通过实际仍待审）
+      const orderId = e.currentTarget.dataset.id
+      const reqKey = orderId + ':approved'
+      this._auditReqIds = this._auditReqIds || {}
+      const requestId = this._auditReqIds[reqKey] || (this._auditReqIds[reqKey] = 'AUD' + Date.now() + Math.random().toString(36).slice(2, 8))
       const result = await cloud.callFunction('dataService', {
         action: 'auditOrder',
-        orderId: e.currentTarget.dataset.id, status: 'approved', requestId, items: []
+        orderId, status: 'approved', requestId, items: []
       })
       if (result.code === 0) {
+        delete this._auditReqIds[reqKey]
         const warning = result.data && result.data.reportWarning
         if (warning) util.showToast(warning); else util.showSuccess('已通过')
         this.onShow()
@@ -106,12 +111,15 @@ Page({
     try {
       const confirmed = await util.showConfirm('确认驳回该采购申请？')
       if (!confirmed) return
-      const app = getApp()
+      const orderId = e.currentTarget.dataset.id
+      const reqKey = orderId + ':rejected'
+      this._auditReqIds = this._auditReqIds || {}
+      const requestId = this._auditReqIds[reqKey] || (this._auditReqIds[reqKey] = 'AUD' + Date.now() + Math.random().toString(36).slice(2, 8))
       const result = await cloud.callFunction('dataService', {
         action: 'auditOrder',
-        orderId: e.currentTarget.dataset.id, status: 'rejected', auditRemark: remark, items: []
+        orderId, status: 'rejected', auditRemark: remark, requestId, items: []
       })
-      if (result.code === 0) { util.showToast('已驳回'); this.onShow() } else util.showToast(result.msg || '审核失败')
+      if (result.code === 0) { delete this._auditReqIds[reqKey]; util.showToast('已驳回'); this.onShow() } else util.showToast(result.msg || '审核失败')
     } finally {
       this._submitting = false
     }

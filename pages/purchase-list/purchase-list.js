@@ -13,7 +13,6 @@ Page({
   data: {
     activeFilter: 'all',
     filterTabs: [],
-    filteredList: [],
     orders: [],
     isLoading: false,
     isLoadingMore: false,
@@ -36,8 +35,12 @@ Page({
     if (app.globalData.pendingListFilter) {
       this.setData({ activeFilter: app.globalData.pendingListFilter })
       app.globalData.pendingListFilter = ''
+      this.reload()
+      return
     }
-    this.reload()
+    // M3（2026-11-13）：与 report-history 同口径——仅空列表时加载，
+    // 从详情返回保留翻页位置，不再每次 onShow 全量重拉
+    if (this.data.orders.length === 0) this.reload()
   },
 
   ...listLifecycle('orders'),
@@ -72,40 +75,34 @@ Page({
     if (isGlobal) {
       filterTabs.push({ label: '待核销', value: 'to_verify' })
     }
-    const ok = await listFetch(page, this, append, {
+    await listFetch(page, this, append, {
       fetch: () => cloud.callFunction('getPurchaseOrders', params),
-      decorate: o => cloud.normalizePurchaseOrder(o),
+      // M9（2026-11-13）：列表装饰并入 decorate——翻页走 listFetch 路径追加，
+      // 不再 renderList 全量重传 filteredList（orders 单份数据，L27 优化生效）
+      decorate: o => {
+        const order = cloud.normalizePurchaseOrder(o)
+        const statusInfo = meta.getStatusInfo(order.orderStatus)
+        return {
+          ...order,
+          statusText: statusInfo.text,
+          statusType: statusInfo.type,
+          itemCount: order.items.length,
+          manualCount: order.items.filter(i => i.isManual).length,
+          canReceive: user.role !== 'chef' && ['approved', 'report_generated', 'partial_received'].includes(order.orderStatus),
+          timeAgo: util.getRelativeTime(order.createdAt)
+        }
+      },
       listKey: 'orders',
       failMsg: '采购订单加载失败，请稍后重试',
       extraSetData: () => ({ filterTabs })
     })
-    if (ok) this.renderList()
   },
 
   switchFilter(e) {
-    this.setData({ activeFilter: e.currentTarget.dataset.value })
+    const value = e.currentTarget.dataset.value
+    if (value === this.data.activeFilter) return  // 重复点击当前 tab 不重置翻页不重拉
+    this.setData({ activeFilter: value })
     this.reload()
-  },
-
-  renderList() {
-    const currentUser = getApp().globalData.userInfo || {}
-    const canReceiveRole = currentUser.role !== 'chef'
-    const filteredList = this.data.orders.map(o => {
-      const statusInfo = meta.getStatusInfo(o.orderStatus)
-      const manualCount = o.items.filter(i => i.isManual).length
-      // 判断是否可直接收货
-      const canReceive = canReceiveRole && ['approved', 'report_generated', 'partial_received'].includes(o.orderStatus)
-      return {
-        ...o,
-        statusText: statusInfo.text,
-        statusType: statusInfo.type,
-        itemCount: o.items.length,
-        manualCount,
-        canReceive,
-        timeAgo: util.getRelativeTime(o.createdAt)
-      }
-    })
-    this.setData({ filteredList })
   },
 
   goDetail(e) {

@@ -22,7 +22,12 @@
     </block>
   </view>
 
-  <view wx:if="{{items.length === 0 && !loading}}" class="empty-state">
+  <view wx:if="{{loadFailed}}" class="empty-state">
+    <view class="empty-state-icon icon icon-xxl icon-package-grey"></view>
+    <view class="empty-state-text">加载失败，请检查网络后重试</view>
+    <button class="btn btn-primary btn-sm" bindtap="reload" style="margin-top:24rpx;">重新加载</button>
+  </view>
+  <view wx:elif="{{items.length === 0 && !loading}}" class="empty-state">
     <view class="empty-state-icon icon icon-xxl icon-package-grey"></view>
     <view class="empty-state-text">暂无收货记录</view>
   </view>

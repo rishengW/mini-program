@@ -5,7 +5,7 @@ const cloud = require('../../utils/cloud')
 const authGuard = require('../../utils/auth-guard')
 
 Page({
-  data: { orders: [], receipts: [] },
+  data: { orders: [], receipts: [], loadFailed: false },
 
   async onShow() {
     if (!authGuard.requireLogin()) return
@@ -32,10 +32,13 @@ Page({
       ])
     } catch (err) {
       console.error('[receive-list] 数据加载异常:', err)
+      this.setData({ loadFailed: true })
       util.showToast('数据加载失败，请稍后重试')
       return
     }
     if (!result || result.code !== 0) {
+      // H2（2026-11-13）：失败置失败态，不再被「暂无待收货订单」空态掩盖
+      this.setData({ loadFailed: true })
       util.showToast((result && result.msg) || '待收货订单加载失败，请稍后重试')
       return
     }
@@ -57,7 +60,7 @@ Page({
     if (!receiptResult || receiptResult.code !== 0) {
       // 收货记录加载失败时保留旧数据并提示，不渲染成"没有记录"的假空态
       util.showToast((receiptResult && receiptResult.msg) || '收货记录加载失败')
-      this.setData({ orders })
+      this.setData({ orders, loadFailed: false })
       return
     }
     const receipts = (receiptResult.data || []).map(receipt => ({
@@ -82,6 +85,7 @@ Page({
     }))
     this.setData({
       orders, receipts,
+      loadFailed: false,
       canRegenerate: ['purchaser', 'super_admin'].includes(user.role),
       canReprice: ['purchaser', 'super_admin'].includes(user.role),
       // 补结算后端同为 GLOBAL_ROLES 校验，前端补对应标志避免店长看到点了必 403 的入口
@@ -117,23 +121,23 @@ Page({
 
   // B5 异常处理完成后的补结算入口（仅管理员/采购员后端校验）
   async settleReceipt(e) {
-    const receiptId = e.currentTarget.dataset.id
-    if (!receiptId) return
-    const confirmed = await util.showConfirm('确认对该收货单执行补结算？将按当前可付款明细生成补充账单。')
-    if (!confirmed) return
     if (this._submitting) return
     this._submitting = true
-    util.showLoading('补结算中...')
-    const result = await cloud.callFunction('dataService', {
-      action: 'settleReceipt',
-      receiptId
-    })
-    wx.hideLoading()
-    this._submitting = false
-    if (!result || result.code !== 0) {
-      util.showToast((result && result.msg) || '补结算失败')
-      return
-    }
+    try {
+      const receiptId = e.currentTarget.dataset.id
+      if (!receiptId) return
+      const confirmed = await util.showConfirm('确认对该收货单执行补结算？将按当前可付款明细生成补充账单。')
+      if (!confirmed) return
+      util.showLoading('补结算中...')
+      const result = await cloud.callFunction('dataService', {
+        action: 'settleReceipt',
+        receiptId
+      })
+      wx.hideLoading()
+      if (!result || result.code !== 0) {
+        util.showToast((result && result.msg) || '补结算失败')
+        return
+      }
     // 多波补结算（2026-11-09）：区分「出了增量账单 / 全部已在既有账单中 / 有行留待下一波」
     const data = (result && result.data) || {}
     if (data.settledRows > 0 && data.deferredRows > 0) {
@@ -142,55 +146,67 @@ Page({
       util.showSuccess(data.wave ? `补结算完成（第${data.wave}波），已生成补充账单` : '补结算完成，已生成补充账单')
     } else if (data.deferredRows > 0) {
       util.showSuccess(`本波未生成账单，${data.deferredRows} 行待下一波补结算`)
-    } else {
-      util.showSuccess('相关行已在既有账单中计价，已更新结算标记')
+      } else {
+        util.showSuccess('相关行已在既有账单中计价，已更新结算标记')
+      }
+    } finally {
+      wx.hideLoading()
+      this._submitting = false
     }
   },
 
   // 清单 #7：报表生成失败后，管理员手动补生成（后端仅 purchaser/super_admin）
   async regenerateReports(e) {
-    const receiptId = e.currentTarget.dataset.id
-    if (!receiptId) return
-    const confirmed = await util.showConfirm('确认补生成该收货单的全部报表？将按收货明细重新生成四类报表。')
-    if (!confirmed) return
     if (this._submitting) return
     this._submitting = true
-    util.showLoading('补生成中...')
-    const result = await cloud.callFunction('dataService', {
-      action: 'regenerateReceiptReports',
-      receiptId
-    })
-    wx.hideLoading()
-    this._submitting = false
-    if (!result || result.code !== 0) {
-      util.showToast((result && result.msg) || '补生成失败')
-      return
+    try {
+      const receiptId = e.currentTarget.dataset.id
+      if (!receiptId) return
+      const confirmed = await util.showConfirm('确认补生成该收货单的全部报表？将按收货明细重新生成四类报表。')
+      if (!confirmed) return
+      util.showLoading('补生成中...')
+      const result = await cloud.callFunction('dataService', {
+        action: 'regenerateReceiptReports',
+        receiptId
+      })
+      wx.hideLoading()
+      if (!result || result.code !== 0) {
+        util.showToast((result && result.msg) || '补生成失败')
+        return
+      }
+      util.showSuccess('补生成完成')
+      await this.onShow()
+    } finally {
+      wx.hideLoading()
+      this._submitting = false
     }
-    util.showSuccess('补生成完成')
-    await this.onShow()
   },
 
   // #11 拍板（2026-09-24）：补价后补账——按当前协议价刷新缺价行快照并重出账单
   async repriceReceipt(e) {
-    const receiptId = e.currentTarget.dataset.id
-    if (!receiptId) return
-    const confirmed = await util.showConfirm('确认对该收货单执行补价补账？将按当前协议价刷新缺价行并重新生成账单。若商品仍未配价，请先到价格管理页补配。')
-    if (!confirmed) return
     if (this._submitting) return
     this._submitting = true
-    util.showLoading('补价补账中...')
-    const result = await cloud.callFunction('dataService', {
-      action: 'repriceReceipt',
-      receiptId
-    })
-    wx.hideLoading()
-    this._submitting = false
-    if (!result || result.code !== 0) {
-      util.showToast((result && result.msg) || '补价补账失败')
-      return
+    try {
+      const receiptId = e.currentTarget.dataset.id
+      if (!receiptId) return
+      const confirmed = await util.showConfirm('确认对该收货单执行补价补账？将按当前协议价刷新缺价行并重新生成账单。若商品仍未配价，请先到价格管理页补配。')
+      if (!confirmed) return
+      util.showLoading('补价补账中...')
+      const result = await cloud.callFunction('dataService', {
+        action: 'repriceReceipt',
+        receiptId
+      })
+      wx.hideLoading()
+      if (!result || result.code !== 0) {
+        util.showToast((result && result.msg) || '补价补账失败')
+        return
+      }
+      const data = result.data || {}
+      util.showSuccess(data.message || '补价补账完成')
+      await this.onShow()
+    } finally {
+      wx.hideLoading()
+      this._submitting = false
     }
-    const data = result.data || {}
-    util.showSuccess(data.message || '补价补账完成')
-    await this.onShow()
   }
 })

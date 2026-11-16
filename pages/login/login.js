@@ -132,12 +132,14 @@ Page({
 
   async login() {
     const { username, password, selectedRole, isSuperAdminLogin } = this.data
-    if (!username || !password) return util.showToast('请输入账号和密码')
+    // 账号忽略首尾空格（密码不 trim，允许含空格）
+    const account = String(username || '').trim()
+    if (!account || !password) return util.showToast('请输入账号和密码')
 
     util.showLoading('登录中')
     const res = await cloud.callFunction('authService', {
       action: 'login',
-      username,
+      username: account,
       password,
       expectedRole: isSuperAdminLogin ? 'super_admin' : selectedRole
     })
@@ -169,7 +171,6 @@ Page({
     wx.setStorageSync('userInfo', user)
     wx.setStorageSync('authToken', sessionToken)
     wx.setStorageSync('sessionExpiresAt', sessionExpiresAt)
-    wx.removeStorageSync('account_history')
 
     util.showSuccess('登录成功')
     // 供货商没有门店概念，进入独立的供货商门户首页

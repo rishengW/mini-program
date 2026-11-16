@@ -9,7 +9,7 @@
     </view>
   </view>
 
-  <view wx:for="{{filteredList}}" wx:key="purchaseOrderId" class="list-item">
+  <view wx:for="{{orders}}" wx:key="purchaseOrderId" class="list-item">
     <view class="flex-between" bindtap="goDetail" data-id="{{item.purchaseOrderId}}">
       <view class="item-title">{{item.orderDate}} 门店采购</view>
       <view class="tag tag-{{item.statusType}}">{{item.statusText}}</view>
@@ -34,20 +34,20 @@
   </view>
 
   <!-- P2-29：首屏加载中与空态/失败态互斥，不再同时闪现"暂无采购申请" -->
-  <view wx:if="{{isLoading && filteredList.length === 0}}" class="empty-state">
+  <view wx:if="{{isLoading && orders.length === 0}}" class="empty-state">
     <view class="empty-state-text">加载中…</view>
   </view>
   <view wx:elif="{{loadFailed}}" class="empty-state">
     <view class="empty-state-icon icon icon-xxl icon-alert-danger"></view>
     <view class="empty-state-text">加载失败，请下拉重试</view>
   </view>
-  <view wx:elif="{{filteredList.length === 0}}" class="empty-state">
+  <view wx:elif="{{orders.length === 0}}" class="empty-state">
     <view class="empty-state-icon icon icon-xxl icon-clipboard-grey"></view>
     <view class="empty-state-text">暂无采购申请</view>
   </view>
 
   <!-- 分页状态提示：上拉加载中 / 已加载全部 -->
-  <view wx:if="{{filteredList.length > 0 && (isLoadingMore || !hasMore)}}" class="load-more-hint">
+  <view wx:if="{{orders.length > 0 && (isLoadingMore || !hasMore)}}" class="load-more-hint">
     {{isLoadingMore ? '正在加载…' : '没有更多了'}}
   </view>
 

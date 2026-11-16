@@ -128,7 +128,7 @@ function formatDateTime(value) {
 function normalizePurchaseItem(item = {}) {
   return {
     ...item,
-    itemId: item.itemId || item.item_id || '',
+    itemId: item.itemId || item.item_id || item._id || '',
     productId: item.productId || item.product_id || '',
     productNameSnapshot: item.productNameSnapshot || item.product_name_snapshot || item.productName || '',
     categorySnapshot: item.categorySnapshot || item.category_snapshot || '',

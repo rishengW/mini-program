@@ -129,6 +129,16 @@ exports.main = async (event = {}) => {
     if (!purchaseOrderId) {
       return { code: -1, msg: '订单信息缺失，请返回订单列表后重新进入验收' }
     }
+    // M2（2026-11-13）：收货幂等键——同 requestId 重复提交（超时重试/弱网重发）直接短路，
+    // 避免纯异常行（0 实收）绕开超收校验而重复生成收货单与异常记录。
+    // 与 audit_request 同为查重型幂等：防顺序重试；并发双发仍由事务内超收复查兜底
+    const requestId = String(event.requestId || '').trim()
+    if (requestId) {
+      const dupRes = await db.collection('receipt').where({ request_id: requestId }).limit(1).get()
+      if (dupRes.data.length) {
+        return { code: 0, data: { receiptId: dupRes.data[0].receipt_id, idempotent: true, reportsGenerated: 0, reportWarning: '该收货请求此前已提交成功，未重复入库' } }
+      }
+    }
     if (!storeId || !storeName) {
       return { code: -1, msg: '门店信息缺失，请重新登录或切换门店后再试' }
     }
@@ -459,6 +469,7 @@ exports.main = async (event = {}) => {
       await transaction.collection('receipt').add({
         data: {
           receipt_id: receiptId, purchase_order_id: purchaseOrderId,
+          request_id: requestId || '',
           store_id: storeId, store_name: storeName,
           receipt_date: receiptDate,
           // 清单 #16 拍板（2026-09-28）：补录历史收货日期打 backfilled 标记供对账区分

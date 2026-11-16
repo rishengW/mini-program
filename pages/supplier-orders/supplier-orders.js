@@ -20,7 +20,9 @@ Page({
     page: 1,
     pageSize: 20,
     total: 0,
-    loading: false
+    loading: false,
+    // H2（2026-11-13）：声明后 listFetch 首屏失败才置失败态，不再渲染成「暂无相关订单」
+    loadFailed: false
   },
 
   onLoad(options = {}) {
@@ -100,15 +102,19 @@ Page({
   async doAction(orderId, action, successText) {
     if (this._submitting) return
     this._submitting = true
-    util.showLoading('提交中...')
-    const res = await cloud.callFunction('confirmSupplierOrder', { orderId, action })
-    util.hideLoading()
-    this._submitting = false
-    if (res && res.code === 0) {
-      util.showSuccess(successText)
-      this.reload()
-    } else {
-      util.showToast((res && res.msg) || '操作失败，请稍后重试')
+    try {
+      util.showLoading('提交中...')
+      const res = await cloud.callFunction('confirmSupplierOrder', { orderId, action })
+      util.hideLoading()
+      if (res && res.code === 0) {
+        util.showSuccess(successText)
+        this.reload()
+      } else {
+        util.showToast((res && res.msg) || '操作失败，请稍后重试')
+      }
+    } finally {
+      util.hideLoading()
+      this._submitting = false
     }
   }
 })

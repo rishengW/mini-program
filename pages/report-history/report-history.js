@@ -18,6 +18,9 @@ Page({
     page: 1,
     hasMore: true,
     isLoadingMore: false,
+    loadFailed: false,
+    isLoading: false,
+    filterScopeLabel: '全部',
     scopeOptions: [
       { value: 'all', label: '全部' },
       { value: 'store', label: '门店报表' },
@@ -65,6 +68,10 @@ Page({
         patch.filterTypeLabel = '全部类型'
       }
     }
+    // M10（2026-11-13）：作用域标签改数据驱动——非全局角色 scopeOptions 仅 1 项，
+    // wxml 原按硬编码下标 scopeOptions[1] 取值会渲染空白（store_manager 必现）
+    const selectedScope = scopeOptions.find(item => item.value === (patch.filterScope || this.data.filterScope))
+    patch.filterScopeLabel = selectedScope ? selectedScope.label : '全部'
     this.setData(patch)
     // P2-33：仅首次进入加载；从详情页返回时保留翻页位置，不再无条件复位到第 1 页
     if (this.data.reports.length === 0) this.reload()
@@ -103,8 +110,9 @@ Page({
   },
 
   onScopeChange(e) {
-    const scope = this.data.scopeOptions[e.detail.value].value
-    this.setData({ filterScope: scope })
+    const selected = this.data.scopeOptions[e.detail.value]
+    if (!selected || selected.value === this.data.filterScope) return
+    this.setData({ filterScope: selected.value, filterScopeLabel: selected.label })
     this.reload()
   },
 

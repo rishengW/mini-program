@@ -97,23 +97,35 @@ Page({
         cloud.callFunction('dataService', { action: 'getOrderStats', storeId })
       ])
 
-      if (ordersResult.code !== 0 || reportsResult.code !== 0 || messagesResult.code !== 0 || statsResult.code !== 0) {
+      // M11（2026-11-13）：部分失败不再整体丢弃——成功区块照常渲染，
+      // 失败接口对应的计数/列表沿用旧值，仅提示失败部分
+      const failedParts = []
+      if (ordersResult.code !== 0) failedParts.push('最近订单')
+      if (reportsResult.code !== 0) failedParts.push('最近报表')
+      if (messagesResult.code !== 0) failedParts.push('消息')
+      if (statsResult.code !== 0) failedParts.push('统计')
+      if (failedParts.length === 4) {
         util.showToast('首页数据加载失败，请稍后重试')
         return
       }
+      if (failedParts.length) util.showToast(failedParts.join('、') + '加载失败，其余内容已更新')
 
-      const myOrders = (ordersResult.data || []).map(cloud.normalizePurchaseOrder)
-      const myReports = (reportsResult.data || []).map(cloud.normalizeReport)
-      const messages = messagesResult.data || []
+      const myOrders = ordersResult.code === 0 ? (ordersResult.data || []).map(cloud.normalizePurchaseOrder) : null
+      const myReports = reportsResult.code === 0 ? (reportsResult.data || []).map(cloud.normalizeReport) : null
 
       // 统计（全部可点击）：来自服务端聚合，不受分页截断影响
-      const statsData = statsResult.data || {}
-      const pendingOrders = statsData.submitted || 0
-      const pendingReceive = statsData.receivable || 0
-      const completedOrders = statsData.received || 0
+      const statsData = statsResult.code === 0 ? (statsResult.data || {}) : {}
+      const prevStats = this.data.stats || []
+      const prevValue = status => { const s = prevStats.find(x => x.status === status); return s ? s.value : 0 }
+      const pendingOrders = statsResult.code === 0 ? (statsData.submitted || 0) : prevValue('submitted')
+      const pendingReceive = statsResult.code === 0 ? (statsData.receivable || 0) : prevValue('receivable')
+      const completedOrders = statsResult.code === 0 ? (statsData.received || 0) : prevValue('received')
       // 待核销：已收货待核销的手动单，仅管理员可见可点击（清单 #20 催办）
-      const toVerify = statsData.to_verify || 0
-      const unreadMsg = messages.filter(m => !m.read).length
+      const toVerify = statsResult.code === 0 ? (statsData.to_verify || 0) : prevValue('to_verify')
+      // M12：未读数改服务端计数（unreadCountOnly），不再全量拉消息列表
+      const unreadMsg = messagesResult.code === 0
+        ? Number(messagesResult.data && messagesResult.data.unread) || 0
+        : prevValue('message')
 
       const stats = [
         { label: '待处理', value: pendingOrders, iconClass: 'icon-clipboard-warning', status: 'submitted' },
@@ -126,7 +138,7 @@ Page({
       }
 
       // 最近采购单
-      const recentOrders = myOrders.slice(0, 3).map(o => {
+      const recentOrders = myOrders ? myOrders.slice(0, 3).map(o => {
         const statusInfo = meta.getStatusInfo(o.orderStatus)
         return {
           ...o,
@@ -135,13 +147,13 @@ Page({
           itemCount: o.items.length,
           manualCount: o.items.filter(i => i.isManual).length
         }
-      })
+      }) : (this.data.recentOrders || [])
 
       // 最近报表
-      const recentReports = myReports.slice(0, 3).map(r => {
+      const recentReports = myReports ? myReports.slice(0, 3).map(r => {
         const typeInfo = meta.getReportTypeInfo(r.reportType)
         return { ...r, typeLabel: typeInfo.label, typeIconClass: typeInfo.iconClass }
-      })
+      }) : (this.data.recentReports || [])
 
       this.setData({
         storeName: store.storeName || store.name || '未选择门店',
@@ -197,8 +209,6 @@ Page({
     if (status === 'message') {
       // "需关注"显示的是未读消息数，跳消息页（tabBar 页面需用 switchTab）
       wx.switchTab({ url: '/pages/message/message' })
-    } else if (status === 'abnormal') {
-      wx.navigateTo({ url: '/pages/abnormal-list/abnormal-list' })
     } else {
       // purchase-list 是 tabBar 页面，switchTab 不支持 URL 传参，改经全局暂存传递筛选状态
       getApp().globalData.pendingListFilter = status

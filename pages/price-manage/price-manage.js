@@ -33,10 +33,18 @@ Page({
     this._initialSupplierId = options.supplierId || ''
   },
 
-  onShow() { this.loadData() },
+  onShow() {
+    // M6（2026-11-13）：角色复检从 onLoad 扩展到 onShow——角色被降级后返回本页不再放行
+    if (!authGuard.requireLogin()) return
+    if (!['super_admin', 'purchaser'].includes((getApp().globalData.userInfo || {}).role)) {
+      util.showToast('当前角色无权访问价格管理')
+      setTimeout(() => wx.navigateBack(), 800)
+      return
+    }
+    this.loadData()
+  },
 
   async loadData() {
-    const app = getApp()
     const [supplierResult, productResult, priceResult] = await Promise.all([
       cloud.callFunction('getSuppliers', { includeInactive: true }),
       cloud.callFunction('getProducts', { includeInactive: true }),
@@ -58,6 +66,8 @@ Page({
       const supplier = supplierMap[price.supplierId]
       return {
         ...price,
+        // 金额展示统一走 util.formatMoney（¥ + 两位小数），不再 wxml 直接插原始数值
+        priceText: util.formatMoney(price.price),
         productName: product ? product.name : price.productId,
         productUnit: product ? product.unit : '',
         productCategory: product ? ((product.categoryName || product.categoryL1) || '') : '',
@@ -135,45 +145,43 @@ Page({
     if (isNaN(price) || price <= 0) return util.showToast('请输入有效价格')
     if (this._submitting) return
     this._submitting = true
-
-    const app = getApp()
-    const updatedBy = (app.globalData.userInfo && app.globalData.userInfo.name) || ''
-    // #10 拍板（2026-09-24）：收货日价口径——调价波及在途订单，先 dryRun 计数再确认
-    const probe = await cloud.callFunction('updateProductPrice', {
-      supplierId: editItem.supplierId,
-      productId: editItem.productId,
-      newPrice: price,
-      updatedBy,
-      dryRun: true
-    })
-    if (probe.code !== 0) {
-      this._submitting = false
-      return util.showToast(probe.msg || '更新失败')
-    }
-    const affected = (probe.data && probe.data.affectedOrders) || 0
-    if (affected > 0) {
-      const confirmed = await util.showConfirm(`当前有 ${affected} 张在途采购单含此商品，调价后它们将按新价结算。确认调价？`, '调价波及提醒')
-      if (!confirmed) {
-        this._submitting = false
-        return
+    try {
+      const app = getApp()
+      const updatedBy = (app.globalData.userInfo && app.globalData.userInfo.name) || ''
+      // #10 拍板（2026-09-24）：收货日价口径——调价波及在途订单，先 dryRun 计数再确认
+      const probe = await cloud.callFunction('updateProductPrice', {
+        supplierId: editItem.supplierId,
+        productId: editItem.productId,
+        newPrice: price,
+        updatedBy,
+        dryRun: true
+      })
+      if (probe.code !== 0) {
+        return util.showToast(probe.msg || '更新失败')
       }
-    }
+      const affected = (probe.data && probe.data.affectedOrders) || 0
+      if (affected > 0) {
+        const confirmed = await util.showConfirm(`当前有 ${affected} 张在途采购单含此商品，调价后它们将按新价结算。确认调价？`, '调价波及提醒')
+        if (!confirmed) return
+      }
 
-    const result = await cloud.callFunction('updateProductPrice', {
-      supplierId: editItem.supplierId,
-      productId: editItem.productId,
-      newPrice: price,
-      updatedBy
-    })
+      const result = await cloud.callFunction('updateProductPrice', {
+        supplierId: editItem.supplierId,
+        productId: editItem.productId,
+        newPrice: price,
+        updatedBy
+      })
 
-    if (result.code === 0) {
-      util.showToast(affected > 0 ? `价格已更新，${affected} 张在途订单将按新价结算` : '价格已更新', affected > 0 ? 'none' : 'success')
-      this.setData({ showEdit: false })
-      await this.loadData()
-    } else {
-      util.showToast(result.msg || '更新失败')
+      if (result.code === 0) {
+        util.showToast(affected > 0 ? `价格已更新，${affected} 张在途订单将按新价结算` : '价格已更新', affected > 0 ? 'none' : 'success')
+        this.setData({ showEdit: false })
+        await this.loadData()
+      } else {
+        util.showToast(result.msg || '更新失败')
+      }
+    } finally {
+      this._submitting = false
     }
-    this._submitting = false
   },
 
   // ===== 新增价格（首次定价）=====
@@ -212,24 +220,26 @@ Page({
     if (existed) return util.showToast('该供应商已有此商品价格，请在列表中修改')
     if (this._submitting) return
     this._submitting = true
+    try {
+      const app = getApp()
+      const result = await cloud.callFunction('updateProductPrice', {
+        supplierId: addForm.supplierId,
+        productId: addForm.productId,
+        newPrice: price,
+        updatedBy: (app.globalData.userInfo && app.globalData.userInfo.name) || ''
+      })
 
-    const app = getApp()
-    const result = await cloud.callFunction('updateProductPrice', {
-      supplierId: addForm.supplierId,
-      productId: addForm.productId,
-      newPrice: price,
-      updatedBy: (app.globalData.userInfo && app.globalData.userInfo.name) || ''
-    })
-
-    if (result.code === 0) {
-      // 首次定价对在途单是好消息：收货时不再触发 #11 缺价异常，按此价正常结算
-      const affected = (result.data && result.data.affectedOrders) || 0
-      util.showToast(affected > 0 ? `已定价，${affected} 张在途订单收货时将按此价结算` : '价格已添加', affected > 0 ? 'none' : 'success')
-      this.setData({ showAdd: false })
-      await this.loadData()
-    } else {
-      util.showToast(result.msg || '添加失败')
+      if (result.code === 0) {
+        // 首次定价对在途单是好消息：收货时不再触发 #11 缺价异常，按此价正常结算
+        const affected = (result.data && result.data.affectedOrders) || 0
+        util.showToast(affected > 0 ? `已定价，${affected} 张在途订单收货时将按此价结算` : '价格已添加', affected > 0 ? 'none' : 'success')
+        this.setData({ showAdd: false })
+        await this.loadData()
+      } else {
+        util.showToast(result.msg || '添加失败')
+      }
+    } finally {
+      this._submitting = false
     }
-    this._submitting = false
   }
 })

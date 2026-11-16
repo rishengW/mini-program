@@ -40,7 +40,7 @@ Page({
     const currentUser = app.globalData.userInfo || {}
     // S6：供货商确认状态按供货商分组头展示（待确认/已确认/已发货）。
     // 草稿/驳回/作废单供货商不可见或事已结，不打标签；已完结单与供货商端口径一致记 done。
-    const confirmations = result.data.supplier_confirmations || {}
+    const confirmations = (result.data && result.data.supplier_confirmations) || {}
     const showConfirm = !['draft', 'rejected', 'cancelled'].includes(order.orderStatus)
     const isDone = ['received', 'receipt_abnormal', 'completed'].includes(order.orderStatus)
     const confirmStatusOf = supplierId => {
@@ -142,7 +142,7 @@ Page({
     }
     this.setData({
       voucherImages,
-      detail: { ...order, statusText: statusInfo.text, statusType: statusInfo.type },
+      detail: { ...order, statusText: statusInfo.text, statusType: statusInfo.type, verifyAmountText: util.formatMoney(order.verifyAmount) },
       supplierGroups,
       canReceive,
       canEdit,
@@ -164,46 +164,54 @@ Page({
   // 2026-11-04：管理员代供应商确认接单（供应商确认门禁的逃生通道，proxy 留痕）
   async proxyConfirm(e) {
     if (this._submitting) return
-    const { supplierId, supplierName } = e.currentTarget.dataset
-    if (!supplierId) return
-    const confirmed = await util.showConfirm(`以管理员身份代「${supplierName}」确认接单？系统将记录代确认人，该供应商的商品行随即允许收货。`)
-    if (!confirmed) return
     this._submitting = true
-    util.showLoading('代确认中...')
-    const result = await cloud.callFunction('confirmSupplierOrder', {
-      orderId: this.orderId,
-      action: 'confirm',
-      supplierId
-    })
-    util.hideLoading()
-    this._submitting = false
-    if (result && result.code === 0) {
-      util.showSuccess('已代确认接单')
-      this.loadData()
-    } else {
-      util.showToast((result && result.msg) || '代确认失败')
+    try {
+      const { supplierId, supplierName } = e.currentTarget.dataset
+      if (!supplierId) return
+      const confirmed = await util.showConfirm(`以管理员身份代「${supplierName}」确认接单？系统将记录代确认人，该供应商的商品行随即允许收货。`)
+      if (!confirmed) return
+      util.showLoading('代确认中...')
+      const result = await cloud.callFunction('confirmSupplierOrder', {
+        orderId: this.orderId,
+        action: 'confirm',
+        supplierId
+      })
+      util.hideLoading()
+      if (result && result.code === 0) {
+        util.showSuccess('已代确认接单')
+        this.loadData()
+      } else {
+        util.showToast((result && result.msg) || '代确认失败')
+      }
+    } finally {
+      util.hideLoading()
+      this._submitting = false
     }
   },
 
   // 清单 #7 订单侧补救：订货报表生成失败后，管理员手动补生成（后端仅 purchaser/super_admin）
   async regenerateOrderReports() {
-    const confirmed = await util.showConfirm('确认补生成该订单的订货报表？将按订单明细重新生成门店与供应商订货报表。')
-    if (!confirmed) return
     if (this._submitting) return
     this._submitting = true
-    util.showLoading('补生成中...')
-    const result = await cloud.callFunction('dataService', {
-      action: 'regenerateOrderReports',
-      orderId: this.orderId
-    })
-    util.hideLoading()
-    this._submitting = false
-    if (!result || result.code !== 0) {
-      util.showToast((result && result.msg) || '补生成失败')
-      return
+    try {
+      const confirmed = await util.showConfirm('确认补生成该订单的订货报表？将按订单明细重新生成门店与供应商订货报表。')
+      if (!confirmed) return
+      util.showLoading('补生成中...')
+      const result = await cloud.callFunction('dataService', {
+        action: 'regenerateOrderReports',
+        orderId: this.orderId
+      })
+      util.hideLoading()
+      if (!result || result.code !== 0) {
+        util.showToast((result && result.msg) || '补生成失败')
+        return
+      }
+      util.showSuccess('补生成完成')
+      await this.loadData()
+    } finally {
+      util.hideLoading()
+      this._submitting = false
     }
-    util.showSuccess('补生成完成')
-    await this.loadData()
   },
 
   // S9：提交付款凭证（店长/采购员/管理员），上传图片后登记
@@ -325,81 +333,93 @@ Page({
 
   // B8：审批后订单申请取消（采购员/店长发起，管理员确认后作废），需填写原因
   async requestCancel() {
-    const d = this.data.detail
-    if (!d.purchaseOrderId) return
-    const reason = await util.showPrompt('确认申请取消该采购单？申请将通知管理员确认处理。', '请填写取消原因（必填）', '申请取消')
-    if (reason === null) return
-    if (!reason.trim()) {
-      util.showToast('申请取消必须填写原因')
-      return
-    }
     if (this._submitting) return
     this._submitting = true
-    util.showLoading('提交申请中...')
-    const result = await cloud.callFunction('dataService', {
-      action: 'requestCancel',
-      orderId: d.purchaseOrderId,
-      reason: reason.trim()
-    })
-    util.hideLoading()
-    this._submitting = false
-    if (result && result.code === 0) {
-      util.showSuccess('已提交取消申请')
-      this.loadData()
-    } else {
-      util.showToast((result && result.msg) || '申请取消失败')
+    try {
+      const d = this.data.detail
+      if (!d.purchaseOrderId) return
+      const reason = await util.showPrompt('确认申请取消该采购单？申请将通知管理员确认处理。', '请填写取消原因（必填）', '申请取消')
+      if (reason === null) return
+      if (!reason.trim()) {
+        util.showToast('申请取消必须填写原因')
+        return
+      }
+      util.showLoading('提交申请中...')
+      const result = await cloud.callFunction('dataService', {
+        action: 'requestCancel',
+        orderId: d.purchaseOrderId,
+        reason: reason.trim()
+      })
+      util.hideLoading()
+      if (result && result.code === 0) {
+        util.showSuccess('已提交取消申请')
+        this.loadData()
+      } else {
+        util.showToast((result && result.msg) || '申请取消失败')
+      }
+    } finally {
+      util.hideLoading()
+      this._submitting = false
     }
   },
 
   // B8：驳回挂起的取消申请，清除 cancel_requested 标记并通知申请人
   async rejectCancel() {
-    const d = this.data.detail
-    if (!d.purchaseOrderId) return
-    const reason = await util.showPrompt('确认驳回该采购单的取消申请？驳回后订单继续执行。', '请填写驳回原因（选填）', '驳回取消申请')
-    if (reason === null) return
     if (this._submitting) return
     this._submitting = true
-    util.showLoading('提交中...')
-    const result = await cloud.callFunction('dataService', {
-      action: 'rejectCancel',
-      orderId: d.purchaseOrderId,
-      reason: (reason || '').trim()
-    })
-    util.hideLoading()
-    this._submitting = false
-    if (result && result.code === 0) {
-      util.showSuccess('已驳回取消申请')
-      this.loadData()
-    } else {
-      util.showToast((result && result.msg) || '驳回失败')
+    try {
+      const d = this.data.detail
+      if (!d.purchaseOrderId) return
+      const reason = await util.showPrompt('确认驳回该采购单的取消申请？驳回后订单继续执行。', '请填写驳回原因（选填）', '驳回取消申请')
+      if (reason === null) return
+      util.showLoading('提交中...')
+      const result = await cloud.callFunction('dataService', {
+        action: 'rejectCancel',
+        orderId: d.purchaseOrderId,
+        reason: (reason || '').trim()
+      })
+      util.hideLoading()
+      if (result && result.code === 0) {
+        util.showSuccess('已驳回取消申请')
+        this.loadData()
+      } else {
+        util.showToast((result && result.msg) || '驳回失败')
+      }
+    } finally {
+      util.hideLoading()
+      this._submitting = false
     }
   },
 
   // B8：作废已提交订单（仅审批前），需填写原因并线下通知供应商
   async cancelOrder() {
-    const d = this.data.detail
-    if (!d.purchaseOrderId) return
-    const reason = await util.showPrompt('确认作废该采购单？请先线下通知供应商停止备货。', '请填写作废原因（必填）', '管理员作废')
-    if (reason === null) return
-    if (!reason.trim()) {
-      util.showToast('作废必须填写原因')
-      return
-    }
     if (this._submitting) return
     this._submitting = true
-    util.showLoading('作废中...')
-    const result = await cloud.callFunction('dataService', {
-      action: 'cancelOrder',
-      orderId: d.purchaseOrderId,
-      reason: reason.trim()
-    })
-    util.hideLoading()
-    this._submitting = false
-    if (result && result.code === 0) {
-      util.showSuccess('已作废')
-      this.loadData()
-    } else {
-      util.showToast((result && result.msg) || '作废失败')
+    try {
+      const d = this.data.detail
+      if (!d.purchaseOrderId) return
+      const reason = await util.showPrompt('确认作废该采购单？请先线下通知供应商停止备货。', '请填写作废原因（必填）', '管理员作废')
+      if (reason === null) return
+      if (!reason.trim()) {
+        util.showToast('作废必须填写原因')
+        return
+      }
+      util.showLoading('作废中...')
+      const result = await cloud.callFunction('dataService', {
+        action: 'cancelOrder',
+        orderId: d.purchaseOrderId,
+        reason: reason.trim()
+      })
+      util.hideLoading()
+      if (result && result.code === 0) {
+        util.showSuccess('已作废')
+        this.loadData()
+      } else {
+        util.showToast((result && result.msg) || '作废失败')
+      }
+    } finally {
+      util.hideLoading()
+      this._submitting = false
     }
   },
 
@@ -421,77 +441,92 @@ Page({
 
   // 驳回单复制为新草稿：原单保留不动，新开一张草稿供修改后重提（B7）
   async copyToDraft() {
-    const d = this.data.detail
-    if (!d.purchaseOrderId) return
-    const confirmed = await util.showConfirm('将按原单内容复制一张新草稿，原驳回单保留不变。继续？')
-    if (!confirmed) return
-    const items = (d.items || []).map(item => ({
-      productId: item.productId,
-      productName: item.productNameSnapshot,
-      category: item.categorySnapshot,
-      unit: item.unitSnapshot,
-      supplierId: item.supplierId || null,
-      orderQty: item.orderQty,
-      isManual: !!item.isManual,
-      remark: item.remark || ''
-    }))
-    util.showLoading('复制中...')
-    const result = await cloud.callFunction('createPurchaseOrder', {
-      storeId: d.storeId,
-      storeName: d.storeName,
-      orderDate: util.formatDate(new Date()),
-      deliveryDate: d.deliveryDate || util.formatDate(new Date()),
-      items,
-      remark: d.remark || '',
-      orderStatus: 'draft',
-      // 幂等键：超时重试/双击时服务端按此去重，防止重复建单
-      requestId: this._genRequestId('copy')
-    })
-    util.hideLoading()
-    if (result && result.code === 0) {
-      util.showSuccess('已复制为新草稿')
-      setTimeout(() => wx.navigateTo({ url: '/pages/purchase-create/purchase-create?orderId=' + (result.data && result.data.orderId) }), 800)
-    } else {
-      util.showToast((result && result.msg) || '复制失败')
+    // M1（2026-11-13）：本页唯二缺防重入的写路径之一，补齐守卫（置位早于确认弹窗）
+    if (this._submitting) return
+    this._submitting = true
+    try {
+      const d = this.data.detail
+      if (!d.purchaseOrderId) return
+      const confirmed = await util.showConfirm('将按原单内容复制一张新草稿，原驳回单保留不变。继续？')
+      if (!confirmed) return
+      const items = (d.items || []).map(item => ({
+        productId: item.productId,
+        productName: item.productNameSnapshot,
+        category: item.categorySnapshot,
+        unit: item.unitSnapshot,
+        supplierId: item.supplierId || null,
+        orderQty: item.orderQty,
+        isManual: !!item.isManual,
+        remark: item.remark || ''
+      }))
+      util.showLoading('复制中...')
+      const result = await cloud.callFunction('createPurchaseOrder', {
+        storeId: d.storeId,
+        storeName: d.storeName,
+        orderDate: util.formatDate(new Date()),
+        deliveryDate: d.deliveryDate || util.formatDate(new Date()),
+        items,
+        remark: d.remark || '',
+        orderStatus: 'draft',
+        // 幂等键：超时重试/双击时服务端按此去重，防止重复建单
+        requestId: this._genRequestId('copy')
+      })
+      util.hideLoading()
+      if (result && result.code === 0) {
+        util.showSuccess('已复制为新草稿')
+        setTimeout(() => wx.navigateTo({ url: '/pages/purchase-create/purchase-create?orderId=' + (result.data && result.data.orderId) }), 800)
+      } else {
+        util.showToast((result && result.msg) || '复制失败')
+      }
+    } finally {
+      util.hideLoading()
+      this._submitting = false
     }
   },
 
   async submitRequest() {
-    const confirmed = await util.showConfirm('确认提交审核？')
-    if (!confirmed) return
-    const d = this.data.detail
-    const items = (d.items || []).map(item => ({
-      productId: item.productId,
-      productName: item.productNameSnapshot,
-      category: item.categorySnapshot,
-      unit: item.unitSnapshot,
-      supplierId: item.supplierId || null,
-      orderQty: item.orderQty,
-      isManual: !!item.isManual,
-      remark: item.remark || ''
-    }))
-    util.showLoading('提交中...')
-    const app = getApp()
-    const result = await cloud.callFunction('createPurchaseOrder', {
-      orderId: d.purchaseOrderId,
-      storeId: d.storeId,
-      storeName: d.storeName,
-      orderDate: d.orderDate,
-      deliveryDate: d.deliveryDate,
-      createdBy: d.createdById,
-      createdByName: d.createdBy,
-      items,
-      remark: d.remark || '',
-      orderStatus: 'submitted',
-      // 幂等键：超时重试/双击时服务端按此去重，防止重复提交
-      requestId: this._genRequestId('submit')
-    })
-    util.hideLoading()
-    if (result && result.code === 0) {
-      util.showSuccess('已提交审核')
-      setTimeout(() => wx.navigateBack(), 1000)
-    } else {
-      util.showToast((result && result.msg) || '提交审核失败')
+    // M1（2026-11-13）：补防重入守卫（置位早于确认弹窗），try/finally 释放
+    if (this._submitting) return
+    this._submitting = true
+    try {
+      const confirmed = await util.showConfirm('确认提交审核？')
+      if (!confirmed) return
+      const d = this.data.detail
+      const items = (d.items || []).map(item => ({
+        productId: item.productId,
+        productName: item.productNameSnapshot,
+        category: item.categorySnapshot,
+        unit: item.unitSnapshot,
+        supplierId: item.supplierId || null,
+        orderQty: item.orderQty,
+        isManual: !!item.isManual,
+        remark: item.remark || ''
+      }))
+      util.showLoading('提交中...')
+      const result = await cloud.callFunction('createPurchaseOrder', {
+        orderId: d.purchaseOrderId,
+        storeId: d.storeId,
+        storeName: d.storeName,
+        orderDate: d.orderDate,
+        deliveryDate: d.deliveryDate,
+        createdBy: d.createdById,
+        createdByName: d.createdBy,
+        items,
+        remark: d.remark || '',
+        orderStatus: 'submitted',
+        // 幂等键：超时重试/双击时服务端按此去重，防止重复提交
+        requestId: this._genRequestId('submit')
+      })
+      util.hideLoading()
+      if (result && result.code === 0) {
+        util.showSuccess('已提交审核')
+        setTimeout(() => wx.navigateBack(), 1000)
+      } else {
+        util.showToast((result && result.msg) || '提交审核失败')
+      }
+    } finally {
+      util.hideLoading()
+      this._submitting = false
     }
   },
 

@@ -24,7 +24,12 @@
     </view>
   </view>
 
-  <view wx:if="{{orders.length === 0}}" class="empty-state">
+  <view wx:if="{{loadFailed}}" class="empty-state">
+    <view class="empty-state-icon icon icon-xxl icon-package-grey"></view>
+    <view class="empty-state-text">加载失败，请检查网络后重试</view>
+    <button class="btn btn-primary btn-sm" bindtap="onShow" style="margin-top:24rpx;">重新加载</button>
+  </view>
+  <view wx:elif="{{orders.length === 0}}" class="empty-state">
     <view class="empty-state-icon icon icon-xxl icon-package-grey"></view>
     <view class="empty-state-text">暂无待收货订单</view>
   </view>

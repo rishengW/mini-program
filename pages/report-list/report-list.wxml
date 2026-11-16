@@ -56,8 +56,21 @@
     </view>
   </view>
 
-  <view wx:if="{{reports.length === 0}}" class="empty-state">
+  <view wx:if="{{loadFailed}}" class="empty-state">
+    <view class="empty-state-icon icon icon-xxl icon-chart-grey"></view>
+    <view class="empty-state-text">加载失败，请检查网络后重试</view>
+    <button class="btn btn-primary btn-sm" bindtap="reload" style="margin-top:24rpx;">重新加载</button>
+  </view>
+  <view wx:elif="{{isLoading && reports.length === 0}}" class="empty-state">
+    <view class="empty-state-text">加载中...</view>
+  </view>
+  <view wx:elif="{{reports.length === 0}}" class="empty-state">
     <view class="empty-state-icon icon icon-xxl icon-chart-grey"></view>
     <view class="empty-state-text">暂无报表</view>
+  </view>
+  <view wx:if="{{reports.length > 0}}" class="empty-state-text" style="text-align:center;padding:24rpx 0;">
+    <text wx:if="{{isLoadingMore}}">加载中...</text>
+    <text wx:elif="{{!hasMore}}">没有更多了</text>
+    <text wx:else>上拉加载更多</text>
   </view>
 </view>

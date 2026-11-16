@@ -1,5 +1,5 @@
 <!-- pages/receive-verify/receive-verify.wxml -->
-<view class="container">
+<view class="container" wx:if="{{!loadFailed}}">
   <!-- 订单信息 -->
   <view class="card">
     <view class="flex-between">
@@ -95,4 +95,11 @@
   <view class="submit-bar">
     <button class="btn btn-primary btn-block" loading="{{isSubmitting}}" disabled="{{isSubmitting}}" bindtap="submitReceipt">提交验收</button>
   </view>
+</view>
+
+<!-- 加载失败态（M6）：表单隐藏，提供重试入口 -->
+<view wx:if="{{loadFailed}}" class="empty-state" style="padding-top:200rpx;">
+  <view class="empty-state-icon icon icon-xxl icon-package-grey"></view>
+  <view class="empty-state-text">订单加载失败，请检查网络后重试</view>
+  <button class="btn btn-primary btn-sm" bindtap="retryLoad" style="margin-top:24rpx;">重新加载</button>
 </view>

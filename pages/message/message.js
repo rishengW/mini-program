@@ -6,16 +6,20 @@ const authGuard = require('../../utils/auth-guard')
 Page({
     data: {
         messages: [],
-        unreadCount: 0
+        unreadCount: 0,
+        loading: false,
+        loadFailed: false
     },
 
     async onShow() {
         if (!authGuard.requireLogin()) return
-        const app = getApp()
+        this.setData({ loading: true, loadFailed: false })
         const result = await cloud.callFunction('dataService', {
             action: 'getMessages',
         })
         if (!result || result.code !== 0) {
+            // H2（2026-11-13）：失败置失败态，不再被「暂无消息」空态掩盖
+            this.setData({ loading: false, loadFailed: true })
             util.showToast((result && result.msg) || '消息加载失败')
             return
         }
@@ -25,7 +29,12 @@ Page({
             timeAgo: util.getRelativeTime(cloud.formatDateTime(m.time))
         }))
         const unreadCount = messages.filter(m => !m.read).length
-        this.setData({ messages, unreadCount })
+        this.setData({ messages, unreadCount, loading: false })
+    },
+
+    async onPullDownRefresh() {
+        await this.onShow()
+        wx.stopPullDownRefresh()
     },
 
     async readMessage(e) {
@@ -34,7 +43,6 @@ Page({
         if (idx < 0) return
         const message = this.data.messages[idx]
         if (!message.read) {
-            const app = getApp()
             const result = await cloud.callFunction('dataService', {
                 action: 'markMessageRead',
                 id
@@ -84,17 +92,22 @@ Page({
     },
 
     async markAllRead() {
-        const app = getApp()
-        const result = await cloud.callFunction('dataService', {
-            action: 'markAllMessagesRead',
-        })
-        if (result.code !== 0) return util.showToast(result.msg || '消息状态更新失败')
-        // L28：与 readMessage 同款的 path 局部更新，不再 map 全量重建长列表
-        const update = { unreadCount: 0 }
-        this.data.messages.forEach((m, i) => {
-            if (!m.read) update[`messages[${i}].read`] = true
-        })
-        this.setData(update)
-        util.showSuccess('全部已读')
+        if (this._submitting) return
+        this._submitting = true
+        try {
+            const result = await cloud.callFunction('dataService', {
+                action: 'markAllMessagesRead',
+            })
+            if (result.code !== 0) return util.showToast(result.msg || '消息状态更新失败')
+            // L28：与 readMessage 同款的 path 局部更新，不再 map 全量重建长列表
+            const update = { unreadCount: 0 }
+            this.data.messages.forEach((m, i) => {
+                if (!m.read) update[`messages[${i}].read`] = true
+            })
+            this.setData(update)
+            util.showSuccess('全部已读')
+        } finally {
+            this._submitting = false
+        }
     }
 })

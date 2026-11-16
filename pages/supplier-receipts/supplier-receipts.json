@@ -1,5 +1,6 @@
 {
   "navigationBarTitleText": "收货记录",
   "usingComponents": {},
-  "onReachBottomDistance": 50
+  "onReachBottomDistance": 50,
+  "enablePullDownRefresh": true
 }

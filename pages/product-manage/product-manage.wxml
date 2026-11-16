@@ -107,7 +107,7 @@
       </view>
 
       <view class="form-group">
-        <view class="form-label">厂家/品牌 *</view>
+        <view class="form-label">厂家/品牌</view>
         <input class="form-input" placeholder="如无则填默认" value="{{form.manufacturerName}}" bindinput="onFormInput" data-field="manufacturerName" />
       </view>
 

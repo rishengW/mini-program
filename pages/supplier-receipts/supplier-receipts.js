@@ -11,7 +11,8 @@ Page({
     page: 1,
     pageSize: 20,
     total: 0,
-    loading: false
+    loading: false,
+    loadFailed: false
   },
 
   onShow() {

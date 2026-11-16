@@ -20,7 +20,15 @@
     </view>
   </view>
 
-  <view wx:if="{{messages.length === 0}}" class="empty-state">
+  <view wx:if="{{loadFailed}}" class="empty-state">
+    <view class="empty-state-icon icon icon-xxl icon-chat-grey"></view>
+    <view class="empty-state-text">加载失败，请检查网络后重试</view>
+    <button class="btn btn-primary btn-sm" bindtap="loadMessages" style="margin-top:24rpx;">重新加载</button>
+  </view>
+  <view wx:elif="{{loading && messages.length === 0}}" class="empty-state">
+    <view class="empty-state-text">加载中...</view>
+  </view>
+  <view wx:elif="{{messages.length === 0}}" class="empty-state">
     <view class="empty-state-icon icon icon-xxl icon-chat-grey"></view>
     <view class="empty-state-text">暂无消息</view>
   </view>

@@ -14,11 +14,16 @@ Page({
 
   onShow() {
     if (!authGuard.requireLogin()) return
+    // M5（2026-11-13）：与 user/store/product/price-manage 同口径的客户端角色门禁
+    if (!['super_admin', 'purchaser'].includes((getApp().globalData.userInfo || {}).role)) {
+      util.showToast('当前角色无权访问供应商管理')
+      setTimeout(() => wx.navigateBack(), 800)
+      return
+    }
     this.loadData()
   },
 
   async loadData() {
-    const app = getApp()
     const result = await cloud.callFunction('getSuppliers', {
       includeInactive: true,
     })

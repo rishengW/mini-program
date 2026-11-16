@@ -45,12 +45,18 @@ Page({
     items: [],
     photos: [],
     overallRemark: '',
-    isSubmitting: false
+    isSubmitting: false,
+    loadFailed: false
   },
 
   // L14（2026-11-10）：登录守卫扩展到 onShow——会话中途失效时返回本页也会被拦截
   onShow() {
     if (!authGuard.requireLogin()) return
+  },
+
+  // M6（2026-11-13）：加载失败重试入口——此前失败仅 toast，页面空白无恢复入口
+  retryLoad() {
+    this.onLoad({ orderId: this._orderId })
   },
 
   async onLoad(options = {}) {
@@ -64,6 +70,7 @@ Page({
       return
     }
     const id = options.orderId || options.id
+    this._orderId = id
     if (!id) {
       util.showToast('未获取到采购订单，请返回后重试')
       return
@@ -75,9 +82,11 @@ Page({
     })
     util.hideLoading()
     if (!result || result.code !== 0) {
+      this.setData({ loadFailed: true })
       util.showToast((result && result.msg) || '采购订单加载失败，请稍后重试')
       return
     }
+    this.setData({ loadFailed: false })
     const order = cloud.normalizePurchaseOrder(result.data)
     if (!Array.isArray(order.items) || order.items.length === 0) {
       util.showToast('订单中没有可验收的商品，请返回后重试')
@@ -208,7 +217,7 @@ Page({
 
     const hasAbnormal = submitItems.some(i => i.isShortage || i.isQualityIssue || i.isWrongItem)
     const receivedLines = submitItems.filter(i => i.receivedQty > 0).length
-    const msg = hasAbnormal ? `本次验收有异常标记，确认提交第${receivedLines}行实收数量？` : `分批收货：本次实收${receivedLines}行，确认提交？`
+    const msg = hasAbnormal ? `本次验收有异常标记，实收${receivedLines}行，确认提交？` : `分批收货：本次实收${receivedLines}行，确认提交？`
     // 先置位再弹确认框，避免弹窗期间双击并发提交
     this.setData({ isSubmitting: true })
     const confirmed = await util.showConfirm(msg)
@@ -219,10 +228,14 @@ Page({
 
     util.showLoading('提交中...')
 
+    // M2（2026-11-13）：收货幂等键——同一次提交的超时重试/弱网重发复用同一键，
+    // 服务端按 request_id 去重；成功（含超时恢复确认已入库）后清除，下一批次生成新键
+    const requestId = this._receiptReqId || (this._receiptReqId = 'RCPT' + Date.now() + Math.random().toString(36).slice(2, 8))
     let result
     try {
       const photoFileIds = await cloud.uploadReceiptPhotos(photos, order.purchaseOrderId)
       result = await cloud.callFunction('createReceipt', {
+        requestId,
         purchaseOrderId: order.purchaseOrderId,
         storeId,
         storeName,
@@ -271,6 +284,7 @@ Page({
     }
 
     if (result && result.code === 0) {
+      this._receiptReqId = ''  // 成功（含超时恢复确认已入库）后清键，下一批次用新键
       const reportsGenerated = result.data.reportsGenerated || 0
       const hasReportWarning = !!result.data.reportWarning
       const hasAbnormal = !!result.data.hasAbnormal

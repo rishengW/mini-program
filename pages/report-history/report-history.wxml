@@ -2,14 +2,14 @@
 <view class="container">
   <view class="page-header">
     <view class="page-title">历史报表</view>
-    <view class="page-subtitle">共 {{reports.length}} 份报表</view>
+    <view class="page-subtitle">共 {{total}} 份报表</view>
   </view>
 
   <!-- 筛选区 -->
   <view class="filter-section">
     <view class="filter-row">
       <picker range="{{scopeOptions}}" range-key="label" bindchange="onScopeChange" style="flex:1;">
-        <view class="filter-picker"><view class="icon icon-sm icon-inline icon-folder-grey"></view>{{scopeOptions[filterScope === 'all' ? 0 : (filterScope === 'store' ? 1 : 2)].label}} ▾</view>
+        <view class="filter-picker"><view class="icon icon-sm icon-inline icon-folder-grey"></view>{{filterScopeLabel}} ▾</view>
       </picker>
       <picker range="{{reportTypeOptions}}" range-key="label" bindchange="onTypeChange" style="flex:1;">
         <view class="filter-picker"><view class="icon icon-sm icon-inline icon-clipboard-grey"></view>{{filterTypeLabel}} ▾</view>
@@ -36,8 +36,21 @@
     </view>
   </view>
 
-  <view wx:if="{{reports.length === 0}}" class="empty-state">
+  <view wx:if="{{loadFailed}}" class="empty-state">
+    <view class="empty-state-icon icon icon-xxl icon-chart-grey"></view>
+    <view class="empty-state-text">加载失败，请检查网络后重试</view>
+    <button class="btn btn-primary btn-sm" bindtap="reload" style="margin-top:24rpx;">重新加载</button>
+  </view>
+  <view wx:elif="{{isLoading && reports.length === 0}}" class="empty-state">
+    <view class="empty-state-text">加载中...</view>
+  </view>
+  <view wx:elif="{{reports.length === 0}}" class="empty-state">
     <view class="empty-state-icon icon icon-xxl icon-chart-grey"></view>
     <view class="empty-state-text">暂无报表</view>
+  </view>
+  <view wx:if="{{reports.length > 0}}" class="empty-state-text" style="text-align:center;padding:24rpx 0;">
+    <text wx:if="{{isLoadingMore}}">加载中...</text>
+    <text wx:elif="{{!hasMore}}">没有更多了</text>
+    <text wx:else>上拉加载更多</text>
   </view>
 </view>

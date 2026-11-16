@@ -27,7 +27,7 @@
         <view class="item-sub">生效：{{item.effectiveDate}}</view>
       </view>
       <view class="price-display">
-        <view class="price-value">¥{{item.price}}</view>
+        <view class="price-value">{{item.priceText}}</view>
         <view class="price-unit">/{{item.productUnit}}</view>
       </view>
     </view>
@@ -46,7 +46,7 @@
       <view class="edit-info">
         <view class="edit-product">{{editItem.productName}}</view>
         <view class="edit-supplier">供应商：{{editItem.supplierName}}</view>
-        <view class="edit-old">当前价格：¥{{editItem.price}} / {{editItem.productUnit}}</view>
+        <view class="edit-old">当前价格：{{editItem.priceText}} / {{editItem.productUnit}}</view>
       </view>
 
       <view class="form-group">

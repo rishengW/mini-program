@@ -13,6 +13,8 @@ Page({
   // L14（2026-11-10）：登录守卫扩展到 onShow——会话中途失效时返回本页也会被拦截
   onShow() {
     if (!authGuard.requireLogin()) return
+    // L6（2026-11-13）：角色复检扩展到 onShow——角色被降级后返回本页不再放行
+    if (!authGuard.requireGlobalRole()) return
   },
 
   async onLoad(options = {}) {
@@ -20,7 +22,6 @@ Page({
     // 清单 #12：审核仅管理员（L24 起拦截收敛到 auth-guard.requireGlobalRole）
     if (!authGuard.requireGlobalRole()) return
     this.orderId = options.id || options.orderId || ''
-    const app = getApp()
     const result = await cloud.callFunction('getPurchaseOrderDetail', {
       orderId: this.orderId,
     })
@@ -76,7 +77,6 @@ Page({
       }
       const confirmed = await util.showConfirm('确认通过该采购申请？')
       if (!confirmed) return
-      const app = getApp()
       // P2-60：审核带幂等键（本页一次通过动作内重试共用同一 requestId，成功后重置）
       const requestId = this._auditReqId || (this._auditReqId = 'AUD' + Date.now() + Math.random().toString(36).slice(2, 8))
       const result = await cloud.callFunction('dataService', {
@@ -106,7 +106,6 @@ Page({
     try {
       const confirmed = await util.showConfirm('确认驳回该采购申请？')
       if (!confirmed) return
-      const app = getApp()
       const requestId = this._rejectReqId || (this._rejectReqId = 'AUD' + Date.now() + Math.random().toString(36).slice(2, 8))
       const result = await cloud.callFunction('dataService', {
         action: 'auditOrder',

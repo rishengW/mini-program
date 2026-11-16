@@ -40,7 +40,7 @@ function abnormalShortage() {
 
   // ===== 第一批：白菜收 4/10（部分）、土豆收 5/5（收齐）→ 非最终批，partial_received =====
   const r1 = await main({
-    authToken: 'tok', purchaseOrderId: 'PO1',
+    authToken: 'tok', purchaseOrderId: 'PO1', requestId: 'RCPT_T1',
     items: [
       { orderItemId: 'PO1_1', receivedQty: 4, orderQty: 10, productId: 'P1', productName: '白菜', unit: '斤' },
       { orderItemId: 'PO1_2', receivedQty: 5, orderQty: 5, productId: 'P2', productName: '土豆', unit: '斤' }
@@ -53,6 +53,17 @@ function abnormalShortage() {
   check('生成第 1 张收货单', receiptsAfter1.length === 1, receiptsAfter1.length)
   check('第 1 张收货单 is_final=false', receiptsAfter1[0] && receiptsAfter1[0].is_final === false, receiptsAfter1[0])
   check('③④⑤⑥ 报表已上传', mock.uploads.length >= 2, mock.uploads.length)
+
+  // ===== M2（2026-11-13）：requestId 幂等——同键重发（超时重试/弱网重发）短路，不重复入库。
+  // 重发体用纯异常行（0 实收+质量标记）：这类行绕开超收校验，是此前唯一可无约束重复提交的路径
+  const abnBefore = (mock.state.abnormal_record || []).length
+  const r1b = await main({
+    authToken: 'tok', purchaseOrderId: 'PO1', requestId: 'RCPT_T1',
+    items: [{ orderItemId: 'PO1_1', receivedQty: 0, orderQty: 10, productId: 'P1', productName: '白菜', unit: '斤', isQualityIssue: true, remark: '破损' }]
+  })
+  check('同 requestId 重发幂等短路', r1b.code === 0 && r1b.data && r1b.data.idempotent === true, r1b)
+  check('短路不重复生成收货单', (mock.state.receipt || []).length === 1, (mock.state.receipt || []).length)
+  check('纯异常行重发不重复生成异常记录', (mock.state.abnormal_record || []).length === abnBefore, (mock.state.abnormal_record || []).length)
 
   // ===== 第二批：白菜补收 6（累计 10 收齐）→ 最终批，received =====
   const r2 = await main({

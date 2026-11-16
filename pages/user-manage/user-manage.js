@@ -37,11 +37,12 @@ Page({
 
   async loadData() {
     util.showLoading()
-    const app = getApp()
     const [usersResult, storesResult, suppliersResult] = await Promise.all([
       cloud.callFunction('authService', { action: 'listUsers' }),
-      cloud.callFunction('authService', { action: 'getStores' }),
-      cloud.callFunction('getSuppliers', {})
+      // M7（2026-11-13）：本页为超管场景，门店/供应商含停用——编辑绑定已停用对象的
+      // 账号时下拉需能回显原值，不再强制重选（getStores 的 includeInactive 仅超管放行）
+      cloud.callFunction('authService', { action: 'getStores', includeInactive: 1 }),
+      cloud.callFunction('getSuppliers', { includeInactive: true })
     ])
     // L35：users 成功即展示；stores/suppliers 失败降级为原始 ID 显示，不再整页丢弃
     if (usersResult.code === 0) {
@@ -169,6 +170,7 @@ Page({
 
   onStoreChange(e) {
     const store = this.data.stores[e.detail.value]
+    if (!store) return
     this.setData({
       'form.defaultStoreId': store.storeId,
       'form.storeName': store.storeName,
@@ -178,6 +180,7 @@ Page({
 
   onSupplierChange(e) {
     const supplier = this.data.suppliers[e.detail.value]
+    if (!supplier) return
     this.setData({
       'form.defaultSupplierId': supplier.supplierId,
       'form.supplierName': supplier.supplierName,
